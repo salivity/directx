@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What APIs Were in the First Version of DirectX? - directx</title>
+    <meta name="description" content="When Microsoft launched DirectX 1.0 in September 1995 under the codename "Manhattan Project," it was designed to convince reluctant game developers to build for Windows 95 instead of MS-DOS. The original release was not the massive multimedia framework k">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/what-apis-were-in-the-first-version-of-directx">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="What APIs Were in the First Version of DirectX? - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/what-apis-were-in-the-first-version-of-directx" />
+    <meta property="og:image:url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="When Microsoft launched DirectX 1.0 in September 1995 under the codename "Manhattan Project," it was designed to convince reluctant game developers to build for Windows 95 instead of MS-DOS. The original release was not the massive multimedia framework k" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <article><h1 id="what-apis-were-in-the-first-version-of-directx">What APIs Were
+in the First Version of DirectX?</h1>
+<p>When Microsoft launched DirectX 1.0 in September 1995 under the
+codename "Manhattan Project," it was designed to convince reluctant game
+developers to build for Windows 95 instead of MS-DOS. The original
+release was not the massive multimedia framework known today, but a
+targeted collection of low-level application programming interfaces
+(APIs) built to give games direct, high-performance access to PC
+hardware. Specifically, the original DirectX 1.0 release comprised three
+foundational components: DirectDraw, DirectSound, and DirectPlay,
+accompanied by an early low-level framework for input and hardware
+abstraction.</p>
+<h2 id="the-push-from-dos-to-windows-95">The Push from DOS to Windows
+95</h2>
+<p>In the mid-1990s, PC game developers avoided Windows due to severe
+performance bottlenecks. MS-DOS granted programmers direct access to
+video memory, sound cards, and input devices via interrupts and raw
+memory registers. Windows, by contrast, placed a protective layer of
+device drivers and graphical abstraction between software and hardware,
+which introduced significant latency and killed frame rates.</p>
+<p>DirectX was engineered to bridge this gap. Rather than routing
+graphics and audio through the slow Windows Graphical Device Interface
+(GDI), DirectX introduced the Hardware Abstraction Layer (HAL) and the
+Hardware Emulation Layer (HEL). If the installed graphics or sound card
+supported a requested feature natively, HAL executed it directly on the
+hardware. If the hardware lacked support, HEL simulated the feature in
+software.</p>
+<h2 id="directdraw-high-speed-2d-bitmaps">DirectDraw: High-Speed 2D
+Bitmaps</h2>
+<p>DirectDraw was the undisputed centerpiece of DirectX 1.0. Contrary to
+modern associations of DirectX with complex 3D graphics pipelines,
+version 1.0 focused almost entirely on accelerated 2D graphics.</p>
+<p>DirectDraw allowed developers to bypass standard Windows GDI
+rendering and manipulate video RAM directly. Key features included:</p>
+<ul>
+<li><strong>Hardware Page Flipping:</strong> Smooth rendering achieved
+by switching between a visible front buffer and a hidden back buffer,
+eliminating screen tearing.</li>
+<li><strong>Hardware Blitting (BitBLT):</strong> Fast hardware-level
+block image transfers, allowing sprites and 2D surfaces to move and
+scale across the screen with minimal CPU overhead.</li>
+<li><strong>Clipping and Surface Overlays:</strong> Management of
+rectangular viewports and video surfaces that could overlay application
+windows.</li>
+</ul>
+<p>Because 3D accelerators were not yet ubiquitous in consumer PCs in
+1995, DirectDraw handled the primary rendering requirements for the vast
+majority of commercial games at the time.</p>
+<h2 id="directsound-hardware-audio-mixing">DirectSound: Hardware Audio
+Mixing</h2>
+<p>Before DirectX, managing audio in PC games was notoriously difficult,
+requiring developers to write custom routines or license third-party
+libraries to support Sound Blaster, Gravis UltraSound, and other
+competing audio cards.</p>
+<p>DirectSound solved this fragmentation by offering a unified interface
+for digital audio playback and recording. Its primary duties in version
+1.0 included:</p>
+<ul>
+<li><strong>Low-Latency Playback:</strong> Providing near-instant audio
+triggering, which was critical for sound effects tied to fast-paced
+on-screen action.</li>
+<li><strong>Hardware Audio Mixing:</strong> Allowing multiple distinct
+audio streams to mix directly on sound card DSPs rather than exhausting
+CPU cycles.</li>
+<li><strong>Secondary Sound Buffers:</strong> Enabling games to store,
+loop, and modify volume or frequency on individual sound clips
+independently.</li>
+</ul>
+<h2 id="directplay-simplified-multiplayer-networking">DirectPlay:
+Simplified Multiplayer Networking</h2>
+<p>DirectPlay provided an abstraction layer for multiplayer
+communication, an area that was rapidly gaining importance with the rise
+of local area network (LAN) gaming and consumer dial-up internet.</p>
+<p>Rather than forcing developers to write unique network stacks for
+IPX/SPX, TCP/IP, or direct modem-to-modem connections, DirectPlay acted
+as a standardized wrapper. A developer could write their multiplayer
+game logic to the DirectPlay interface once, and the API handled message
+routing across various communication protocols.</p>
+<h2 id="the-foundation-for-modern-pc-gaming">The Foundation for Modern
+PC Gaming</h2>
+<p>While Direct3D, DirectInput, and DirectMusic later became synonymous
+with PC multimedia, none of them were part of the initial DirectX 1.0
+shipment. DirectInput in version 1.0 existed only in an embryonic, basic
+joystick-handling state rather than a distinct standalone API, and 3D
+capabilities did not arrive until Microsoft acquired RenderMorphics and
+integrated Direct3D into DirectX 2.0 in 1996.</p>
+<p>DirectDraw, DirectSound, and DirectPlay formed the minimal,
+battle-tested core that proved Windows 95 could rival MS-DOS in raw
+gaming performance, laying the groundwork for Windows to become the
+dominant PC gaming platform.</p></article>
+        <div id="comments-container"></div>
+
+        <script>
+            const utterancesScript = document.createElement('script');
+            
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            utterancesScript.setAttribute('theme', localStorage.getItem('theme') === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

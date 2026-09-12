@@ -1,0 +1,62 @@
+[
+  [
+    10,
+    "What Replaced DirectSound and DirectMusic in Windows?",
+    "Modern Windows audio pipelines replaced legacy DirectX components like DirectSound and DirectMusic with a layered architecture centered on the Windows Audio Session API (WASAPI), the Windows Core Audio APIs, high-level frameworks like AudioGraph, and mod",
+    false
+  ],
+  [
+    9,
+    "How Did Early DirectSound Manage Low-Latency Audio?",
+    "Early DirectSound transformed PC gaming audio in Windows 95 by bypassing sluggish operating system layers to provide direct, low-latency communication with sound hardware. Prior to DirectX, Windows routed waveform audio through the High-Level Audio API a",
+    false
+  ],
+  [
+    8,
+    "What Was DirectDraw Used for in DirectX?",
+    "DirectDraw served as the primary 2D graphics acceleration API in Microsoft’s early DirectX suite, designed to grant developers direct, high-performance access to video hardware while maintaining compatibility across diverse PC configurations. By allowi",
+    false
+  ],
+  [
+    7,
+    "How Does DirectWrite Enhance DirectX Typography?",
+    "DirectWrite is Microsoft's high-performance text-rendering API designed to integrate with DirectX, delivering hardware-accelerated text layout, advanced typography, and sub-pixel glyph positioning. In graphic-intensive applications such as games, creativ",
+    false
+  ],
+  [
+    6,
+    "How Does Direct2D Work Alongside Direct3D?",
+    "Direct2D and Direct3D operate as complementary graphics APIs within Microsoft's DirectX ecosystem, sharing underlying hardware resources rather than running as isolated pipelines. Built directly on top of Direct3D, Direct2D translates 2D vector geometrie",
+    false
+  ],
+  [
+    5,
+    "What Is the Role of Direct3D in DirectX?",
+    "DirectX serves as Microsoft’s overarching multimedia API suite, and Direct3D acts as its dedicated graphics engine responsible for rendering 3D visuals. While the broader DirectX framework handles various multimedia tasks such as spatial audio, control",
+    false
+  ],
+  [
+    4,
+    "How Does DirectX Connect Games to Hardware?",
+    "DirectX acts as a specialized software intermediary, translating high-level graphical commands from video games into low-level instructions that diverse graphics processing units (GPUs) can execute. By establishing a unified application programming inter",
+    false
+  ],
+  [
+    3,
+    "What APIs Were in the First Version of DirectX?",
+    "When Microsoft launched DirectX 1.0 in September 1995 under the codename \"Manhattan Project,\" it was designed to convince reluctant game developers to build for Windows 95 instead of MS-DOS. The original release was not the massive multimedia framework k",
+    false
+  ],
+  [
+    2,
+    "How Did DirectX in 1995 Make Windows 95 a Gaming Powerhouse?",
+    "In 1995, Microsoft launched DirectX to solve a critical adoption crisis: PC game developers refused to build for Windows 95 because it restricted direct access to computer hardware, favoring MS-DOS instead. By introducing a suite of low-level application",
+    false
+  ],
+  [
+    1,
+    "What Is Microsoft DirectX in Modern PC Gaming?",
+    "Microsoft DirectX is a foundational collection of application programming interfaces (APIs) that bridges the communication gap between video games and a computer's physical hardware. In modern PC gaming, its core purpose is to maximize rendering performa",
+    false
+  ]
+]
