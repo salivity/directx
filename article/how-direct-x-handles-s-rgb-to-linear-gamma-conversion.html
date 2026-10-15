@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectX Handles sRGB to Linear Gamma Conversion - directx</title>
+    <meta name="description" content="DirectX manages color space conversion between sRGB and linear gamma through dedicated hardware-accelerated pipeline features and specific texture formats. Instead of requiring developers to manually compute gamma curves within shader code, modern DirectX">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-x-handles-s-rgb-to-linear-gamma-conversion">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectX Handles sRGB to Linear Gamma Conversion - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-x-handles-s-rgb-to-linear-gamma-conversion" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX manages color space conversion between sRGB and linear gamma through dedicated hardware-accelerated pipeline features and specific texture formats. Instead of requiring developers to manually compute gamma curves within shader code, modern DirectX" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directx-handles-srgb-to-linear-gamma-conversion">How DirectX
+Handles sRGB to Linear Gamma Conversion</h1>
+<p>DirectX manages color space conversion between sRGB and linear gamma
+through dedicated hardware-accelerated pipeline features and specific
+texture formats. Instead of requiring developers to manually compute
+gamma curves within shader code, modern DirectX APIs (DirectX 11 and
+DirectX 12) utilize the Direct3D graphics pipeline to automatically
+decode non-linear sRGB image data into linear floating-point values
+during texture sampling, and re-encode linear values back to sRGB when
+writing to the final render target.</p>
+<h3 id="hardware-accelerated-formats-via-dxgi">Hardware-Accelerated
+Formats via DXGI</h3>
+<p>The core of color space handling in DirectX is the
+<code>DXGI_FORMAT</code> enumeration. To handle non-linear color assets
+correctly, DirectX provides explicitly typed sRGB formats, such as
+<code>DXGI_FORMAT_R8G8B8A8_UNORM_SRGB</code> and
+<code>DXGI_FORMAT_B8G8R8A8_UNORM_SRGB</code>.</p>
+<p>When an asset stored in standard sRGB color space is loaded, it must
+be assigned an <code>_SRGB</code> format. This instructs the GPU that
+the raw byte data (0 to 255) represents non-linear values governed by
+the standard sRGB transfer function (roughly equivalent to a 2.2 gamma
+curve).</p>
+<h3 id="texture-sampling-and-linearization">Texture Sampling and
+Linearization</h3>
+<p>When a shader samples a texture flagged with an <code>_SRGB</code>
+format, the GPU's texture sampling unit automatically performs the
+conversion from sRGB to linear space before exposing the color data to
+the shader register:</p>
+<ol type="1">
+<li><strong>Hardware Decoding:</strong> The hardware applies the exact
+IEC 61966-2-1 sRGB piece-wise transfer function, converting the 8-bit
+non-linear integer data into 32-bit linear floating-point values.</li>
+<li><strong>Filtering in Linear Space:</strong> A critical advantage of
+this hardware handling is texture filtering. DirectX performs bilinear,
+trilinear, and anisotropic filtering <em>after</em> the values have been
+converted to linear space. This eliminates common artifacts such as dark
+halos and incorrect luminance transitions along filtered texture
+edges.</li>
+</ol>
+<p>Inside the HLSL shader, developers can perform all physically based
+rendering (PBR), lighting calculations, and additions in mathematically
+correct linear space without writing manual gamma correction
+formulas.</p>
+<h3 id="render-target-writes-and-blending">Render Target Writes and
+Blending</h3>
+<p>To display linear computations correctly on standard monitors, the
+colors must be converted back to non-linear sRGB. DirectX manages this
+at the Output Merger (OM) stage through sRGB render targets:</p>
+<ul>
+<li><strong>Alpha Blending:</strong> If hardware blending is enabled,
+DirectX executes the blend equation in linear space. The existing linear
+value in the render target and the newly calculated linear pixel from
+the shader are combined accurately.</li>
+<li><strong>Gamma Encoding:</strong> Upon the final write to a render
+target surface configured with an <code>_SRGB</code> format (such as an
+sRGB swap chain back buffer), the GPU hardware applies the inverse sRGB
+transfer function. This converts the linear floating-point color back to
+gamma-encoded sRGB values for display output.</li>
+</ul>
+<h3 id="manual-shader-conversion">Manual Shader Conversion</h3>
+<p>If a pipeline does not utilize <code>_SRGB</code> DXGI formats—such
+as when handling raw buffers or custom packed formats—DirectX shaders
+can manually implement the conversion in HLSL. The accurate piece-wise
+sRGB-to-linear conversion function is:</p>
+<ul>
+<li>For values <span class="math inline">\(\le 0.04045\)</span>: <span
+class="math inline">\(\text{Linear} =
+\frac{\text{sRGB}}{12.92}\)</span></li>
+<li>For values <span class="math inline">\(&gt; 0.04045\)</span>: <span
+class="math inline">\(\text{Linear} = \left(\frac{\text{sRGB} +
+0.055}{1.055}\right)^{2.4}\)</span></li>
+</ul>
+<p>While a simplified power approximation (<span
+class="math inline">\(\text{pow}(\text{color}, 2.2)\)</span>) is
+sometimes used for lower computational cost, utilizing the native
+<code>_SRGB</code> hardware pipeline formats remains the recommended
+approach in DirectX because it provides standard compliance, eliminates
+shader instruction overhead, and guarantees correct linear
+filtering.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

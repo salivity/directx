@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLSL Cooperative Vector Math for Neural Inference - directx</title>
+    <meta name="description" content="Cooperative vector math in DirectX High-Level Shader Language (HLSL) significantly accelerates local neural network inference in modern game engines by distributing matrix operations across entire GPU wavefronts. By enabling thread lanes to collaborate di">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/hlsl-cooperative-vector-math-for-neural-inference">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="HLSL Cooperative Vector Math for Neural Inference - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/hlsl-cooperative-vector-math-for-neural-inference" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Cooperative vector math in DirectX High-Level Shader Language (HLSL) significantly accelerates local neural network inference in modern game engines by distributing matrix operations across entire GPU wavefronts. By enabling thread lanes to collaborate di" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="hlsl-cooperative-vector-math-for-neural-inference">HLSL
+Cooperative Vector Math for Neural Inference</h1>
+<p>Cooperative vector math in DirectX High-Level Shader Language (HLSL)
+significantly accelerates local neural network inference in modern game
+engines by distributing matrix operations across entire GPU wavefronts.
+By enabling thread lanes to collaborate directly on low-precision matrix
+multiply-accumulate (MMA) operations, this feature leverages dedicated
+silicon—such as Tensor Cores—without requiring dedicated machine
+learning runtimes. The result is dramatically reduced memory traffic,
+minimal latency, and the ability to evaluate compact neural models
+directly inside standard rendering and compute passes.</p>
+<h3 id="direct-mapping-to-specialized-hardware">Direct Mapping to
+Specialized Hardware</h3>
+<p>Traditional HLSL compute shaders process data using
+single-instruction, multiple-data (SIMD) vectors on a per-thread basis.
+In contrast, cooperative vector and cooperative matrix primitives treat
+a group of threads (a wave or warp) as an aggregate processing unit.</p>
+<p>When HLSL invokes cooperative vector operations, the compiler maps
+these high-level instructions directly to vendor-specific hardware
+units, such as NVIDIA Tensor Cores or AMD Matrix Cores. These hardware
+units are fundamentally designed to execute fused
+matrix-multiply-accumulate instructions (<code>D = A * B + C</code>) in
+a single or few clock cycles, yielding throughput orders of magnitude
+higher than standard FP32 or FP16 ALU pipelines.</p>
+<h3 id="elimination-of-memory-and-cache-bottlenecks">Elimination of
+Memory and Cache Bottlenecks</h3>
+<p>Neural network inference is frequently memory-bandwidth bound rather
+than compute bound. Cooperative vector math addresses this bottleneck
+through register-level data sharing:</p>
+<ul>
+<li><strong>Distributed Register Storage:</strong> Matrix tiles are
+partitioned and held directly across the register files of all threads
+in a wave.</li>
+<li><strong>Bypassing Thread Group Shared Memory (TGSM):</strong>
+Conventional compute approaches require reading weights and activations
+into shared memory, synchronizing via barriers, and then loading data
+into registers. Cooperative operations allow direct accumulation within
+registers, bypassing TGSM and reducing cache pressure.</li>
+<li><strong>Low-Precision Formats:</strong> Cooperative vectors natively
+support reduced-precision types such as FP16, BF16, and INT8/INT4. These
+compact formats halve or quarter the memory bandwidth footprint when
+reading neural network weights from VRAM, keeping compute units
+saturated.</li>
+</ul>
+<h3 id="low-latency-integration-in-game-render-graphs">Low-Latency
+Integration in Game Render Graphs</h3>
+<p>Modern game engines deploy neural networks for real-time tasks such
+as super-resolution, neural radiance caching, frame generation, dynamic
+character animation, and learned physics. These passes must complete
+within a strict sub-millisecond frame budget.</p>
+<p>Using external runtimes or separate API contexts introduces dispatch
+overhead, synchronization stalls, and context-switching penalties
+between graphics and compute pipelines. Cooperative vector math allows
+inference to be executed within native DirectX 12 compute pipelines.
+Neural inference passes can be inserted directly into the engine's
+existing render graph, sharing intermediate render targets and G-buffer
+data without cross-API synchronization or CPU round-trips.</p>
+<h3 id="optimal-compute-occupancy-for-micro-models">Optimal Compute
+Occupancy for Micro-Models</h3>
+<p>Most in-engine neural models are lightweight multilayer perceptrons
+(MLPs) or small convolutional networks designed for per-pixel or
+per-vertex evaluation. Traditional machine learning frameworks are
+optimized for large-batch server inference, struggling with the tiny
+batch sizes (often batch size 1 across millions of pixels) used in
+real-time rendering. Cooperative vector math aligns perfectly with the
+GPU's natural SIMT occupancy, allowing millions of localized
+micro-inferences to run concurrently across the graphics pipeline with
+maximum hardware utilization.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

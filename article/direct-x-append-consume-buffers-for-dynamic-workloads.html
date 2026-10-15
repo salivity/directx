@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX Append Consume Buffers for Dynamic Workloads - directx</title>
+    <meta name="description" content="This article provides an overview of append and consume buffers in DirectX, detailing how these specialized GPU resources operate and why they are critical for dynamic rendering workloads. Append and consume buffers allow Compute Shaders to build and cons">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-append-consume-buffers-for-dynamic-workloads">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX Append Consume Buffers for Dynamic Workloads - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-append-consume-buffers-for-dynamic-workloads" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of append and consume buffers in DirectX, detailing how these specialized GPU resources operate and why they are critical for dynamic rendering workloads. Append and consume buffers allow Compute Shaders to build and cons" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-append-consume-buffers-for-dynamic-workloads">DirectX
+Append Consume Buffers for Dynamic Workloads</h1>
+<p>This article provides an overview of append and consume buffers in
+DirectX, detailing how these specialized GPU resources operate and why
+they are critical for dynamic rendering workloads. Append and consume
+buffers allow Compute Shaders to build and consume data streams on the
+fly without CPU intervention. By leveraging internal atomic counters,
+they enable efficient GPU-driven pipelines such as dynamic
+level-of-detail, particle simulation, and visibility culling,
+eliminating memory overhead and minimizing CPU-GPU synchronization
+bottlenecks.</p>
+<h2 id="what-are-append-and-consume-buffers">What Are Append and Consume
+Buffers?</h2>
+<p>In DirectX (Direct3D 11 and Direct3D 12), append and consume buffers
+are specialized variants of Structured Buffers bound as Unordered Access
+Views (UAVs). In High-Level Shading Language (HLSL), they are exposed
+via the <code>AppendStructuredBuffer&lt;T&gt;</code> and
+<code>ConsumeStructuredBuffer&lt;T&gt;</code> template types.</p>
+<p>Functionally, these buffers behave like concurrent, GPU-side stacks
+or dynamic collections:</p>
+<ul>
+<li><strong><code>AppendStructuredBuffer&lt;T&gt;</code>:</strong>
+Allows shader threads to write items to the end of the buffer using the
+<code>.Append()</code> intrinsic.</li>
+<li><strong><code>ConsumeStructuredBuffer&lt;T&gt;</code>:</strong>
+Allows shader threads to retrieve and remove items from the end of the
+buffer using the <code>.Consume()</code> intrinsic.</li>
+</ul>
+<p>Unlike standard structured buffers that require explicit array
+indexing managed by thread IDs (<code>SV_DispatchThreadID</code>),
+append and consume buffers manage indexing automatically using an
+internal, hardware-accelerated atomic counter.</p>
+<h2 id="how-the-internal-counter-operates">How the Internal Counter
+Operates</h2>
+<p>Every append and consume UAV contains an internal 32-bit counter
+maintained by the GPU hardware:</p>
+<ul>
+<li>When a thread invokes <code>.Append()</code>, the hardware
+atomically increments the counter and assigns the previous counter value
+as the write offset for the new item.</li>
+<li>When a thread invokes <code>.Consume()</code>, the hardware
+atomically decrements the counter and reads the data located at the new
+offset.</li>
+</ul>
+<p>Because thread execution order across warps or wavefronts is
+non-deterministic, the order of elements pushed to or popped from the
+buffer is not strictly sequential. It does not guarantee
+First-In-First-Out (FIFO) or Last-In-First-Out (LIFO) order relative to
+thread invocation, but it guarantees that every valid write receives a
+unique, sequential memory slot without race conditions.</p>
+<p>Host applications can initialize this counter to a specific value
+when binding the UAV or read the counter back using DirectX API
+functions such as <code>CopyStructureCount</code> in Direct3D 11 or
+<code>CopyBufferRegion</code> combined with indirect arguments in
+Direct3D 12.</p>
+<h2 id="managing-dynamic-workloads-on-the-gpu">Managing Dynamic
+Workloads on the GPU</h2>
+<p>In modern real-time rendering, workload sizes are often variable and
+unpredictable. For example, a scene containing 100,000 objects might
+only have 12,410 objects visible after frustum and occlusion
+culling.</p>
+<p>Without append buffers, the GPU would either:</p>
+<ol type="1">
+<li>Write visibility flags to a fixed-size buffer, requiring subsequent
+passes to process all 100,000 entries (most of which do no work).</li>
+<li>Read the results back to the CPU to compute the active draw calls,
+introducing significant latency and pipeline stalls.</li>
+</ol>
+<p>Append and consume buffers solve this problem by enabling fully
+dynamic, GPU-driven execution:</p>
+<h3 id="1-work-compaction-culling">1. Work-Compaction (Culling)</h3>
+<p>A compute pass performs bounding-box visibility tests against the
+camera view frustum. If an object is visible, the shader calls
+<code>Append()</code> with the object's instance ID. The output buffer
+now contains a tightly packed list of only the visible objects, with no
+empty slots or inactive entries.</p>
+<h3 id="2-producer-consumer-pipelines">2. Producer-Consumer
+Pipelines</h3>
+<p>One compute shader acts as a producer (e.g., simulating a fluid or
+breaking down geometry via dynamic tessellation) and appends newly
+generated primitives to an <code>AppendStructuredBuffer</code>. A
+subsequent compute shader binds the same underlying memory as a
+<code>ConsumeStructuredBuffer</code>, popping items to perform secondary
+processing, shading, or collision checks.</p>
+<h3 id="3-indirect-drawing-and-dispatching">3. Indirect Drawing and
+Dispatching</h3>
+<p>Through Direct3D’s <code>DrawInstancedIndirect</code> or
+<code>DispatchIndirect</code> commands, the value stored in the append
+buffer's counter can be copied directly into an indirect arguments
+buffer. This allows the GPU to launch the exact number of vertex draws
+or compute threads required to process the compacted data without
+round-tripping to the CPU.</p>
+<h2 id="hlsl-usage-example">HLSL Usage Example</h2>
+<pre class="hlsl"><code>struct Particle
+{
+    float3 Position;
+    float3 Velocity;
+    float  LifeTime;
+};
+
+// Producer shader: updates active particles
+ConsumeStructuredBuffer&lt;Particle&gt; CurrentParticles : register(u0);
+AppendStructuredBuffer&lt;Particle&gt;  NextParticles    : register(u1);
+
+[numthreads(64, 1, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    Particle p = CurrentParticles.Consume();
+    
+    p.LifeTime -= 0.016f; // Update lifetime
+    p.Position += p.Velocity * 0.016f;
+
+    // Keep particle alive only if lifetime remains
+    if (p.LifeTime &gt; 0.0f)
+    {
+        NextParticles.Append(p);
+    }
+}</code></pre>
+<h2 id="practical-considerations-and-limitations">Practical
+Considerations and Limitations</h2>
+<ul>
+<li><strong>Memory Allocation:</strong> Append buffers do not resize
+automatically. Developers must allocate a buffer large enough to
+accommodate the worst-case scenario. If the append counter exceeds the
+buffer capacity, writes are discarded or risk out-of-bounds undefined
+behavior.</li>
+<li><strong>Atomic Contention:</strong> Because every thread writing or
+reading from the buffer must access the same underlying counter, high
+levels of thread concurrency can cause memory contention. Modern GPU
+architectures optimize these atomic increments at the
+sub-group/wavefront level, but excessive atomic traffic can impact
+throughput.</li>
+<li><strong>Underflow and Overflow Safety:</strong> Shaders calling
+<code>.Consume()</code> on an empty buffer produce undefined values.
+Shaders must ensure that the thread dispatch count matches the exact
+element count stored in the buffer's counter via indirect
+execution.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

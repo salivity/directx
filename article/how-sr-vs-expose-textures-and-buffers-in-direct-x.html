@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How SRVs Expose Textures and Buffers in DirectX - directx</title>
+    <meta name="description" content="Shader Resource Views (SRVs) in DirectX serve as an essential abstraction layer that enables programmable shader stages to safely read underlying GPU memory, including textures and structured or raw buffers. By decoupling physical resource allocations fro">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-sr-vs-expose-textures-and-buffers-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How SRVs Expose Textures and Buffers in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-sr-vs-expose-textures-and-buffers-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Shader Resource Views (SRVs) in DirectX serve as an essential abstraction layer that enables programmable shader stages to safely read underlying GPU memory, including textures and structured or raw buffers. By decoupling physical resource allocations fro" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-srvs-expose-textures-and-buffers-in-directx">How SRVs Expose
+Textures and Buffers in DirectX</h1>
+<p>Shader Resource Views (SRVs) in DirectX serve as an essential
+abstraction layer that enables programmable shader stages to safely read
+underlying GPU memory, including textures and structured or raw buffers.
+By decoupling physical resource allocations from how shaders interpret
+memory layout and data formats, SRVs provide read-only access guarantees
+that maximize GPU memory caching and execution parallelism. This article
+breaks down how SRVs function, how they reinterpret subresources, and
+how they bind data pipelines across Direct3D 11 and Direct3D 12.</p>
+<h2 id="the-concept-of-a-view-in-directx">The Concept of a View in
+DirectX</h2>
+<p>In modern DirectX APIs (Direct3D 11 and Direct3D 12), memory
+resources such as <code>ID3D11Texture2D</code> or
+<code>ID3D12Resource</code> are simply allocations of raw GPU virtual
+address space. Shaders cannot access raw resources directly. Instead,
+the runtime requires a "view" to identify the data layout, channel
+swizzling, and formatting. An SRV acts as an interface that
+declares:</p>
+<ul>
+<li><strong>Resource Format:</strong> How the raw bits are cast into
+concrete data types (e.g., converting a typeless
+<code>DXGI_FORMAT_R32_TYPELESS</code> buffer into
+<code>DXGI_FORMAT_R32_FLOAT</code>).</li>
+<li><strong>Subresource Range:</strong> Which specific mipmap levels,
+array slices, or depth slices are visible to the shader.</li>
+<li><strong>Access Intent:</strong> Specifically defining read-only
+operations, preventing accidental write hazards.</li>
+</ul>
+<h2 id="read-only-semantics-and-hardware-optimization">Read-Only
+Semantics and Hardware Optimization</h2>
+<p>SRVs expose resources strictly for read access, separating reading
+from writing (which is handled by Unordered Access Views or Render
+Target Views). This distinction provides critical hardware and
+architectural benefits:</p>
+<ol type="1">
+<li><strong>Cache Coherency:</strong> Because an SRV guarantees the
+bound pipeline stage will not write to the resource, the GPU can utilize
+dedicated read-only texture and L1/L2 caches without tracking dirty
+lines or cache-invalidation hazards within that draw call.</li>
+<li><strong>Concurrent Reading:</strong> Multiple shader stages (such as
+the Vertex Shader, Pixel Shader, and Compute Shader) can safely read
+from the same SRV simultaneously without synchronization overhead.</li>
+<li><strong>Format Reinterpretation:</strong> A single underlying
+resource can back multiple SRVs. For example, a texture can be viewed as
+an sRGB format for color grading in one pass, and read as raw linear
+data through a separate SRV in another.</li>
+</ol>
+<h2 id="handling-textures-vs-buffers">Handling Textures vs. Buffers</h2>
+<p>The structure of an SRV depends on the underlying resource
+dimension:</p>
+<ul>
+<li><strong>Textures (1D, 2D, 3D, Cube):</strong> The SRV descriptor
+defines mip ranges (<code>MostDetailedMip</code>,
+<code>MipLevels</code>) and array slices. Inside High-Level Shading
+Language (HLSL), textures are paired with Sampler states to allow
+filtered lookups via hardware texture filtering units using objects like
+<code>Texture2D&lt;float4&gt;</code>.</li>
+<li><strong>Structured Buffers:</strong> The SRV configuration defines
+an element count and stride. HLSL exposes these as
+<code>StructuredBuffer&lt;T&gt;</code>, allowing indexed, structured
+struct lookups.</li>
+<li><strong>Raw (ByteAddress) Buffers:</strong> Configured with the
+<code>D3D11_BUFFEREX_SRV_FLAG_RAW</code> flag, exposing low-level
+byte-aligned memory. In HLSL, these map to
+<code>ByteAddressBuffer</code> using 32-bit aligned byte offsets.</li>
+</ul>
+<h2 id="hlsl-and-pipeline-binding-mechanisms">HLSL and Pipeline Binding
+Mechanisms</h2>
+<p>In HLSL, resources bound through an SRV occupy texture register slots
+indicated by the <code>t</code> register prefix:</p>
+<pre class="hlsl"><code>Texture2D g_AlbedoTexture : register(t0);
+StructuredBuffer&lt;InstanceData&gt; g_Instances : register(t1);
+SamplerState g_LinearSampler : register(s0);
+
+float4 PSMain(VSOutput input) : SV_Target
+{
+    float4 color = g_AlbedoTexture.Sample(g_LinearSampler, input.UV);
+    uint instanceID = g_Instances[input.InstanceIndex].ID;
+    return color;
+}</code></pre>
+<p>The underlying binding mechanism differs across API versions:</p>
+<ul>
+<li><strong>Direct3D 11:</strong> The application calls explicit
+stage-binding methods such as <code>PSSetShaderResources</code> or
+<code>CSSetShaderResources</code>. The runtime verifies that the bound
+SRV does not conflict with active output render targets.</li>
+<li><strong>Direct3D 12:</strong> SRVs exist as entries within
+Descriptor Heaps. Shaders access them via Root Signatures using Root
+Descriptors, Descriptor Tables, or through modern Bindless (SM6.6+)
+resource handles. Direct3D 12 requires developers to transition the
+resource into a readable state (e.g.,
+<code>D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE</code> or
+<code>D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE</code>) via
+resource barriers prior to dispatching draw or compute commands,
+ensuring synchronization with prior write operations.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

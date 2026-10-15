@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How SV_Coverage Works in DirectX Multisampling - directx</title>
+    <meta name="description" content="In DirectX, the SVCoverage system-value semantic exposes the hardware-level sub-pixel coverage mask generated during multisample anti-aliasing (MSAA) directly to the pixel shader. This feature allows rendering pipelines to inspect exactly which sub-pixel">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-sv-coverage-works-in-direct-x-multisampling">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How SV_Coverage Works in DirectX Multisampling - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-sv-coverage-works-in-direct-x-multisampling" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX, the SVCoverage system-value semantic exposes the hardware-level sub-pixel coverage mask generated during multisample anti-aliasing (MSAA) directly to the pixel shader. This feature allows rendering pipelines to inspect exactly which sub-pixel" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-sv_coverage-works-in-directx-multisampling">How SV_Coverage
+Works in DirectX Multisampling</h1>
+<p>In DirectX, the <code>SV_Coverage</code> system-value semantic
+exposes the hardware-level sub-pixel coverage mask generated during
+multisample anti-aliasing (MSAA) directly to the pixel shader. This
+feature allows rendering pipelines to inspect exactly which sub-pixel
+sample points a primitive covers, as well as modify that mask before the
+raster operations pipeline writes to render targets. By exposing
+coverage as a bitmask, DirectX enables advanced anti-aliasing workflows,
+custom alpha-to-coverage logic, and sophisticated deferred multisampling
+techniques without forcing full per-sample shading overhead.</p>
+<h2 id="the-multisampling-coverage-mask">The Multisampling Coverage
+Mask</h2>
+<p>When MSAA is active, the GPU rasterizes geometry at a higher
+sub-pixel sample rate than the shading rate. For instance, in an 8x MSAA
+configuration, each pixel contains eight distinct sample locations with
+specific geometric offsets.</p>
+<p>During the rasterization stage, the hardware evaluates which of these
+sub-pixel positions fall inside the incoming triangle boundaries. The
+result of this geometric test is a bitmask where each bit represents a
+specific sample index:</p>
+<ul>
+<li>If sample 0 is covered, bit 0 is set to <code>1</code>.</li>
+<li>If sample 3 is outside the primitive, bit 3 is set to
+<code>0</code>.</li>
+</ul>
+<p>For standard MSAA, the pixel shader runs once per covered pixel (or
+at centroid locations), and the resulting color is broadcast to all
+covered samples. <code>SV_Coverage</code> gives the shader direct
+programmatic access to this bitmask.</p>
+<h2 id="sv_coverage-as-a-pixel-shader-input">SV_Coverage as a Pixel
+Shader Input</h2>
+<p>When declared as an input parameter in High-Level Shader Language
+(HLSL), <code>SV_Coverage</code> provides the pixel shader with the raw
+coverage mask determined by the rasterizer:</p>
+<pre class="hlsl"><code>float4 PSMain(PSInput input, uint coverageMask : SV_Coverage) : SV_Target
+{
+    // coverageMask contains a bitmask of covered MSAA samples
+    ...
+}</code></pre>
+<p>The input mask is represented as a 32-bit unsigned integer
+(<code>uint</code>). For an <span
+class="math inline">\(N\)</span>-sample MSAA target, only the lowest
+<span class="math inline">\(N\)</span> bits are used:</p>
+<ul>
+<li><strong>4x MSAA:</strong> Bits <code>0</code> through <code>3</code>
+correspond to samples <code>0</code> through <code>3</code>.</li>
+<li><strong>8x MSAA:</strong> Bits <code>0</code> through <code>7</code>
+correspond to samples <code>0</code> through <code>7</code>.</li>
+</ul>
+<p>Reading this mask enables shaders to detect edges within a pixel. If
+all active bits are <code>1</code>, the pixel is fully interior to the
+primitive; if only a subset of bits are <code>1</code>, the pixel lies
+along a geometric boundary. This information is frequently used in
+custom deferred resolve passes to distinguish edge pixels that require
+complex multi-sample reconstruction from fully covered pixels that can
+be shaded with a single fast operation.</p>
+<h2 id="sv_coverage-as-a-pixel-shader-output">SV_Coverage as a Pixel
+Shader Output</h2>
+<p>DirectX also allows <code>SV_Coverage</code> to be defined as an
+output parameter. When a shader outputs a coverage mask, it overrides or
+filters the hardware-computed coverage before the depth, stencil, and
+blend stages execute:</p>
+<pre class="hlsl"><code>void PSMain(PSInput input, 
+            out float4 color : SV_Target, 
+            out uint outCoverage : SV_Coverage)
+{
+    color = CalculateColor(input);
+    
+    // Dynamically calculate and set sample coverage
+    outCoverage = 0x5; // Samples 0 and 2 are marked covered
+}</code></pre>
+<p>When modifying coverage programmatically:</p>
+<ol type="1">
+<li><strong>Mask Reduction:</strong> Shaders can turn off sample bits to
+mask out parts of the pixel.</li>
+<li><strong>Alpha-to-Coverage Emulation:</strong> Shaders can map
+fractional alpha values directly to ordered bit patterns, providing
+precise, custom-dithered sub-pixel transparency for fences, foliage, and
+hair.</li>
+<li><strong>Partial Discards:</strong> Instead of discarding the entire
+pixel via <code>clip()</code> or <code>discard</code>, the shader can
+turn off individual samples. The remaining samples continue through
+depth testing and write to the frame buffer normally.</li>
+</ol>
+<p>If both input and output <code>SV_Coverage</code> are used, the
+shader can read the rasterized coverage and apply a bitwise
+<code>AND</code> operation with an internal mask, ensuring that no
+samples outside the primitive's geometric boundaries are mistakenly
+marked as covered.</p>
+<h2 id="performance-and-pipeline-considerations">Performance and
+Pipeline Considerations</h2>
+<p>Using <code>SV_Coverage</code> introduces specific hardware
+implications:</p>
+<ul>
+<li><strong>Early-Z Pipeline Interaction:</strong> Outputting
+<code>SV_Coverage</code> modifies sample participation after primitive
+interpolation. Because the final sample occupancy is unknown until the
+pixel shader executes, the GPU may be forced to disable standard Early-Z
+rejection or fall back to conservative Early-Z testing, potentially
+impacting performance on fill-rate-bound scenes.</li>
+<li><strong>Sample Frequency Shading:</strong> Merely reading
+<code>SV_Coverage</code> as an input does not force per-sample
+execution. The pixel shader executes at pixel frequency unless other
+mechanics—such as <code>SV_SampleIndex</code> or sample-frequency
+interpolation attributes—explicitly force per-sample shading.</li>
+<li><strong>Conservative Depth:</strong> When writing both
+<code>SV_Depth</code> and <code>SV_Coverage</code>, hardware
+optimizations depend heavily on conservative flags
+(<code>[earlydepthstencil]</code>, <code>SV_DepthGreaterEqual</code>,
+<code>SV_DepthLessEqual</code>) to maintain depth buffer culling
+efficiency.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Shader Model 6.6 New Features - directx</title>
+    <meta name="description" content="Shader Model 6.6 introduces a suite of significant features to DirectX 12, granting developers greater low-level hardware control, improved performance optimization, and streamlined resource management. This update expands GPU programmability through dire">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-shader-model-6-6-new-features">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Shader Model 6.6 New Features - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-shader-model-6-6-new-features" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Shader Model 6.6 introduces a suite of significant features to DirectX 12, granting developers greater low-level hardware control, improved performance optimization, and streamlined resource management. This update expands GPU programmability through dire" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-shader-model-66-new-features">DirectX 12 Shader Model
+6.6 New Features</h1>
+<p>Shader Model 6.6 introduces a suite of significant features to
+DirectX 12, granting developers greater low-level hardware control,
+improved performance optimization, and streamlined resource management.
+This update expands GPU programmability through direct descriptor heap
+access, enhanced 64-bit atomic operations, native compute shader
+derivatives, specialized pack and unpack math intrinsics, and runtime
+helper lane detection.</p>
+<h3 id="direct-resource-access-descriptor-heap-indexing">Direct Resource
+Access (Descriptor Heap Indexing)</h3>
+<p>One of the most impactful additions in Shader Model 6.6 is direct
+resource binding using dynamic descriptor indexing. HLSL shaders can now
+read resources directly from global descriptor heaps using the
+<code>ResourceDescriptorHeap</code> and
+<code>SamplerDescriptorHeap</code> arrays. This model eliminates the
+requirement to pre-bind specific descriptor tables via root signatures,
+dramatically simplifying bindless rendering architectures and lowering
+CPU overhead during draw call preparation.</p>
+<h3 id="expanded-64-bit-atomics-and-bitwise-operations">Expanded 64-Bit
+Atomics and Bitwise Operations</h3>
+<p>Shader Model 6.6 broadens the scope of 64-bit integer atomics.
+Previous models were limited in how and where 64-bit atomics could be
+applied. With SM 6.6:</p>
+<ul>
+<li>64-bit integer atomics are supported across Group Shared Memory
+(GSM), raw buffers, structured buffers, and typed resources.</li>
+<li>64-bit and 32-bit bitwise atomic functions—including
+<code>InterlockedAnd</code>, <code>InterlockedOr</code>, and
+<code>InterlockedXor</code>—are supported across typed and structured
+resources.</li>
+<li>Shaders can perform direct atomic synchronization on global counters
+and shared data structures without falling back to emulation loops.</li>
+</ul>
+<h3 id="compute-shader-derivatives">Compute Shader Derivatives</h3>
+<p>Before Shader Model 6.6, quad-based derivative operations like
+<code>ddx</code>, <code>ddy</code>, and anisotropic texture sampling
+were primarily restricted to pixel shaders. Shader Model 6.6 enables
+screen-space and quad-based derivatives in Compute Shaders, Mesh
+Shaders, and Amplification Shaders. This enables advanced compute-driven
+rendering techniques, such as custom software rasterization,
+post-processing filters, and procedural texture generation directly
+within compute pipelines.</p>
+<h3 id="pack-and-unpack-intrinsics">Pack and Unpack Intrinsics</h3>
+<p>To accelerate data compression and packing algorithms, Shader Model
+6.6 adds dedicated HLSL intrinsics for manipulating packed 8-bit and
+16-bit vector data inside 32-bit registers. These instructions include
+operations like <code>pack_s8</code>, <code>pack_u8</code>,
+<code>unpack_s8s32</code>, and <code>unpack_u8u32</code>. Utilizing
+these hardware-accelerated instructions improves memory bandwidth
+efficiency and arithmetic throughput in machine learning inferencing,
+image processing, and compact G-buffer pipelines.</p>
+<h3 id="helper-lane-detection-ishelperlane">Helper Lane Detection
+(<code>IsHelperLane</code>)</h3>
+<p>In derivative calculations, inactive lanes in a SIMD wave act as
+"helper lanes" to compute finite differences across a quad. Shader Model
+6.6 exposes the <code>IsHelperLane()</code> intrinsic, allowing a shader
+invocation to detect whether it is executing strictly as a helper.
+Developers can branch around costly operations, skip redundant memory
+stores, and eliminate undefined behavior caused by helper invocations
+attempting resource writes.</p>
+<h3 id="ray-tracing-payload-access-qualifiers">Ray Tracing Payload
+Access Qualifiers</h3>
+<p>Building on DirectX Raytracing (DXR) 1.1, Shader Model 6.6 introduces
+payload access qualifiers. Developers can explicitly declare read and
+write permissions between ray generation, closest-hit, miss, and any-hit
+shaders for specific payload fields. The HLSL compiler uses these access
+tags to optimize register allocation, substantially reducing the
+register footprint of ray tracing payloads and improving overall ray
+dispatch occupancy.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

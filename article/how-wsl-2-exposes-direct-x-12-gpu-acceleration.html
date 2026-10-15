@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How WSL2 Exposes DirectX 12 GPU Acceleration - directx</title>
+    <meta name="description" content="Windows Subsystem for Linux (WSL2) enables DirectX 12 hardware acceleration for Linux binaries through GPU paravirtualization (GPU-PV), a specialized Linux kernel driver, and a user-mode Direct3D 12 runtime. This architecture allows Linux environments run">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-wsl-2-exposes-direct-x-12-gpu-acceleration">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How WSL2 Exposes DirectX 12 GPU Acceleration - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-wsl-2-exposes-direct-x-12-gpu-acceleration" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Windows Subsystem for Linux (WSL2) enables DirectX 12 hardware acceleration for Linux binaries through GPU paravirtualization (GPU-PV), a specialized Linux kernel driver, and a user-mode Direct3D 12 runtime. This architecture allows Linux environments run" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-wsl2-exposes-directx-12-gpu-acceleration">How WSL2 Exposes
+DirectX 12 GPU Acceleration</h1>
+<p>Windows Subsystem for Linux (WSL2) enables DirectX 12 hardware
+acceleration for Linux binaries through GPU paravirtualization (GPU-PV),
+a specialized Linux kernel driver, and a user-mode Direct3D 12 runtime.
+This architecture allows Linux environments running inside a Hyper-V
+virtual machine to offload rendering, compute, and machine learning
+tasks directly to the physical Windows host GPU with minimal overhead
+and without requiring dedicated PCIe passthrough.</p>
+<h3 id="gpu-paravirtualization-gpu-pv-architecture">GPU
+Paravirtualization (GPU-PV) Architecture</h3>
+<p>WSL2 operates inside a lightweight Hyper-V virtual machine. Instead
+of using discrete device assignment (which would dedicate the entire
+physical GPU exclusively to the guest VM and disconnect it from
+Windows), Microsoft utilizes GPU Paravirtualization. GPU-PV allows the
+host and guest operating systems to share the same physical graphics
+hardware concurrently. The host retains control of GPU scheduling, power
+management, and physical memory allocation, while the guest VM is
+presented with a virtualized interface to the GPU.</p>
+<h3 id="the-devdxg-kernel-driver">The <code>/dev/dxg</code> Kernel
+Driver</h3>
+<p>At the core of the guest-to-host bridge is <code>dxgkrnl</code>, a
+Linux kernel driver developed by Microsoft specifically for WSL2. This
+driver initializes inside the Linux kernel and creates a character
+device located at <code>/dev/dxg</code>.</p>
+<p>When a Linux process requires GPU services, it communicates with
+<code>/dev/dxg</code>. The driver packages the standard Graphics
+Processing Unit input/output control (IOCTL) calls and forwards them
+across the virtualization boundary to the host using Hyper-V's
+high-speed VMBus transport protocol.</p>
+<h3 id="host-side-processing">Host-Side Processing</h3>
+<p>On the Windows host, the incoming requests from the VMBus are handled
+by the native Windows DirectX Graphics Kernel
+(<code>dxgkrnl.sys</code>). Because the requests arriving from WSL2
+match the abstraction level of Windows graphics commands, the host
+treats the VM's requests similarly to any native Windows process. The
+host kernel schedules the tasks and executes them through the host’s
+installed Windows Display Driver Model (WDDM) GPU driver.</p>
+<h3 id="user-mode-libraries-libdxcore-and-libd3d12">User-Mode Libraries:
+<code>libdxcore</code> and <code>libd3d12</code></h3>
+<p>For user-space Linux binaries to interact with <code>/dev/dxg</code>,
+Microsoft provides companion libraries:</p>
+<ul>
+<li><strong><code>libdxcore.so</code></strong>: A Linux port of the
+Windows DXCore API. It handles adapter enumeration and manages the
+low-level communication with the <code>/dev/dxg</code> device.</li>
+<li><strong><code>libd3d12.so</code></strong>: A native Linux
+implementation of the Direct3D 12 API. It translates high-level DirectX
+12 calls into command streams formatted for the underlying kernel
+driver.</li>
+</ul>
+<p>These libraries are mounted automatically into the WSL2 environment
+from the host OS, ensuring that the guest libraries match the version of
+the Windows host graphics stack.</p>
+<h3 id="enabling-broader-api-support-mesa-and-compute">Enabling Broader
+API Support: Mesa and Compute</h3>
+<p>Linux software typically relies on OpenGL, Vulkan, or compute
+frameworks rather than native Direct3D 12. To support the wider Linux
+ecosystem, this translation layer is utilized by external
+frameworks:</p>
+<ul>
+<li><strong>Mesa 3D (OpenGL and Vulkan)</strong>: The Mesa graphics
+library includes drivers (such as the D3D12 Gallium driver and the
+"Dozen" Vulkan-over-D3D12 driver) that translate OpenGL and Vulkan API
+calls directly into Direct3D 12 calls, which are then passed to
+<code>libd3d12.so</code>.</li>
+<li><strong>DirectML and AI Frameworks</strong>: Machine learning
+libraries like PyTorch and ONNX Runtime use the DirectML API built on
+top of Direct3D 12 to leverage GPU-accelerated tensor operations.</li>
+<li><strong>NVIDIA CUDA</strong>: NVIDIA provides a specialized
+user-mode driver for WSL2 that binds directly to the
+<code>/dev/dxg</code> interface, allowing unmodified CUDA containers and
+applications to execute parallel compute workloads on NVIDIA
+hardware.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

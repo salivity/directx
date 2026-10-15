@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Agility SDK on Windows Enterprise LTSC - directx</title>
+    <meta name="description" content="The DirectX 12 Agility SDK simplifies software deployment on enterprise systems by decoupling the DirectX 12 runtime from operating system feature updates. In environments running Windows Long-Term Servicing Channel (LTSC) or other long-term branches, sys">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-agility-sdk-on-windows-enterprise-ltsc">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Agility SDK on Windows Enterprise LTSC - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-agility-sdk-on-windows-enterprise-ltsc" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The DirectX 12 Agility SDK simplifies software deployment on enterprise systems by decoupling the DirectX 12 runtime from operating system feature updates. In environments running Windows Long-Term Servicing Channel (LTSC) or other long-term branches, sys" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-agility-sdk-on-windows-enterprise-ltsc">DirectX 12
+Agility SDK on Windows Enterprise LTSC</h1>
+<p>The DirectX 12 Agility SDK simplifies software deployment on
+enterprise systems by decoupling the DirectX 12 runtime from operating
+system feature updates. In environments running Windows Long-Term
+Servicing Channel (LTSC) or other long-term branches, systems prioritize
+stability and intentionally defer major Windows upgrades. The Agility
+SDK eliminates the barrier between static OS builds and modern graphics
+capabilities, allowing enterprise applications—such as computer-aided
+design (CAD), simulation, and machine learning workloads—to run modern
+DirectX 12 features reliably without requiring system-wide OS
+upgrades.</p>
+<p>Traditionally, new DirectX 12 features—such as updated DirectX
+Raytracing (DXR) tiers, Variable Rate Shading, Mesh Shaders, and Work
+Graphs—were delivered exclusively through major Windows 10 and Windows
+11 feature updates. This model created a significant deployment
+roadblock for enterprise environments. Because LTSC releases only
+receive security and quality patches over their lifecycle, enterprise
+workstations could remain locked to an older DirectX runtime for years.
+Developers and IT administrators were faced with a dilemma: maintain
+enterprise stability on LTSC and forgo modern graphics functionality, or
+undergo costly and time-consuming OS upgrades across entire fleets.</p>
+<p>The DirectX 12 Agility SDK resolves this challenge through
+application-local deployment. Instead of relying on a centralized,
+system-wide DirectX runtime provided by the installed Windows build,
+developers can package the necessary Agility SDK runtime binaries
+directly alongside their application executables.</p>
+<p>When the application launches, the Agility SDK loader determines
+whether the underlying system meets a minimal architectural baseline
+(such as Windows 10 version 1909 or later). If the baseline is
+satisfied, the application loads the newer DirectX 12 runtime directly
+from the local application directory. This process bypasses the
+operating system's native runtime limitations while continuing to
+interact with the installed graphics hardware driver normally.</p>
+<p>For enterprise IT teams, this architecture delivers several
+deployment advantages:</p>
+<ul>
+<li><strong>Preserved System Stability:</strong> Applications can adopt
+cutting-edge rendering and compute features without forcing IT
+administrators to alter the certified, locked-down operating system
+image.</li>
+<li><strong>Reduced Validation Overhead:</strong> Enterprise fleets
+running Windows Enterprise LTSC do not need broad testing cycles for new
+Windows OS builds just to support a single updated visualization or
+engineering tool.</li>
+<li><strong>Target Consistency:</strong> Software vendors and internal
+developers can write against a unified, modern DirectX 12 API version,
+confident that their software will behave identically on standard
+consumer Windows builds and enterprise long-term branches.</li>
+<li><strong>Isolated Rollbacks:</strong> Because runtimes are bundled
+locally with individual applications, runtime updates or rollbacks are
+scoped strictly to the software package itself, completely eliminating
+the risk of system-wide rendering regressions.</li>
+</ul>
+<p>By shifting runtime management from the operating system to the
+application layer, the DirectX 12 Agility SDK enables enterprise
+workstations on long-term Windows branches to leverage modern
+GPU-accelerated workloads without compromising their core mandate of
+stability and longevity.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

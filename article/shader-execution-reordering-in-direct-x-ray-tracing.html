@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shader Execution Reordering in DirectX Ray Tracing - directx</title>
+    <meta name="description" content="Shader Execution Reordering (SER) optimizes ray tracing performance in DirectX by dynamically reorganizing incoherent GPU workloads into coherent execution threads on the fly. In real-time ray tracing, rays bounce off surfaces in unpredictable directions,">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/shader-execution-reordering-in-direct-x-ray-tracing">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Shader Execution Reordering in DirectX Ray Tracing - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/shader-execution-reordering-in-direct-x-ray-tracing" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Shader Execution Reordering (SER) optimizes ray tracing performance in DirectX by dynamically reorganizing incoherent GPU workloads into coherent execution threads on the fly. In real-time ray tracing, rays bounce off surfaces in unpredictable directions," />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="shader-execution-reordering-in-directx-ray-tracing">Shader
+Execution Reordering in DirectX Ray Tracing</h1>
+<p>Shader Execution Reordering (SER) optimizes ray tracing performance
+in DirectX by dynamically reorganizing incoherent GPU workloads into
+coherent execution threads on the fly. In real-time ray tracing, rays
+bounce off surfaces in unpredictable directions, causing neighboring GPU
+threads to execute different shaders or access distant memory locations.
+SER acts as a real-time sorting mechanism that groups threads performing
+similar work into the same execution warps, dramatically reducing
+execution and memory divergence and maximizing GPU hardware
+utilization.</p>
+<h3 id="the-divergence-bottleneck-in-ray-tracing">The Divergence
+Bottleneck in Ray Tracing</h3>
+<p>Modern GPUs rely on Single Instruction, Multiple Threads (SIMT)
+architectures, where groups of threads (termed warps or wavefronts)
+execute the same instruction in lockstep across multiple ALU lanes. This
+model works exceptionally well for rasterization, where neighboring
+pixels share the same materials and screen-space alignment.</p>
+<p>Ray tracing breaks this model through two distinct types of
+divergence:</p>
+<ol type="1">
+<li><strong>Shader Execution Divergence:</strong> When secondary rays
+(such as reflections, refractions, or diffuse global illumination) hit
+different surfaces, neighboring threads must execute entirely different
+Closest Hit Shaders (CHSs). If 32 threads in a warp hit 32 different
+materials, the GPU must serialize the execution of each unique shader
+while the remaining threads sit idle, causing severe underutilization of
+execution units.</li>
+<li><strong>Data and Memory Divergence:</strong> Even when rays execute
+the same shader code, rays traveling in divergent directions fetch
+geometry, textures, and acceleration structure nodes from disjointed
+memory regions. This thrashes L1 and L2 caches, causing high memory
+latency and bandwidth saturation.</li>
+</ol>
+<h3 id="how-shader-execution-reordering-solves-divergence">How Shader
+Execution Reordering Solves Divergence</h3>
+<p>Shader Execution Reordering transforms divergent, chaotic workloads
+into uniform, aligned threads before those threads execute compute-heavy
+shader logic.</p>
+<p>In a typical DirectX Raytracing (DXR) pipeline without SER, the
+system processes a ray from generation to traversal, executes the
+closest hit shader, and returns control to the caller. If execution
+diverges, performance degrades immediately.</p>
+<p>With SER enabled, the ray traversal and shader execution phases are
+decoupled:</p>
+<ol type="1">
+<li><strong>Hit Evaluation:</strong> Rays traverse the Bounding Volume
+Hierarchy (BVH) and identify hit points. Instead of immediately invoking
+the corresponding Closest Hit Shader, the runtime generates a
+lightweight record (often represented as a "Hit Object").</li>
+<li><strong>Dynamic Sorting and Clustering:</strong> The GPU hardware
+and driver analyze the pending Hit Objects across concurrent waves.
+Threads with matching execution requirements—such as those invoking the
+same shader or accessing contiguous spatial data—are gathered and
+sorted.</li>
+<li><strong>Coherent Dispatch:</strong> The GPU repacks these sorted
+threads into new, coherent warps. When the actual hit shaders execute,
+all threads within a given warp evaluate identical code paths and access
+localized memory.</li>
+</ol>
+<h3 id="implementation-in-directx">Implementation in DirectX</h3>
+<p>Within DirectX Raytracing, SER is leveraged through modern API
+extensions and HLSL constructs, primarily utilizing Ray Queries or
+dynamic Hit Objects rather than traditional monolithic
+<code>TraceRay</code> calls.</p>
+<p>Developers utilize APIs (such as those exposed by NVIDIA’s NVAPI or
+modern cross-vendor DXR enhancements) to split the tracing process into
+two explicit stages:</p>
+<ul>
+<li><strong>Tracing to Hit Object:</strong> The shader issues a trace
+command that yields a <code>HitObject</code> rather than immediately
+executing an inline or callable shader.</li>
+<li><strong>Reorder Execution:</strong> The shader explicitly calls an
+execution-reordering intrinsic on the <code>HitObject</code>. The GPU
+pauses the wave, collects Hit Objects across the streaming
+multiprocessors, groups like-with-like, and resumes execution with newly
+organized warps.</li>
+</ul>
+<h3 id="impact-on-hardware-utilization">Impact on Hardware
+Utilization</h3>
+<p>By resolving divergence at runtime, SER provides measurable
+hardware-level advantages:</p>
+<ul>
+<li><strong>Elimination of Inactive SIMD Lanes:</strong> Warps no longer
+waste compute cycles masking out inactive threads during material
+evaluation, dramatically raising floating-point (FP32) utilization.</li>
+<li><strong>Improved Cache Hit Rates:</strong> Coherent memory access
+patterns allow the L1 and L2 caches to retain and reuse texture data,
+material properties, and geometry buffers effectively.</li>
+<li><strong>Scalable Path Tracing:</strong> Complex lighting models like
+full path tracing, which rely on multi-bounce diffuse and glossy
+calculations, shift from being bottlenecked by thread divergence to
+scaling predictably with raw compute power.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

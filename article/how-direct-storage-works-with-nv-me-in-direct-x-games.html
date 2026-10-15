@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectStorage Works with NVMe in DirectX Games - directx</title>
+    <meta name="description" content="DirectStorage modernizes the PC gaming data pipeline by coordinating directly with NVMe hardware to maximize data transfer rates and eliminate CPU bottlenecks. In modern DirectX games, it replaces legacy, single-threaded storage routines with an asynchron">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-storage-works-with-nv-me-in-direct-x-games">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectStorage Works with NVMe in DirectX Games - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-storage-works-with-nv-me-in-direct-x-games" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectStorage modernizes the PC gaming data pipeline by coordinating directly with NVMe hardware to maximize data transfer rates and eliminate CPU bottlenecks. In modern DirectX games, it replaces legacy, single-threaded storage routines with an asynchron" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directstorage-works-with-nvme-in-directx-games">How
+DirectStorage Works with NVMe in DirectX Games</h1>
+<p>DirectStorage modernizes the PC gaming data pipeline by coordinating
+directly with NVMe hardware to maximize data transfer rates and
+eliminate CPU bottlenecks. In modern DirectX games, it replaces legacy,
+single-threaded storage routines with an asynchronous, high-queue-depth
+architecture that streamlines the operating system's storage stack. By
+feeding NVMe submission queues efficiently and shifting asset
+decompression directly to the graphics hardware, DirectStorage enables
+near-instant asset streaming and significantly reduced load times.</p>
+<h3 id="the-limitations-of-the-legacy-storage-stack">The Limitations of
+the Legacy Storage Stack</h3>
+<p>Traditional PC games rely on Win32 storage APIs like
+<code>ReadFile</code>, which were designed decades ago for slow,
+spinning hard drives. This legacy path processes I/O operations
+synchronously or with limited concurrency, generating significant CPU
+overhead per request:</p>
+<ol type="1">
+<li><strong>High Context Switching:</strong> Each file request
+transitions between user mode and kernel mode, consuming CPU
+cycles.</li>
+<li><strong>Sequential Handling:</strong> The OS storage stack processes
+requests in small, unbatched quantities, incapable of saturating modern
+solid-state hardware.</li>
+<li><strong>CPU-Bound Decompression:</strong> Data travels from storage
+into system RAM, where the CPU decompresses it before uploading it to
+the GPU via the PCIe bus.</li>
+</ol>
+<h3 id="modern-nvme-controller-architecture">Modern NVMe Controller
+Architecture</h3>
+<p>NVMe SSDs rely on massive parallelism, supporting up to 64,000 I/O
+queues with up to 64,000 commands per queue. The legacy Win32 path
+typically utilizes only a single queue with shallow depths (often 1 to 4
+requests at a time), leaving the vast majority of an NVMe drive's
+potential bandwidth unused.</p>
+<p>DirectStorage bridges this gap by tailoring its architecture to
+mirror how NVMe hardware functions.</p>
+<h3 id="how-directstorage-coordinates-with-the-os-stack-and-nvme">How
+DirectStorage Coordinates with the OS Stack and NVMe</h3>
+<p>DirectStorage alters the interaction between the DirectX 12 runtime,
+the Windows kernel, and the physical NVMe controller through several
+coordinated steps:</p>
+<h4 id="1-batched-asynchronous-request-queuing">1. Batched, Asynchronous
+Request Queuing</h4>
+<p>The game engine submits thousands of simultaneous read requests
+through the DirectStorage API (<code>IDStorageQueue</code>). Instead of
+executing individual I/O system calls, DirectStorage packages these
+requests into high-density batches.</p>
+<h4 id="2-streamlined-os-kernel-traversal">2. Streamlined OS Kernel
+Traversal</h4>
+<p>DirectStorage uses an optimized kernel-mode storage driver that
+bypasses unnecessary layers of the traditional Windows storage filter
+stack. This specialized path translates DirectStorage batches into
+native NVMe command structures with minimal CPU involvement and reduced
+context switches.</p>
+<h4 id="3-nvme-queue-saturation">3. NVMe Queue Saturation</h4>
+<p>The optimized OS driver pushes batched commands directly into the
+NVMe controller's hardware Submission Queues (SQ). Because requests are
+already ordered and optimized, the NVMe controller can leverage its
+multiple internal channels and flash dies simultaneously via Direct
+Memory Access (DMA), moving raw compressed blocks directly into system
+memory without CPU intervention.</p>
+<h4 id="4-gpu-accelerated-decompression">4. GPU-Accelerated
+Decompression</h4>
+<p>Once the NVMe controller finishes the DMA transfer, DirectStorage
+notifies the DirectX runtime. Rather than routing the compressed data
+through the CPU, the assets are transferred directly to GPU memory
+(VRAM). The GPU uses specialized compute shaders or dedicated silicon to
+decompress the assets in parallel, matching the throughput of the NVMe
+drive and making textures, geometry, and worlds immediately accessible
+to the DirectX rendering pipeline.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

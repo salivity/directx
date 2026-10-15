@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX Mesh Shading Memory Bandwidth Savings - directx</title>
+    <meta name="description" content="DirectX 12 mesh shading fundamentally changes how GPUs process dense geometry by replacing the legacy, fixed-function geometry pipeline with a flexible, compute-like programming model. By introducing amplification and mesh shaders, this architecture group">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-mesh-shading-memory-bandwidth-savings">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX Mesh Shading Memory Bandwidth Savings - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-mesh-shading-memory-bandwidth-savings" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 mesh shading fundamentally changes how GPUs process dense geometry by replacing the legacy, fixed-function geometry pipeline with a flexible, compute-like programming model. By introducing amplification and mesh shaders, this architecture group" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-mesh-shading-memory-bandwidth-savings">DirectX Mesh
+Shading Memory Bandwidth Savings</h1>
+<p>DirectX 12 mesh shading fundamentally changes how GPUs process dense
+geometry by replacing the legacy, fixed-function geometry pipeline with
+a flexible, compute-like programming model. By introducing amplification
+and mesh shaders, this architecture groups geometry into localized
+clusters called meshlets, enabling aggressive on-chip culling and highly
+efficient data reuse. For scenes with exceptionally dense geometry,
+adopting mesh shading typically reduces geometry-related memory
+bandwidth consumption by 50% to over 80% compared to the traditional
+Input Assembler and Vertex Shader pipeline.</p>
+<h3 id="elimination-of-redundant-vram-roundtrips">Elimination of
+Redundant VRAM Roundtrips</h3>
+<p>In the traditional graphics pipeline, primitives move through
+multiple discrete stages—Input Assembler, Vertex Shader, Hull/Domain
+Shaders, and Geometry Shader. Intermediate geometric data often spills
+to off-chip VRAM or global memory buffers between stages.</p>
+<p>Mesh shading bypasses the fixed-function Input Assembler entirely.
+Mesh shaders execute cooperative thread groups that fetch, process, and
+output primitives directly using fast, on-chip shared memory and L1
+cache. Because primitive assembly and transformation happen locally
+on-chip, intermediate vertex and primitive structures never traverse
+external memory buses, instantly reducing memory traffic.</p>
+<h3
+id="coarse-grained-culling-in-the-amplification-shader">Coarse-Grained
+Culling in the Amplification Shader</h3>
+<p>The primary driver of bandwidth reduction in dense scenes is early
+rejection. Mesh shaders work alongside amplification shaders (task
+shaders), which operate on entire clusters of primitives rather than
+individual vertices or triangles.</p>
+<p>Before any detailed vertex data is fetched from VRAM, the
+amplification shader can perform:</p>
+<ul>
+<li><strong>Bounding box frustum culling:</strong> Testing if a meshlet
+falls outside the camera view.</li>
+<li><strong>Cluster-level back-face/cone culling:</strong> Rejecting
+entire clusters facing away from the camera.</li>
+<li><strong>Occlusion culling:</strong> Discarding geometry hidden
+behind closer objects via depth hierarchies.</li>
+</ul>
+<p>When a cluster is rejected at this stage, the GPU completely drops
+it. The high-resolution vertex and index data for that cluster is never
+requested from memory, avoiding massive amounts of unnecessary memory
+bus saturation in scenes containing millions of micro-triangles.</p>
+<h3 id="compact-index-formats-and-data-compression">Compact Index
+Formats and Data Compression</h3>
+<p>Traditional rendering relies on global index buffers. When a model
+contains hundreds of thousands or millions of vertices, each triangle
+index requires a 32-bit integer to reference the global vertex
+array.</p>
+<p>Mesh shading partitions meshes into localized meshlets, usually
+capped at 64 to 128 vertices and up to 126 triangles. Because primitive
+indices are relative only to the local meshlet rather than the entire
+mesh:</p>
+<ul>
+<li>Triangles can be indexed using 8-bit (or 16-bit) unsigned integers
+instead of 32-bit indices.</li>
+<li>Index buffer bandwidth is consistently cut by 50% to 75%.</li>
+<li>Shared vertices within a cluster are transformed once in local
+memory, minimizing redundant vertex fetches.</li>
+</ul>
+<h3 id="dynamic-level-of-detail-lod-management">Dynamic Level of Detail
+(LOD) Management</h3>
+<p>In complex environments, swapping between discrete Level of Detail
+meshes traditionally requires managing and streaming separate buffers
+through memory. Amplification shaders allow developers to evaluate LOD
+metrics procedurally on the GPU. The pipeline can select LODs or
+dynamically scale geometry amplification factors entirely within GPU
+registers and cache, avoiding the need to continuously stream
+alternative geometric representations across the memory interface.</p>
+<h3 id="summary-of-bandwidth-gains">Summary of Bandwidth Gains</h3>
+<p>In typical dense rendering workloads—such as high-density foliage,
+scanned photogrammetry assets, or CAD models—the combined impact of mesh
+shading yields substantial savings:</p>
+<ul>
+<li><strong>Index Traffic:</strong> Reduced by up to 75% through
+localized 8-bit indexing.</li>
+<li><strong>Vertex Fetch Bandwidth:</strong> Reduced by 50% to 85%
+through aggressive, pre-transform cluster culling.</li>
+<li><strong>Pipeline Traffic:</strong> Virtually zero VRAM write-read
+overhead for intermediate geometry states due to on-chip
+processing.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reinhard Tone Mapping in DirectX HLSL - directx</title>
+    <meta name="description" content="This article provides a concise overview of the Reinhard tone mapping operator and its practical implementation in DirectX High-Level Shading Language (HLSL). It covers the mathematical foundation of both the basic and extended Reinhard formulations and d">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/reinhard-tone-mapping-in-direct-x-hlsl">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Reinhard Tone Mapping in DirectX HLSL - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/reinhard-tone-mapping-in-direct-x-hlsl" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides a concise overview of the Reinhard tone mapping operator and its practical implementation in DirectX High-Level Shading Language (HLSL). It covers the mathematical foundation of both the basic and extended Reinhard formulations and d" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="reinhard-tone-mapping-in-directx-hlsl">Reinhard Tone Mapping in
+DirectX HLSL</h1>
+<p>This article provides a concise overview of the Reinhard tone mapping
+operator and its practical implementation in DirectX High-Level Shading
+Language (HLSL). It covers the mathematical foundation of both the basic
+and extended Reinhard formulations and details how to implement
+luminance-preserving tone mapping in pixel shaders to transition High
+Dynamic Range (HDR) renders into displayable Low Dynamic Range (LDR)
+images.</p>
+<h2 id="understanding-the-reinhard-tone-mapping-operator">Understanding
+the Reinhard Tone Mapping Operator</h2>
+<p>The Reinhard tone mapping operator, introduced by Erik Reinhard et
+al. in 2002, is an algorithmic curve used in computer graphics to
+compress HDR color values into the standard displayable range of <span
+class="math inline">\([0.0, 1.0]\)</span>. Without tone mapping, any
+luminance value exceeding 1.0 clips abruptly, resulting in blown-out
+highlights and loss of detail in bright regions.</p>
+<h3 id="1-simple-reinhard">1. Simple Reinhard</h3>
+<p>The fundamental Reinhard curve is an asymptotic function that
+non-linearly maps any positive real number to the range <span
+class="math inline">\([0, 1)\)</span>:</p>
+<p><span class="math display">\[L_d = \frac{L}{1 + L}\]</span></p>
+<p>Where:</p>
+<ul>
+<li><span class="math inline">\(L\)</span> is the original HDR luminance
+or color component.</li>
+<li><span class="math inline">\(L_d\)</span> is the tone-mapped display
+luminance.</li>
+</ul>
+<p>When <span class="math inline">\(L\)</span> is small, <span
+class="math inline">\(L_d \approx L\)</span>, preserving shadow
+contrast. As <span class="math inline">\(L\)</span> approaches infinity,
+<span class="math inline">\(L_d\)</span> asymptotes toward <span
+class="math inline">\(1.0\)</span>, preventing hard clipping.</p>
+<h3 id="2-extended-reinhard">2. Extended Reinhard</h3>
+<p>The basic curve never fully reaches pure white (<span
+class="math inline">\(1.0\)</span>), which can make scenes with very
+bright light sources appear flat or muted. The extended Reinhard
+operator introduces a parameter, <span
+class="math inline">\(L_{white}\)</span>, defining the minimum luminance
+value that maps completely to white (<span
+class="math inline">\(1.0\)</span>):</p>
+<p><span class="math display">\[L_d = \frac{L \left(1 +
+\frac{L}{L_{white}^2}\right)}{1 + L}\]</span></p>
+<p>If <span class="math inline">\(L = L_{white}\)</span>, the numerator
+and denominator scale such that <span class="math inline">\(L_d =
+1.0\)</span>.</p>
+<h2 id="implementing-reinhard-in-directx-hlsl">Implementing Reinhard in
+DirectX HLSL</h2>
+<p>Tone mapping can be applied either per-color-channel (RGB)
+independently or across total luminance. Per-channel mapping is
+computationally cheaper but can shift color saturation and hue.
+Luminance-based tone mapping maintains consistent hue and chrominance by
+calculating scalar luminance, mapping it, and scaling the original RGB
+color accordingly.</p>
+<h3 id="method-1-simple-per-channel-operator">Method 1: Simple
+Per-Channel Operator</h3>
+<p>This approach runs the equation independently on each color
+channel:</p>
+<pre class="hlsl"><code>float3 ReinhardSimpleRGB(float3 hdrColor)
+{
+    return hdrColor / (hdrColor + 1.0f);
+}</code></pre>
+<h3 id="method-2-luminance-based-extended-reinhard">Method 2:
+Luminance-Based Extended Reinhard</h3>
+<p>This implementation preserves chrominance by calculating Rec. 709
+relative luminance, applying the extended operator to the scalar
+luminance, and scaling the input color vector:</p>
+<pre class="hlsl"><code>// Converts linear RGB to standard relative luminance (Rec. 709)
+float GetLuminance(float3 color)
+{
+    return dot(color, float3(0.2126f, 0.7152f, 0.0722f));
+}
+
+// Extended Reinhard Tone Mapping function
+float3 ReinhardExtendedLuminance(float3 hdrColor, float maxWhiteLuminance)
+{
+    float l_old = GetLuminance(hdrColor);
+    
+    // Avoid division by zero in absolute black areas
+    if (l_old &lt;= 0.0001f)
+    {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+
+    // Apply the extended Reinhard equation to luminance
+    float whiteSq = maxWhiteLuminance * maxWhiteLuminance;
+    float l_new = (l_old * (1.0f + (l_old / whiteSq))) / (1.0f + l_old);
+
+    // Re-apply scaled luminance to original chromaticity
+    return hdrColor * (l_new / l_old);
+}</code></pre>
+<h3 id="pixel-shader-integration">Pixel Shader Integration</h3>
+<p>Below is an example of an HLSL pixel shader utilizing the operator
+within a post-processing pass:</p>
+<pre class="hlsl"><code>Texture2D gHDRBuffer : register(t0);
+SamplerState gLinearSampler : register(s0);
+
+cbuffer ToneMappingConstants : register(b0)
+{
+    float gMaxWhite; // e.g., 4.0f to 10.0f depending on scene exposure
+};
+
+struct PixelInput
+{
+    float4 position : SV_POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+float4 PSMain(PixelInput input) : SV_Target
+{
+    // Sample linear HDR color
+    float3 hdrColor = gHDRBuffer.Sample(gLinearSampler, input.uv).rgb;
+
+    // Apply extended Reinhard tone mapping
+    float3 ldrColor = ReinhardExtendedLuminance(hdrColor, gMaxWhite);
+
+    // Output mapped color (apply gamma correction downstream or via sRGB render target)
+    return float4(ldrColor, 1.0f);
+}</code></pre></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

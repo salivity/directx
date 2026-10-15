@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>When to Refit vs Rebuild a BLAS in DirectX - directx</title>
+    <meta name="description" content="Refitting a Bottom-Level Acceleration Structure (BLAS) in DirectX Raytracing (DXR) is an optimization technique that updates existing bounding volume hierarchy (BVH) nodes without altering the underlying tree topology. While a full rebuild creates a globa">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/when-to-refit-vs-rebuild-a-blas-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="When to Refit vs Rebuild a BLAS in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/when-to-refit-vs-rebuild-a-blas-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Refitting a Bottom-Level Acceleration Structure (BLAS) in DirectX Raytracing (DXR) is an optimization technique that updates existing bounding volume hierarchy (BVH) nodes without altering the underlying tree topology. While a full rebuild creates a globa" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="when-to-refit-vs-rebuild-a-blas-in-directx">When to Refit vs
+Rebuild a BLAS in DirectX</h1>
+<p>Refitting a Bottom-Level Acceleration Structure (BLAS) in DirectX
+Raytracing (DXR) is an optimization technique that updates existing
+bounding volume hierarchy (BVH) nodes without altering the underlying
+tree topology. While a full rebuild creates a globally optimized BVH
+from scratch, a refit merely adjusts the bounding boxes around displaced
+vertices. Choosing to refit rather than rebuild is cost-effective when
+the performance gained from faster BVH generation outweighs the
+potential rendering loss caused by degraded ray traversal efficiency,
+typically occurring in continuous, localized vertex motion such as
+skeletal animations and soft-body simulations.</p>
+<h3 id="the-mechanism-refit-vs-rebuild">The Mechanism: Refit vs.
+Rebuild</h3>
+<p>In DirectX 12, building a BLAS requires dispatching compute work via
+<code>BuildRaytracingAccelerationStructure</code>.</p>
+<ul>
+<li><strong>Rebuild:</strong> The GPU analyzes all primitive data, sorts
+triangles, and generates a new BVH tree. This produces optimal bounding
+volume overlap and density, ensuring the fastest ray-primitive
+intersection traversal during the ray dispatch stage. However, it
+carries high compute and memory bandwidth overhead each frame.</li>
+<li><strong>Refit
+(<code>D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE</code>):</strong>
+The GPU retains the pre-existing tree topology and recalculates only the
+Axis-Aligned Bounding Boxes (AABBs) for the leaf and internal nodes to
+enclose the moved vertices. This operation is dramatically faster—often
+requiring an order of magnitude less execution time than a full
+rebuild—and consumes minimal memory bandwidth.</li>
+</ul>
+<h3 id="when-refitting-is-more-cost-effective">When Refitting Is More
+Cost-Effective</h3>
+<p>Refitting becomes the superior choice under specific geometric and
+performance conditions:</p>
+<h4 id="1-skeletal-and-skinned-mesh-animation">1. Skeletal and Skinned
+Mesh Animation</h4>
+<p>Skinned characters exhibit local vertex movement driven by bone
+matrices. Because adjacent vertices generally move in unison, the
+underlying spatial structure of the triangles remains relatively
+consistent from frame to frame. In this scenario:</p>
+<ul>
+<li>Rebuilding every frame introduces severe compute bottlenecks if
+multiple characters occupy the view.</li>
+<li>Refitting handles vertex coordinate changes efficiently without
+significantly inflating the AABBs.</li>
+</ul>
+<h4 id="2-cloth-and-continuous-soft-body-deformations">2. Cloth and
+Continuous Soft-Body Deformations</h4>
+<p>Simulations involving flags, clothing, or subtle surface ripple
+effects alter vertex coordinates continuously while preserving the
+overall mesh shape. Because the vertex displacements are localized and
+small, the bounding boxes stretch only slightly, keeping tree efficiency
+high while avoiding the heavy GPU cost of a full reconstruction.</p>
+<h4 id="3-low-impact-or-distant-secondary-geometry">3. Low-Impact or
+Distant Secondary Geometry</h4>
+<p>For dynamic objects located far from the camera or objects that
+contribute minimally to primary rays, reflections, or global
+illumination, the quality of ray traversal is less critical. The frame
+time saved on the compute queue by refitting easily outweighs any
+microscopic drop in traversal speed.</p>
+<h4 id="4-hard-gpu-frame-budgets">4. Hard GPU Frame Budgets</h4>
+<p>When a frame is compute-bound or GPU execution time is approaching
+its deadline (e.g., targeting high-refresh VR or 60/120 FPS targets),
+refitting allows dynamic geometry to remain ray-traceable without
+causing frame drops, trading minor traversal inefficiency for
+substantial BVH generation savings.</p>
+<h3
+id="the-tipping-point-when-traversal-costs-overtake-refit-savings">The
+Tipping Point: When Traversal Costs Overtake Refit Savings</h3>
+<p>A refit ceases to be cost-effective when mesh topology changes or
+extreme deformation causes bounding boxes to expand
+disproportionately:</p>
+<ul>
+<li><strong>Disjointed or High-Velocity Motion:</strong> If vertices
+cross over one another or undergo massive scaling/stretching, parent
+AABBs expand excessively. This creates large areas of empty space and
+heavy overlap between adjacent bounding boxes.</li>
+<li><strong>Topological Changes:</strong> If triangle count changes, or
+if primitives are added or removed, a refit is invalid in DirectX and a
+rebuild is mandatory.</li>
+<li><strong>Traversal Penalties:</strong> When AABB overlap becomes
+severe, rays must traverse multiple overlapping branches, testing dozens
+of false positives before finding an intersection. If ray query
+execution time increases by more than the time saved by skipping the
+rebuild, refitting becomes a net loss.</li>
+</ul>
+<h3 id="recommended-strategy">Recommended Strategy</h3>
+<p>The standard industry approach is a <strong>hybrid
+cadence</strong>:</p>
+<ul>
+<li>Use
+<code>D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE</code>
+during the initial BLAS creation.</li>
+<li>Refit the BLAS on dynamic skinned and simulated meshes every frame
+to preserve GPU compute time.</li>
+<li>Force a full rebuild either periodically (e.g., every <span
+class="math inline">\(N\)</span> frames), when an object undergoes rapid
+state changes (such as teleportation or explosive deformation), or
+dynamically when metric tracking detects that node overlap exceeds
+acceptable thresholds.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

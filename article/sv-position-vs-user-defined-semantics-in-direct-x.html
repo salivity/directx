@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SV_Position vs User-Defined Semantics in DirectX - directx</title>
+    <meta name="description" content="In DirectX High-Level Shading Language (HLSL), vertex shader outputs are tagged with semantics that dictate how data travels through the graphics pipeline. While user-defined semantics serve as generic carriers for custom data like texture coordinates or">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/sv-position-vs-user-defined-semantics-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="SV_Position vs User-Defined Semantics in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/sv-position-vs-user-defined-semantics-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX High-Level Shading Language (HLSL), vertex shader outputs are tagged with semantics that dictate how data travels through the graphics pipeline. While user-defined semantics serve as generic carriers for custom data like texture coordinates or" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="sv_position-vs-user-defined-semantics-in-directx">SV_Position vs
+User-Defined Semantics in DirectX</h1>
+<p>In DirectX High-Level Shading Language (HLSL), vertex shader outputs
+are tagged with semantics that dictate how data travels through the
+graphics pipeline. While user-defined semantics serve as generic
+carriers for custom data like texture coordinates or surface normals
+that simply undergo interpolation, <code>SV_Position</code> is a
+specialized System Value semantic with a strict, hardware-enforced
+purpose. This article explains the technical differences between
+<code>SV_Position</code> and user-defined semantics, covering their
+coordinate space requirements, pipeline behavior, and hardware
+integration.</p>
+<h3 id="hardware-consumption-vs-generic-data-passing">Hardware
+Consumption vs. Generic Data Passing</h3>
+<p>The primary difference lies in how the GPU's fixed-function hardware
+interprets the semantic:</p>
+<ul>
+<li><strong><code>SV_Position</code> (System Value):</strong> This
+semantic signals the GPU's rasterizer stage directly. The rasterization
+hardware requires a position output to determine where a primitive lies
+on the screen, handle frustum clipping, perform back-face culling, and
+execute perspective division. It is mandatory for the final
+pre-rasterization stage (Vertex, Geometry, or Domain Shader).</li>
+<li><strong>User-Defined Semantics:</strong> Semantics such as
+<code>TEXCOORD</code>, <code>NORMAL</code>, or custom names like
+<code>TANGENT</code> are not interpreted by the rasterization hardware.
+The GPU treats them as generic payloads of floating-point or integer
+data that must be forwarded to the Pixel Shader.</li>
+</ul>
+<h3 id="coordinate-space-requirements">Coordinate Space
+Requirements</h3>
+<p>Because <code>SV_Position</code> directly feeds the rasterization
+stage, it must conform to a strict coordinate format:</p>
+<ul>
+<li><strong>Clip Space Output:</strong> When output by a vertex shader
+(or the last stage before the rasterizer), <code>SV_Position</code> must
+be in homogeneous clip space, expressed as a four-component vector <span
+class="math inline">\((x, y, z, w)\)</span>.</li>
+<li><strong>User-Defined Flexibility:</strong> User-defined semantics
+can store values in any mathematical space desired by the developer,
+such as local space, world space, view space, or normalized UV
+coordinates. The graphics pipeline enforces no mathematical conventions
+on these values.</li>
+</ul>
+<h3 id="transformation-between-shader-stages">Transformation Between
+Shader Stages</h3>
+<p>How these values arrive in the Pixel Shader highlights another
+critical divergence in behavior:</p>
+<ul>
+<li><strong><code>SV_Position</code> in the Pixel Shader:</strong>
+Between the vertex and pixel shader stages, the GPU performs perspective
+divide (dividing <span class="math inline">\(x, y, z\)</span> by <span
+class="math inline">\(w\)</span>) and viewport mapping on
+<code>SV_Position</code>. Consequently, if a pixel shader reads
+<code>SV_Position</code> as an input, it receives screen-space (pixel)
+coordinates where <span class="math inline">\(x\)</span> and <span
+class="math inline">\(y\)</span> correspond to the pixel's location in
+the render target (with pixel centers offset by 0.5), <span
+class="math inline">\(z\)</span> represents the depth buffer value, and
+<span class="math inline">\(w\)</span> holds <span
+class="math inline">\(1/w\)</span> for perspective interpolation.</li>
+<li><strong>User-Defined Interpolation:</strong> User-defined semantics
+undergo perspective-correct interpolation across the surface of the
+triangle. Unless overridden by interpolation modifiers (such as
+<code>nointerpolation</code> or <code>noperspective</code>), the data
+arrives at the pixel shader smoothly blended across vertices without any
+automatic screen-space transformations.</li>
+</ul>
+<h3 id="pipeline-validation-and-constraints">Pipeline Validation and
+Constraints</h3>
+<p>The DirectX compiler and runtime enforce strict rules regarding
+<code>SV_Position</code>:</p>
+<ul>
+<li><strong>Uniqueness and Presence:</strong> Exactly one active
+position semantic (<code>SV_Position</code>) must be output prior to the
+rasterizer. Failing to provide <code>SV_Position</code> results in a
+compilation error or runtime pipeline failure.</li>
+<li><strong>Arbitrary Definition:</strong> User-defined semantics can be
+arbitrarily declared, named, indexed (e.g., <code>TEXCOORD0</code>
+through <code>TEXCOORD7</code>), or omitted entirely depending on the
+requirements of the rendering pass.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

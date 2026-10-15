@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLSL Compilation Targets: lib_6_6 vs cs_6_6 - directx</title>
+    <meta name="description" content="Modern DirectX Shader Compiler (DXC) relies on compilation targets to determine how High-Level Shader Language (HLSL) code is validated, optimized, and packaged for the GPU. Stage-specific profiles such as cs66 compile isolated, single-entry-point program">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/hlsl-compilation-targets-lib-6-6-vs-cs-6-6">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="HLSL Compilation Targets: lib_6_6 vs cs_6_6 - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/hlsl-compilation-targets-lib-6-6-vs-cs-6-6" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Modern DirectX Shader Compiler (DXC) relies on compilation targets to determine how High-Level Shader Language (HLSL) code is validated, optimized, and packaged for the GPU. Stage-specific profiles such as cs66 compile isolated, single-entry-point program" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="hlsl-compilation-targets-lib_6_6-vs-cs_6_6">HLSL Compilation
+Targets: lib_6_6 vs cs_6_6</h1>
+<p>Modern DirectX Shader Compiler (DXC) relies on compilation targets to
+determine how High-Level Shader Language (HLSL) code is validated,
+optimized, and packaged for the GPU. Stage-specific profiles such as
+<code>cs_6_6</code> compile isolated, single-entry-point programs for
+specific pipeline stages like compute shaders, whereas library profiles
+like <code>lib_6_6</code> generate modular, multi-entry shader libraries
+essential for modern features such as DirectX Raytracing (DXR) and Work
+Graphs. Understanding the architectural differences between these target
+profiles is vital for structuring HLSL code bases, managing linking, and
+optimizing GPU pipeline state objects.</p>
+<h3 id="stage-specific-targets-cs_6_6">Stage-Specific Targets:
+cs_6_6</h3>
+<p>The <code>cs_6_6</code> compilation target represents a dedicated
+compute shader compiled under Shader Model 6.6. When targeting
+<code>cs_6_6</code>, DXC expects a monolithic program with a single,
+explicitly defined entry point function that includes the
+<code>[numthreads(x, y, z)]</code> attribute.</p>
+<p>Because the compiler knows the exact entry point and execution
+context during compilation, it performs aggressive whole-program
+optimizations. Any functions, variables, or resource bindings that are
+unreachable from the declared entry point are treated as dead code and
+stripped from the final DXIL (DirectX Intermediate Language) binary. The
+resulting output is a self-contained shader blob ready to be passed
+directly into a traditional Compute Pipeline State Object (PSO).</p>
+<h3 id="library-targets-lib_6_6">Library Targets: lib_6_6</h3>
+<p>The <code>lib_6_6</code> target compiles HLSL code into a reusable
+code library rather than an isolated, monolithic stage. Introduced
+primarily to support DXR and later extended to features like Work
+Graphs, library targets do not enforce a single entry point or a fixed
+pipeline stage.</p>
+<p>A single <code>lib_6_6</code> binary can contain:</p>
+<ul>
+<li>Multiple entry points of various types (e.g.,
+<code>[shader("raygeneration")]</code>,
+<code>[shader("closesthit")]</code>, <code>[shader("compute")]</code>,
+<code>[shader("node")]</code>).</li>
+<li>Standalone helper functions exported for linking with other shaders
+at runtime.</li>
+<li>Shared type definitions and resource declarations.</li>
+</ul>
+<p>Instead of stripping unreferenced functions, DXC preserves all
+exported public functions and their symbol tables within the DXIL
+binary. This allows the DirectX 12 runtime and the graphics driver to
+link these functions dynamically when assembling a State Object (such as
+a Raytracing Pipeline State Object or an Executable Graph).</p>
+<h3 id="key-architectural-differences">Key Architectural
+Differences</h3>
+<ol type="1">
+<li><p><strong>Entry Point Requirements:</strong> <code>cs_6_6</code>
+requires exactly one compute entry point specified via the compiler
+command line (e.g., <code>-E CSMain</code>). <code>lib_6_6</code> does
+not use the <code>-E</code> flag to target a single function; instead,
+entry points are declared inside the HLSL source using the
+<code>[shader("...")]</code> attribute.</p></li>
+<li><p><strong>Dead Code Elimination:</strong> In <code>cs_6_6</code>,
+dead code elimination is global and definitive; uncalled functions are
+removed. In <code>lib_6_6</code>, exported functions are retained
+regardless of whether they reference each other, keeping the library
+flexible for external linkage at the cost of requiring the driver to
+perform final dead-code elimination when building the pipeline
+state.</p></li>
+<li><p><strong>Pipeline State Object Integration:</strong> A
+<code>cs_6_6</code> blob is supplied directly to a standard
+<code>D3D12_COMPUTE_PIPELINE_STATE_DESC</code>. Conversely, a
+<code>lib_6_6</code> container must be wrapped inside a
+<code>D3D12_STATE_OBJECT_DESC</code>, where the application explicitly
+defines which entry points, hit groups, or subobjects are exposed to the
+driver.</p></li>
+<li><p><strong>Resource Binding Semantics:</strong> While
+<code>cs_6_6</code> resolves all root signatures and resource registers
+at compile-time for a fixed compute context, <code>lib_6_6</code>
+supports both local and global root signatures, enabling localized
+resource binding per raytracing shader or node function.</p></li>
+</ol>
+<h3 id="choosing-between-targets">Choosing Between Targets</h3>
+<p>Use <code>cs_6_6</code> for traditional, standalone compute workloads
+where performance requires compile-time symbol resolution and standard
+compute pipeline state caching. Use <code>lib_6_6</code> whenever
+developing for DirectX Raytracing, Work Graphs, dynamic shader linking,
+or when packaging multiple related entry points into a single compiled
+artifact to simplify asset management.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

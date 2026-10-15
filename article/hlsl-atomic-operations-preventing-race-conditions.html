@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLSL Atomic Operations: Preventing Race Conditions - directx</title>
+    <meta name="description" content="This article provides an overview of atomic operations in DirectX High-Level Shader Language (HLSL), explaining how they function and why they are essential for GPU programming. It examines the mechanics of write race conditions in parallel computing arch">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/hlsl-atomic-operations-preventing-race-conditions">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="HLSL Atomic Operations: Preventing Race Conditions - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/hlsl-atomic-operations-preventing-race-conditions" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of atomic operations in DirectX High-Level Shader Language (HLSL), explaining how they function and why they are essential for GPU programming. It examines the mechanics of write race conditions in parallel computing arch" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="hlsl-atomic-operations-preventing-race-conditions">HLSL Atomic
+Operations: Preventing Race Conditions</h1>
+<p>This article provides an overview of atomic operations in DirectX
+High-Level Shader Language (HLSL), explaining how they function and why
+they are essential for GPU programming. It examines the mechanics of
+write race conditions in parallel computing architectures, details the
+primary <code>Interlocked</code> intrinsic functions available in HLSL,
+and demonstrates how these operations serialize memory access to
+preserve data integrity across concurrent threads.</p>
+<h3 id="understanding-race-conditions-on-the-gpu">Understanding Race
+Conditions on the GPU</h3>
+<p>Graphics Processing Units (GPUs) achieve massive performance by
+executing thousands of threads simultaneously. However, this massive
+parallelism introduces synchronization challenges when multiple threads
+attempt to access and modify the same memory address at the same
+time.</p>
+<p>In standard HLSL operations, modifying a value stored in memory—such
+as an Unordered Access View (UAV) or Thread Group Shared Memory
+(<code>groupshared</code>)—is not instantaneous. It requires three
+distinct steps:</p>
+<ol type="1">
+<li><strong>Read:</strong> The thread fetches the current value from
+memory into a register.</li>
+<li><strong>Modify:</strong> The ALU modifies the value (e.g.,
+increments it).</li>
+<li><strong>Write:</strong> The thread writes the updated value back to
+the original memory address.</li>
+</ol>
+<p>A <strong>write race condition</strong> occurs when two or more
+threads attempt this read-modify-write sequence on the same memory
+location concurrently. For example, if Thread A and Thread B both read a
+value of <code>5</code>, both increment it to <code>6</code>, and both
+write <code>6</code> back, the final stored value becomes <code>6</code>
+instead of the expected <code>7</code>. One of the updates is
+permanently lost.</p>
+<h3 id="what-are-atomic-operations">What Are Atomic Operations?</h3>
+<p>An atomic operation is an operation that executes as a single,
+indivisible unit. From the perspective of all other threads in the
+system, the operation either has not started or has completely finished;
+it cannot be observed in an intermediate state, paused, or interleaved
+with another operation on the same address.</p>
+<p>In DirectX HLSL, atomic operations are implemented at the hardware
+level through dedicated memory controllers. When an atomic instruction
+targets an address, the hardware serializes access to that specific
+memory location. Other threads attempting to perform atomic operations
+on that same address are queued and executed one after another, ensuring
+that no update overwrites or invalidates another.</p>
+<h3 id="common-hlsl-atomic-intrinsics">Common HLSL Atomic
+Intrinsics</h3>
+<p>DirectX HLSL provides a suite of atomic operations known as
+<strong>Interlocked functions</strong>. These functions operate on
+32-bit (and in newer shader models, 64-bit) integer types within raw
+buffers, structured buffers, textures, or <code>groupshared</code>
+memory.</p>
+<p>Key HLSL Interlocked intrinsics include:</p>
+<ul>
+<li><strong><code>InterlockedAdd(dest, value, [original_value])</code>:</strong>
+Atomically adds <code>value</code> to the variable at <code>dest</code>.
+Optionally returns the value held prior to the addition.</li>
+<li><strong><code>InterlockedMin(dest, value, [original_value])</code> /
+<code>InterlockedMax(...)</code>:</strong> Atomically computes the
+minimum or maximum between <code>value</code> and the target at
+<code>dest</code>, storing the result.</li>
+<li><strong><code>InterlockedAnd(...)</code>,
+<code>InterlockedOr(...)</code>,
+<code>InterlockedXor(...)</code>:</strong> Performs bitwise operations
+atomically.</li>
+<li><strong><code>InterlockedExchange(dest, value, original_value)</code>:</strong>
+Atomically assigns <code>value</code> to <code>dest</code> and stores
+the previous value in <code>original_value</code>.</li>
+<li><strong><code>InterlockedCompareExchange(dest, compare_value, value, original_value)</code>:</strong>
+Compares the target at <code>dest</code> with
+<code>compare_value</code>. If they are equal, it replaces the target
+with <code>value</code>; otherwise, the target remains unchanged. The
+original value is always returned.</li>
+</ul>
+<h3 id="how-atomics-prevent-write-race-conditions">How Atomics Prevent
+Write Race Conditions</h3>
+<p>Consider an algorithm building a histogram or allocating dynamic
+memory indices where multiple threads increment a shared counter:</p>
+<pre class="hlsl"><code>RWStructuredBuffer&lt;uint&gt; g_Counter;
+
+[numthreads(64, 1, 1)]
+void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    // Race Condition: Multiple threads may read and write simultaneously
+    // g_Counter[0] = g_Counter[0] + 1; 
+
+    // Thread-safe: Hardware ensures serialized updates
+    uint originalIndex;
+    InterlockedAdd(g_Counter[0], 1, originalIndex);
+    
+    // Each thread receives a unique originalIndex for its exclusive use
+}</code></pre>
+<p>By substituting standard arithmetic assignments with
+<code>InterlockedAdd</code>, the memory controller enforces an orderly
+execution queue:</p>
+<ol type="1">
+<li>Thread A initiates <code>InterlockedAdd</code>.</li>
+<li>The memory controller locks modification access to
+<code>g_Counter[0]</code>.</li>
+<li>Thread A reads the current value, increments it, and writes it
+back.</li>
+<li>The memory controller releases the lock for
+<code>g_Counter[0]</code> and immediately processes Thread B's pending
+request.</li>
+</ol>
+<p>Because no two threads can execute the read-modify-write cycle at the
+exact same instant on that address, lost updates are entirely
+eliminated.</p>
+<h3 id="performance-considerations">Performance Considerations</h3>
+<p>While atomic operations guarantee thread safety, they can introduce
+performance bottlenecks if misused:</p>
+<ul>
+<li><strong>Memory Contention:</strong> When hundreds of threads target
+the exact same memory address simultaneously, the parallel execution of
+the GPU collapses into serial execution for that operation.</li>
+<li><strong>Hierarchical Reduction:</strong> To minimize global
+contention, developers often perform atomic operations locally within
+<code>groupshared</code> memory first, using a single representative
+thread per thread group to issue a single atomic write to global memory
+(UAV).</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

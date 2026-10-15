@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How D3D12_MEMORY_POOL Configures Device Memory - directx</title>
+    <meta name="description" content="This article explores how the D3D12MEMORYPOOL enumeration configures physical device memory pools for DirectX 12 resources. It details the operational differences between L0 and L1 memory pools across discrete and integrated hardware architectures, explai">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-d-3-d-12-memory-pool-configures-device-memory">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How D3D12_MEMORY_POOL Configures Device Memory - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-d-3-d-12-memory-pool-configures-device-memory" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how the D3D12MEMORYPOOL enumeration configures physical device memory pools for DirectX 12 resources. It details the operational differences between L0 and L1 memory pools across discrete and integrated hardware architectures, explai" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-d3d12_memory_pool-configures-device-memory">How
+D3D12_MEMORY_POOL Configures Device Memory</h1>
+<p>This article explores how the <code>D3D12_MEMORY_POOL</code>
+enumeration configures physical device memory pools for DirectX 12
+resources. It details the operational differences between L0 and L1
+memory pools across discrete and integrated hardware architectures,
+explains how custom heap properties leverage these pools, and examines
+the performance implications of directing allocations to specific
+physical memory locations.</p>
+<h3 id="understanding-d3d12_memory_pool">Understanding
+D3D12_MEMORY_POOL</h3>
+<p>In DirectX 12, memory management is exposed directly to the
+application. The <code>D3D12_MEMORY_POOL</code> enumeration defines the
+physical location of the memory backing a resource heap. It provides
+three primary values:</p>
+<ul>
+<li><strong><code>D3D12_MEMORY_POOL_UNKNOWN</code></strong>: The system
+decides the physical memory pool based on the heap type and driver
+heuristics.</li>
+<li><strong><code>D3D12_MEMORY_POOL_L0</code></strong>: Specifies
+physical memory pool zero, which corresponds to system RAM.</li>
+<li><strong><code>D3D12_MEMORY_POOL_L1</code></strong>: Specifies
+physical memory pool one, which corresponds to local video memory (VRAM)
+physically attached to a discrete GPU.</li>
+</ul>
+<h3 id="architecture-uma-vs-numa">Architecture: UMA vs. NUMA</h3>
+<p>The physical behavior of <code>D3D12_MEMORY_POOL</code> depends on
+whether the underlying hardware operates under a Unified Memory
+Architecture (UMA) or a Non-Unified Memory Architecture (NUMA).</p>
+<p>On NUMA systems (typical discrete graphics cards), the GPU and CPU
+maintain separate physical memory spaces:</p>
+<ul>
+<li><strong>Pool L0 (System Memory)</strong>: Accessible to the CPU with
+optimal latency and bandwidth. The GPU accesses L0 across the PCIe bus,
+resulting in higher latency and lower bandwidth compared to local
+VRAM.</li>
+<li><strong>Pool L1 (Dedicated VRAM)</strong>: Positioned directly on
+the graphics card. It offers high bandwidth and low latency for the GPU.
+The CPU can only access L1 through a bridge like PCIe, often via a
+limited size window (Base Address Register/BAR).</li>
+</ul>
+<p>On UMA systems (such as integrated graphics or modern consoles), both
+the CPU and GPU share the same physical system RAM:</p>
+<ul>
+<li><strong>Pool L0</strong>: Contains the unified system memory.</li>
+<li><strong>Pool L1</strong>: Generally does not exist on pure UMA
+systems. Attempting to allocate directly to L1 on such systems may fall
+back to L0 or produce an invalid configuration, as queried via
+<code>D3D12_FEATURE_DATA_ARCHITECTURE</code>.</li>
+</ul>
+<h3 id="configuration-through-custom-heaps">Configuration Through Custom
+Heaps</h3>
+<p>Standard heap types (<code>D3D12_HEAP_TYPE_DEFAULT</code>,
+<code>D3D12_HEAP_TYPE_UPLOAD</code>, and
+<code>D3D12_HEAP_TYPE_READBACK</code>) automatically map to underlying
+pools. For example, <code>DEFAULT</code> maps to L1 on discrete GPUs,
+while <code>UPLOAD</code> and <code>READBACK</code> map to L0.</p>
+<p>To override these defaults and manually configure the physical pool,
+developers must use <code>D3D12_HEAP_TYPE_CUSTOM</code> inside the
+<code>D3D12_HEAP_PROPERTIES</code> structure. Within this structure, the
+<code>MemoryPoolPreference</code> field is explicitly assigned to either
+<code>D3D12_MEMORY_POOL_L0</code> or
+<code>D3D12_MEMORY_POOL_L1</code>.</p>
+<p>Along with the pool preference, developers specify the
+<code>CPUPageProperty</code>, which defines how the CPU caches and
+accesses the allocated pages (such as
+<code>D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE</code> or
+<code>D3D12_CPU_PAGE_PROPERTY_WRITE_BACK</code>).</p>
+<h3 id="practical-application-and-optimization">Practical Application
+and Optimization</h3>
+<p>Configuring memory pools directly allows developers to optimize data
+transfers and resource access patterns:</p>
+<ol type="1">
+<li><strong>CPU-GPU Shared Buffers on Resizable BAR Hardware</strong>:
+Setting <code>MemoryPoolPreference</code> to
+<code>D3D12_MEMORY_POOL_L1</code> combined with write-combined CPU
+access allows the CPU to write directly into fast VRAM, bypassing the
+need for a separate staging copy from L0 to L1.</li>
+<li><strong>Streaming Textures and Geometry</strong>: When VRAM capacity
+is exhausted, assigning large, lower-priority assets to
+<code>D3D12_MEMORY_POOL_L0</code> prevents allocation failures while
+keeping the resources directly bindable by the GPU, albeit at the cost
+of PCIe bus bandwidth.</li>
+<li><strong>Adaptive Architectures</strong>: Applications should query
+<code>CheckFeatureSupport</code> with
+<code>D3D12_FEATURE_ARCHITECTURE</code> at startup. If the device
+reports <code>UMA = TRUE</code>, code paths can be simplified to request
+<code>D3D12_MEMORY_POOL_L0</code>, avoiding redundant intermediate copy
+operations required on discrete NUMA devices.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

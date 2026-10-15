@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding D3D12_CPU_PAGE_PROPERTY in DirectX 12 - directx</title>
+    <meta name="description" content="In DirectX 12, memory management is exposed directly to the developer, requiring precise control over how resources are allocated and cached across the CPU and GPU. The D3D12CPUPAGEPROPERTY enumeration is a specialized tool within custom heap configuratio">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/understanding-d-3-d-12-cpu-page-property-in-direct-x-12">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Understanding D3D12_CPU_PAGE_PROPERTY in DirectX 12 - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/understanding-d-3-d-12-cpu-page-property-in-direct-x-12" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, memory management is exposed directly to the developer, requiring precise control over how resources are allocated and cached across the CPU and GPU. The D3D12CPUPAGEPROPERTY enumeration is a specialized tool within custom heap configuratio" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="understanding-d3d12_cpu_page_property-in-directx-12">Understanding
+D3D12_CPU_PAGE_PROPERTY in DirectX 12</h1>
+<p>In DirectX 12, memory management is exposed directly to the
+developer, requiring precise control over how resources are allocated
+and cached across the CPU and GPU. The
+<code>D3D12_CPU_PAGE_PROPERTY</code> enumeration is a specialized tool
+within custom heap configurations that dictates the CPU cache policies
+for physical memory pages. By fine-tuning CPU page properties, graphics
+engineers can balance CPU access latency, bandwidth usage, and cache
+coherency based on the specific read/write patterns of a resource.</p>
+<h3 id="the-role-of-custom-heaps">The Role of Custom Heaps</h3>
+<p>DirectX 12 provides high-level heap
+types—<code>D3D12_HEAP_TYPE_DEFAULT</code>,
+<code>D3D12_HEAP_TYPE_UPLOAD</code>, and
+<code>D3D12_HEAP_TYPE_READBACK</code>—which internally assign default
+CPU page properties. However, when developers define a
+<code>D3D12_HEAP_TYPE_CUSTOM</code> heap via
+<code>D3D12_HEAP_PROPERTIES</code>, they must manually declare the
+<code>CPUPageProperty</code> member.</p>
+<p>Selecting the proper property prevents performance hazards, such as
+CPU cache pollution, read-stall penalties, and inefficient cache
+coherency traffic over the interconnect bus (such as PCIe).</p>
+<h3 id="enumeration-values-and-caching-mechanisms">Enumeration Values
+and Caching Mechanisms</h3>
+<p>The <code>D3D12_CPU_PAGE_PROPERTY</code> enum defines four distinct
+states:</p>
+<ul>
+<li><p><strong><code>D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE</code></strong><br />
+The CPU cannot access the memory allocated in this heap. The memory is
+not mapped into the CPU's virtual address space, eliminating any CPU
+cache overhead. This is the optimal setting for GPU-exclusive resources
+(textures, render targets, depth buffers) living in discrete
+VRAM.</p></li>
+<li><p><strong><code>D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE</code>
+(WC)</strong><br />
+CPU access is configured to bypass the L1/L2/L3 caches. Writes are
+accumulated in internal CPU write-combining buffers and burst-written to
+system memory in cache-line-sized chunks.</p>
+<ul>
+<li><strong>Use Case:</strong> Highly efficient for write-only CPU
+buffers, such as per-frame dynamic vertex buffers, instance buffers, and
+constant buffers.<br />
+</li>
+<li><strong>Performance Implication:</strong> Prevents CPU writes from
+evicting useful cached application data. However, reading from
+Write-Combine memory incurs an extreme performance penalty because every
+read must fetch directly from system memory without cache
+acceleration.</li>
+</ul></li>
+<li><p><strong><code>D3D12_CPU_PAGE_PROPERTY_WRITE_BACK</code>
+(WB)</strong><br />
+Memory allocations utilize full CPU caching. Reads and writes are cached
+across the CPU's cache hierarchy (L1, L2, L3) and written back to main
+memory as lines are evicted.</p>
+<ul>
+<li><strong>Use Case:</strong> Critical for resources where the CPU must
+read data generated by the GPU (such as occlusion query results, compute
+readbacks, or staging memory), or for resources that the CPU reads and
+modifies iteratively before the GPU consumes them.<br />
+</li>
+<li><strong>Performance Implication:</strong> Greatly improves read
+performance for the CPU. On the GPU side, the hardware must either
+invalidate CPU caches or utilize hardware snooping to maintain
+coherency, which can add overhead on discrete systems.</li>
+</ul></li>
+<li><p><strong><code>D3D12_CPU_PAGE_PROPERTY_UNKNOWN</code></strong><br />
+A default/invalid value indicating that the page property is
+uninitialized or not applicable to standard heaps.</p></li>
+</ul>
+<h3 id="optimizing-for-uma-and-numa-architectures">Optimizing for UMA
+and NUMA Architectures</h3>
+<p>The effectiveness of <code>D3D12_CPU_PAGE_PROPERTY</code> heavily
+depends on the memory architecture:</p>
+<ol type="1">
+<li><p><strong>Unified Memory Architecture (UMA):</strong><br />
+On systems where the CPU and GPU share physical RAM (such as APUs,
+mobile chips, and modern consoles), <code>WRITE_BACK</code> combined
+with <code>D3D12_MEMORY_POOL_L0</code> allows the GPU to read directly
+from CPU-cached memory without redundant transfer copies. This enables
+zero-copy resource updates with minimal latency.</p></li>
+<li><p><strong>Non-Unified Memory Architecture (NUMA):</strong><br />
+On systems with discrete GPUs, memory pools are strictly divided between
+system RAM (<code>L0</code>) and dedicated video memory
+(<code>L1</code>). Assigning <code>WRITE_COMBINE</code> to upload
+buffers residing in system memory ensures that high-speed CPU writes
+stream over PCIe without polluting the CPU cache or triggering unneeded
+cache-line write-backs.</p></li>
+</ol>
+<h3 id="best-practices">Best Practices</h3>
+<ul>
+<li><strong>Never read from <code>WRITE_COMBINE</code> memory:</strong>
+Even a single accidental read operation from a mapped WC buffer stalls
+the CPU pipeline while waiting for non-cached memory access.</li>
+<li><strong>Default to <code>NOT_AVAILABLE</code> when
+possible:</strong> If the CPU never maps or touches a resource after
+creation, keeping CPU pages unmapped maximizes GPU access performance
+and saves virtual address space.</li>
+<li><strong>Use <code>WRITE_BACK</code> sparingly for uploads:</strong>
+Unless the CPU reads back values from the buffer prior to submission,
+<code>WRITE_BACK</code> introduces unnecessary cache invalidation and
+eviction costs on write-only streams.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

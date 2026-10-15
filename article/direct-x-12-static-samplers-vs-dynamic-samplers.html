@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Static Samplers vs Dynamic Samplers - directx</title>
+    <meta name="description" content="This article examines static samplers in DirectX 12, contrasting them with dynamic, heap-allocated samplers to illustrate their architectural differences and performance characteristics. You will learn how static samplers operate directly within the root">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-static-samplers-vs-dynamic-samplers">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Static Samplers vs Dynamic Samplers - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-static-samplers-vs-dynamic-samplers" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article examines static samplers in DirectX 12, contrasting them with dynamic, heap-allocated samplers to illustrate their architectural differences and performance characteristics. You will learn how static samplers operate directly within the root" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-static-samplers-vs-dynamic-samplers">DirectX 12
+Static Samplers vs Dynamic Samplers</h1>
+<p>This article examines static samplers in DirectX 12, contrasting them
+with dynamic, heap-allocated samplers to illustrate their architectural
+differences and performance characteristics. You will learn how static
+samplers operate directly within the root signature, why their immutable
+nature eliminates runtime descriptor management overhead, and the
+hardware-level optimizations that make them significantly faster than
+dynamic samplers during rendering operations.</p>
+<h2 id="what-are-static-samplers-in-directx-12">What Are Static Samplers
+in DirectX 12?</h2>
+<p>In DirectX 12, a static sampler is an immutable texture sampler
+defined directly inside a root signature using the
+<code>D3D12_STATIC_SAMPLER_DESC</code> structure. Unlike dynamic
+samplers, static samplers do not reside in a descriptor heap and are not
+bound via descriptor tables.</p>
+<p>When you define a static sampler, you explicitly configure its
+filtering mode, addressing mode, LOD bias, comparison functions, and
+register mapping (<code>s0</code>, <code>s1</code>, etc.) at the time
+the root signature is created. Once defined, these parameters cannot be
+altered at runtime without compiling and using a completely different
+root signature.</p>
+<h2 id="what-are-dynamic-heap-allocated-samplers">What Are Dynamic
+Heap-Allocated Samplers?</h2>
+<p>Dynamic samplers are defined using the
+<code>D3D12_SAMPLER_DESC</code> structure and are placed into a
+dedicated sampler descriptor heap
+(<code>D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER</code>). To use them in
+shaders, applications must allocate descriptors, copy or create sampler
+states inside the heap, and bind the descriptor heap using descriptor
+tables set into root parameters. This approach offers full runtime
+flexibility, enabling shaders to dynamically index into an array of
+samplers or swap sampler states dynamically per draw call.</p>
+<h2 id="why-static-samplers-are-faster-than-dynamic-samplers">Why Static
+Samplers Are Faster than Dynamic Samplers</h2>
+<p>Static samplers provide substantial performance benefits over dynamic
+samplers due to how the GPU driver and hardware handle memory,
+compilation, and instruction execution.</p>
+<h3 id="1-zero-descriptor-heap-and-table-indirection">1. Zero Descriptor
+Heap and Table Indirection</h3>
+<p>Dynamic samplers require pointing the GPU to an offset in a sampler
+descriptor heap via a descriptor table. When a shader executes a sample
+instruction using a dynamic sampler, the GPU must perform an extra level
+of indirection: reading the descriptor from memory before fetching
+texture data.</p>
+<p>Static samplers completely bypass the descriptor heap. Because they
+are baked directly into the root signature, there is no indirection, no
+heap memory fetch, and no cache miss associated with loading the sampler
+descriptor from VRAM.</p>
+<h3 id="2-instruction-inlining-and-hardware-state-binding">2.
+Instruction Inlining and Hardware State Binding</h3>
+<p>Because static sampler configurations are fixed and known ahead of
+time, GPU drivers can embed sampler parameters directly into the
+compiled shader microcode or bind them directly to hardware registers.
+Modern GPU architectures often have dedicated hardware registers for
+sampler configurations. When using static samplers, the hardware avoids
+generic sampler lookup logic and executes specialized, hardcoded
+sampling instructions natively.</p>
+<h3 id="3-shader-compiler-optimizations">3. Shader Compiler
+Optimizations</h3>
+<p>When a shader is compiled with dynamic samplers, the compiler must
+generate generic sampling code capable of handling any valid sampler
+state that might be passed in at runtime.</p>
+<p>With static samplers, the driver knows the exact filtering method
+(e.g., point vs. anisotropic) and addressing modes (e.g., clamp vs.
+wrap) at pipeline compilation time. This allows the compiler to strip
+dead branches, eliminate unneeded logic (such as border color evaluation
+or anisotropic math when using point filtering), and optimize
+instruction scheduling specifically for that sampler configuration.</p>
+<h3 id="4-conservation-of-root-signature-space">4. Conservation of Root
+Signature Space</h3>
+<p>A DirectX 12 root signature has a strict size limit of 64 DWORDs.
+Binding dynamic samplers requires root parameters (descriptor tables),
+which consume root signature space. Static samplers do not count against
+this 64-DWORD limit. You can define up to 2,032 static samplers in a
+single root signature without consuming any space allocated for root
+constants, root descriptors, or descriptor tables.</p>
+<h3 id="5-elimination-of-cpu-and-driver-overhead">5. Elimination of CPU
+and Driver Overhead</h3>
+<p>Dynamic samplers introduce CPU overhead because you must manage
+descriptor allocations, handle descriptor heap synchronization, and call
+<code>SetGraphicsRootDescriptorTable</code> during draw setup. Static
+samplers are bound automatically when the root signature is bound,
+reducing both CPU API overhead and the number of GPU state transitions
+between draw calls.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

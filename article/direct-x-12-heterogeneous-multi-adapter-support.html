@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Heterogeneous Multi-Adapter Support - directx</title>
+    <meta name="description" content="DirectX 12 provides low-level explicit multi-adapter capabilities that allow applications to harness the compute and graphics power of fundamentally different GPUs simultaneously. This article explains how heterogeneous multi-adapter configurations functi">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-heterogeneous-multi-adapter-support">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Heterogeneous Multi-Adapter Support - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-heterogeneous-multi-adapter-support" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 provides low-level explicit multi-adapter capabilities that allow applications to harness the compute and graphics power of fundamentally different GPUs simultaneously. This article explains how heterogeneous multi-adapter configurations functi" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-heterogeneous-multi-adapter-support">DirectX 12
+Heterogeneous Multi-Adapter Support</h1>
+<p>DirectX 12 provides low-level explicit multi-adapter capabilities
+that allow applications to harness the compute and graphics power of
+fundamentally different GPUs simultaneously. This article explains how
+heterogeneous multi-adapter configurations function under the API,
+covering the unlinked adapter architecture, memory sharing via
+cross-adapter heaps, synchronization with shared fences, and practical
+task-distribution techniques.</p>
+<h3 id="implicit-vs-explicit-multi-gpu">Implicit vs. Explicit
+Multi-GPU</h3>
+<p>Traditional multi-GPU solutions such as NVIDIA SLI and AMD CrossFire
+relied on implicit hardware configurations. The graphics driver handled
+frame synchronization—usually via Alternate Frame Rendering (AFR)—and
+required paired GPUs to be nearly identical.</p>
+<p>DirectX 12 eliminates implicit driver reliance by introducing
+explicit multi-adapter support. Under this paradigm, the game engine
+directly manages hardware detection, memory allocation, workload
+scheduling, and inter-GPU synchronization.</p>
+<h3 id="unlinked-multi-adapter-architecture">Unlinked Multi-Adapter
+Architecture</h3>
+<p>DirectX 12 categorizes multi-adapter setups into two distinct
+models:</p>
+<ul>
+<li><strong>Linked Display Adapters (LDA):</strong> Manages GPUs
+connected via hardware links or identical architectures using a single
+logical <code>ID3D12Device</code>.</li>
+<li><strong>Unlinked Adapters:</strong> Exposes completely separate
+<code>ID3D12Device</code> instances for every physical GPU present in
+the system, even if they feature different architectures, power
+envelopes, or vendors (such as pairing an Intel integrated GPU with an
+NVIDIA or AMD discrete GPU).</li>
+</ul>
+<p>In an unlinked configuration, each GPU operates as an isolated
+ecosystem. Each adapter maintains its own distinct command queues,
+memory pools, command allocators, and pipeline states.</p>
+<h3 id="cross-adapter-resource-sharing">Cross-Adapter Resource
+Sharing</h3>
+<p>Because unlinked GPUs do not share physical or virtual memory spaces,
+DirectX 12 utilizes shared resources to facilitate communication across
+the PCIe bus:</p>
+<ol type="1">
+<li><strong>Cross-Adapter Heaps:</strong> Developers create shared heaps
+using the <code>D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER</code> flag. These
+allocations must reside in system memory (RAM) rather than local GPU
+VRAM to ensure bidirectional access.</li>
+<li><strong>Resource Limitations:</strong> Textures allocated in
+cross-adapter heaps are restricted to standard linear, row-major
+formats. Swizzled (tiled) layouts specific to one hardware architecture
+are unsupported because the secondary GPU cannot natively parse
+proprietary layouts from another vendor.</li>
+<li><strong>Data Marshaling:</strong> A typical workflow involves the
+rendering GPU copying data from its local VRAM to a shared cross-adapter
+heap via <code>CopyTextureRegion</code>, followed by the secondary GPU
+reading the data out of the shared heap into its own local memory.</li>
+</ol>
+<h3 id="inter-gpu-synchronization">Inter-GPU Synchronization</h3>
+<p>DirectX 12 implements cross-adapter synchronization through shared
+fences (<code>ID3D12Fence</code> created with
+<code>D3D12_FENCE_FLAG_SHARED</code>):</p>
+<ul>
+<li>The producing GPU signals the fence when it finishes writing to a
+cross-adapter resource.</li>
+<li>The consuming GPU inserts a wait command into its own command queue
+tied to that shared fence handle.</li>
+<li>Work on the consuming GPU remains paused until the producing GPU
+signals completion, preventing race conditions without requiring
+CPU-side synchronization.</li>
+</ul>
+<h3 id="workload-splitting-strategies">Workload Splitting
+Strategies</h3>
+<p>Because PCIe bandwidth and varying GPU execution speeds create
+latency bottlenecks, heterogeneous setups are unsuited for strict
+Alternate Frame Rendering (AFR). Instead, developers use asymmetric task
+distribution:</p>
+<ul>
+<li><strong>Post-Processing Offloading:</strong> The high-performance
+discrete GPU renders the primary scene geometry, lighting, and
+materials, then streams the render target to an integrated GPU to
+execute post-processing passes (temporal anti-aliasing, color grading,
+bloom, and UI composition).</li>
+<li><strong>Asynchronous Compute:</strong> The secondary GPU calculates
+compute-bound tasks that are not strictly latency-sensitive for the
+current frame, such as physics simulations, particle updates,
+pathfinding, or ambient occlusion maps.</li>
+<li><strong>Shadow Map Generation:</strong> The auxiliary GPU can
+generate static or dynamic shadow depth maps asynchronously, allowing
+the primary GPU to focus exclusively on view-dependent shading.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

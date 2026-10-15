@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU Profiling in DirectX Using Timestamp Queries - directx</title>
+    <meta name="description" content="Timestamp queries in DirectX provide a hardware-level mechanism for measuring how long specific rendering and compute tasks take to execute directly on the GPU. Because the CPU and GPU operate asynchronously, standard CPU timers cannot accurately measure">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/gpu-profiling-in-direct-x-using-timestamp-queries">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="GPU Profiling in DirectX Using Timestamp Queries - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/gpu-profiling-in-direct-x-using-timestamp-queries" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Timestamp queries in DirectX provide a hardware-level mechanism for measuring how long specific rendering and compute tasks take to execute directly on the GPU. Because the CPU and GPU operate asynchronously, standard CPU timers cannot accurately measure" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="gpu-profiling-in-directx-using-timestamp-queries">GPU Profiling
+in DirectX Using Timestamp Queries</h1>
+<p>Timestamp queries in DirectX provide a hardware-level mechanism for
+measuring how long specific rendering and compute tasks take to execute
+directly on the GPU. Because the CPU and GPU operate asynchronously,
+standard CPU timers cannot accurately measure GPU workloads. Timestamp
+queries solve this by writing GPU clock ticks into memory at designated
+points in the command stream, allowing developers to isolate performance
+bottlenecks, measure frame-stage durations, and optimize rendering
+pipelines with high precision.</p>
+<h3 id="the-purpose-of-timestamp-queries">The Purpose of Timestamp
+Queries</h3>
+<p>In modern graphics APIs like DirectX 11 and DirectX 12, the CPU
+records commands into command lists and submits them to a queue, while
+the GPU processes them at a later time. Using CPU-side timers to profile
+draw calls or compute dispatches measures only submission time, driver
+overhead, and synchronization latency—not actual GPU execution time.</p>
+<p>Timestamp queries place measurement markers directly within the GPU's
+command pipeline. When the GPU reaches a timestamp query marker, it
+records its current internal clock counter. By capturing timestamps
+before and after a specific operation or render pass, developers can
+calculate the exact duration the GPU spent processing that workload.</p>
+<h3 id="how-timestamp-queries-work-in-directx">How Timestamp Queries
+Work in DirectX</h3>
+<p>Timestamp profiling relies on writing query commands into the command
+stream and reading the results back once execution completes:</p>
+<ol type="1">
+<li><strong>Query Heap Allocation</strong>: In DirectX 12, a query heap
+is created with the type <code>D3D12_QUERY_HEAP_TYPE_TIMESTAMP</code>.
+This serves as the storage allocation for a predetermined number of
+timestamp recordings.</li>
+<li><strong>Command Insertion</strong>: The developer inserts queries
+around the targeted operations within a command list using
+<code>EndQuery</code> (timestamps in DirectX only support
+<code>EndQuery</code> because a timestamp represents an instantaneous
+point in time rather than a scoped range).</li>
+<li><strong>Resolving Data</strong>: Before the CPU can access the
+recorded ticks, a command is issued (<code>ResolveQueryData</code>) to
+extract the raw query results from the query heap and write them into a
+standard <code>ID3D12Resource</code> buffer.</li>
+<li><strong>Readback and Calculation</strong>: The resolve buffer is
+mapped to the CPU (or used by the GPU in shader pipelines) to calculate
+the delta between the start and end ticks.</li>
+</ol>
+<h3 id="converting-clocks-to-real-world-time">Converting Clocks to
+Real-World Time</h3>
+<p>The raw values retrieved from timestamp queries represent clock
+cycles rather than seconds or milliseconds. To convert these ticks into
+actionable time units, DirectX provides command queue frequency
+data.</p>
+<p>In DirectX 12, calling
+<code>ID3D12CommandQueue::GetTimestampFrequency</code> returns the clock
+frequency of the GPU command queue in ticks per second (Hertz). In
+DirectX 11, this information is provided via a
+<code>D3D11_QUERY_TIMESTAMP_DISJOINT</code> query.</p>
+<p>The elapsed execution time is calculated using the following
+formula:</p>
+<p><span class="math display">\[\text{Time (milliseconds)} =
+\frac{\text{End Timestamp} - \text{Start Timestamp}}{\text{Timestamp
+Frequency}} \times 1000\]</span></p>
+<h3 id="key-functions-and-benefits-in-profiling">Key Functions and
+Benefits in Profiling</h3>
+<ul>
+<li><strong>Granular Bottleneck Identification</strong>: Developers can
+isolate individual draw calls, compute shaders, post-processing effects,
+or shadow map passes to determine precisely which stage of the pipeline
+consumes the most frame budget.</li>
+<li><strong>Elimination of Pipeline Bubbles</strong>: Comparing
+timestamp sequences reveals when the GPU is idling between tasks,
+exposing pipeline stalls caused by resource dependencies or
+synchronization barriers.</li>
+<li><strong>Zero Host Interference</strong>: Timestamp queries do not
+force CPU-GPU synchronization or flush the pipeline, ensuring profiling
+accurately reflects real-world runtime conditions.</li>
+<li><strong>Custom In-Engine Profilers</strong>: By combining timestamp
+queries with ring buffers, engines can display real-time performance
+graphs and hierarchical GPU profiling overlays without relying solely on
+external tools.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

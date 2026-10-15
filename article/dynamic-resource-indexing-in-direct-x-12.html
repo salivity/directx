@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Resource Indexing in DirectX 12 - directx</title>
+    <meta name="description" content="DirectX 12 eliminates the overhead of manual descriptor table switching through dynamic resource indexing, commonly known as bindless rendering. By leveraging shader-visible descriptor heaps, unbounded resource arrays in HLSL, and modern Resource Binding">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dynamic-resource-indexing-in-direct-x-12">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Dynamic Resource Indexing in DirectX 12 - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dynamic-resource-indexing-in-direct-x-12" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 eliminates the overhead of manual descriptor table switching through dynamic resource indexing, commonly known as bindless rendering. By leveraging shader-visible descriptor heaps, unbounded resource arrays in HLSL, and modern Resource Binding" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="dynamic-resource-indexing-in-directx-12">Dynamic Resource
+Indexing in DirectX 12</h1>
+<p>DirectX 12 eliminates the overhead of manual descriptor table
+switching through dynamic resource indexing, commonly known as bindless
+rendering. By leveraging shader-visible descriptor heaps, unbounded
+resource arrays in HLSL, and modern Resource Binding Tiers, the GPU can
+resolve resource locations dynamically at runtime using simple integer
+indices. This architecture allows shaders to access thousands of unique
+textures, buffers, and samplers within a single draw call without
+requiring the CPU to re-bind descriptor tables on the command list.</p>
+<h3 id="shader-visible-descriptor-heaps">Shader-Visible Descriptor
+Heaps</h3>
+<p>Traditional rendering pipelines require developers to group related
+descriptors into tables and explicitly bind each table to the pipeline
+using CPU-side API calls like
+<code>SetGraphicsRootDescriptorTable</code>.</p>
+<p>In DirectX 12, dynamic indexing relies on persistent, shader-visible
+descriptor heaps
+(<code>D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE</code>). A developer
+allocates a large heap capable of holding thousands of Constant Buffer
+Views (CBV), Shader Resource Views (SRV), and Unordered Access Views
+(UAV). Instead of binding small descriptor tables per material or mesh,
+the entire heap (or a massive contiguous range of it) is mapped to the
+root signature once per frame or pass using
+<code>SetDescriptorHeaps</code>.</p>
+<h3 id="unbounded-arrays-and-shader-model-51">Unbounded Arrays and
+Shader Model 5.1+</h3>
+<p>HLSL introduced unbounded arrays starting with Shader Model 5.1,
+forming the core language feature required for dynamic indexing. Shaders
+declare an array of resources without a fixed size, mapping it to a
+single register space:</p>
+<pre class="hlsl"><code>Texture2D g_Textures[] : register(t0, space0);
+SamplerState g_Sampler : register(s0);</code></pre>
+<p>Under this model, the root signature does not define a fixed-size
+table for distinct textures. Instead, it exposes a single descriptor
+range with <code>UINT_MAX</code> descriptors, effectively mapping the
+shader array directly over the descriptor heap.</p>
+<h3 id="runtime-index-resolution">Runtime Index Resolution</h3>
+<p>Resources are selected at runtime by passing an integer index
+directly into the shader. This index can originate from:</p>
+<ul>
+<li>A per-instance vertex buffer (e.g., material IDs for instanced
+rendering).</li>
+<li>A flat root constant set via
+<code>SetGraphicsRoot32BitConstants</code>.</li>
+<li>Structured or byte-address buffers storing scene or draw
+metadata.</li>
+</ul>
+<p>The shader executes a dynamic read from the array using the supplied
+index:</p>
+<pre class="hlsl"><code>float4 color = g_Textures[materialIndex].Sample(g_Sampler, input.UV);</code></pre>
+<h3 id="uniform-vs-non-uniform-indexing">Uniform vs. Non-Uniform
+Indexing</h3>
+<p>GPU hardware executes threads in lockstep (warps or wavefronts). When
+threads within the same wave dynamically index different resources,
+standard divergence rules apply:</p>
+<ul>
+<li><strong>Uniform Indexing:</strong> If every thread across a draw
+call or wave accesses the same resource index, the GPU executes a
+uniform load.</li>
+<li><strong>Divergent (Non-Uniform) Indexing:</strong> If adjacent
+pixels or vertices access different descriptors simultaneously (such as
+different materials assigned to different polygons in an instanced
+draw), the compiler must handle hardware-level divergence.</li>
+</ul>
+<p>To safely permit divergent access, HLSL provides the
+<code>NonUniformResourceIndex</code> intrinsic:</p>
+<pre class="hlsl"><code>uint matIndex = NonUniformResourceIndex(input.MaterialID);
+float4 color = g_Textures[matIndex].Sample(g_Sampler, input.UV);</code></pre>
+<p>This intrinsic signals the shader compiler to emit instructions that
+preserve divergence safety, such as scalarizing the descriptor load
+across the wave or executing lane masks depending on hardware
+capabilities.</p>
+<h3 id="hardware-tiers-and-capabilities">Hardware Tiers and
+Capabilities</h3>
+<p>Dynamic indexing is governed by DirectX 12 Resource Binding
+Tiers:</p>
+<ul>
+<li><strong>Tier 1:</strong> Highly restricted. Descriptor heaps must be
+indexed statically or uniformly.</li>
+<li><strong>Tier 2:</strong> Permits dynamic indexing across a broad
+range of resources, though limits exist regarding heap sizes and
+concurrent resource declarations.</li>
+<li><strong>Tier 3:</strong> Removes nearly all restrictions. Shaders
+can dynamically and non-uniformly index across the entire capacity of a
+descriptor heap (up to hundreds of thousands of descriptors) without
+limitation. Modern desktop GPUs (NVIDIA Maxwell+, AMD GCN+, Intel Gen9+)
+natively support Tier 3.</li>
+</ul>
+<p>By shifting resource identification from CPU-bound descriptor table
+bindings to GPU-driven array indices, DirectX 12 streamlines pipeline
+execution, minimizes API call overhead, and maximizes batching
+efficiency.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

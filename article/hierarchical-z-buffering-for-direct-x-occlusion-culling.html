@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hierarchical Z-Buffering for DirectX Occlusion Culling - directx</title>
+    <meta name="description" content="Hierarchical Z-buffering (HZB) is an optimization technique that accelerates occlusion testing by constructing a mipmapped depth pyramid of the rendered scene. Instead of testing high-polygon meshes or individual pixels against a full-resolution depth buf">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/hierarchical-z-buffering-for-direct-x-occlusion-culling">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Hierarchical Z-Buffering for DirectX Occlusion Culling - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/hierarchical-z-buffering-for-direct-x-occlusion-culling" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Hierarchical Z-buffering (HZB) is an optimization technique that accelerates occlusion testing by constructing a mipmapped depth pyramid of the rendered scene. Instead of testing high-polygon meshes or individual pixels against a full-resolution depth buf" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="hierarchical-z-buffering-for-directx-occlusion-culling">Hierarchical
+Z-Buffering for DirectX Occlusion Culling</h1>
+<p>Hierarchical Z-buffering (HZB) is an optimization technique that
+accelerates occlusion testing by constructing a mipmapped depth pyramid
+of the rendered scene. Instead of testing high-polygon meshes or
+individual pixels against a full-resolution depth buffer, HZB allows
+rendering engines to quickly test coarse bounding volumes against
+lower-resolution depth representations. In modern DirectX pipelines,
+this approach moves visibility determination entirely to the GPU,
+eliminating the CPU-GPU synchronization stalls typical of traditional
+hardware queries and dramatically reducing geometric overdraw.</p>
+<h3 id="constructing-the-depth-pyramid">Constructing the Depth
+Pyramid</h3>
+<p>HZB begins with the scene’s existing depth buffer, typically rendered
+during an early depth pre-pass (Z-prepass) or carried over from the
+previous frame. A compute shader in DirectX generates a sequence of
+downsampled depth maps (a MIP chain), where each level is half the width
+and height of the previous one.</p>
+<p>Unlike standard color mipmapping, which averages pixel values, HZB
+uses conservative reduction:</p>
+<ul>
+<li>In a standard depth configuration (0.0 near, 1.0 far), each texel in
+mip level <span class="math inline">\(n+1\)</span> stores the maximum
+depth of the corresponding <span class="math inline">\(2 \times
+2\)</span> texel block in level <span
+class="math inline">\(n\)</span>.</li>
+<li>In a reversed-Z configuration (1.0 near, 0.0 far), which is standard
+in DirectX to maximize floating-point precision, each texel stores the
+minimum depth of the <span class="math inline">\(2 \times 2\)</span>
+block.</li>
+</ul>
+<p>This conservative filtering guarantees that the value stored at any
+mip level represents the closest occluding surface within that entire
+block's footprint.</p>
+<h3 id="software-occlusion-testing-workflow">Software Occlusion Testing
+Workflow</h3>
+<p>Once the pyramid is constructed, the DirectX pipeline uses compute
+shaders to test the visibility of scene geometry before issuing draw
+commands.</p>
+<ol type="1">
+<li><strong>Bounding Volume Projection:</strong> Each instance's
+oriented or axis-aligned bounding box (AABB) is transformed into clip
+space to determine its screen-space extents and its closest depth value
+to the camera.</li>
+<li><strong>Mip Level Selection:</strong> The compute shader calculates
+the screen-space size of the bounding box. It selects a mip level where
+the projected area of the bounds covers roughly a <span
+class="math inline">\(1 \times 1\)</span> to <span
+class="math inline">\(2 \times 2\)</span> texel footprint.</li>
+<li><strong>Depth Fetch and Comparison:</strong> The shader reads the
+depth value from the selected HZB mip level. Because that texel covers
+the entire area of the bounding box, a single texture fetch reveals the
+closest occluder in that screen region.</li>
+<li><strong>Visibility Determination:</strong> If the closest depth of
+the bounding box is farther from the camera than the value stored in the
+HZB, the entire object is guaranteed to be fully occluded and is
+rejected. If it is closer, the object is marked visible.</li>
+</ol>
+<h3 id="acceleration-advantages-in-directx">Acceleration Advantages in
+DirectX</h3>
+<p>HZB provides distinct performance advantages over standard DirectX
+hardware occlusion queries and brute-force pixel depth testing:</p>
+<ul>
+<li><strong>Elimination of Pipeline Latency:</strong> Traditional
+DirectX hardware occlusion queries
+(<code>D3D12_QUERY_HEAP_TYPE_OCCLUSION</code>) require issuing queries
+and waiting for the GPU to return results, causing pipeline bubbles or
+forcing a multi-frame latency delay. HZB executes entirely within
+compute passes on the GPU timeline, avoiding CPU readbacks.</li>
+<li><strong>Fewer Memory Accesses:</strong> Testing against a
+full-resolution depth buffer requires rasterizing bounding volumes and
+performing hundreds of depth comparisons. HZB resolves visibility with
+one to four texture samples per instance, minimizing memory bandwidth
+usage.</li>
+<li><strong>DirectX 12 GPU-Driven Rendering:</strong> HZB integrates
+directly with DirectX 12 indirect drawing
+(<code>ExecuteIndirect</code>). The compute shader that performs the HZB
+test directly populates the indirect argument buffer, allowing the GPU
+to cull occluded objects and dispatch only the visible draw calls
+without any CPU intervention.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

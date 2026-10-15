@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Write-Combined Memory Impacts DirectX 12 Performance - directx</title>
+    <meta name="description" content="In DirectX 12, write-combined (WC) memory configuration dramatically accelerates CPU-to-GPU data transfers by grouping individual memory writes into single, burst-rate bus transactions. Primarily backing D3D12HEAPTYPEUPLOAD heaps, WC memory bypasses the s">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-write-combined-memory-impacts-direct-x-12-performance">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Write-Combined Memory Impacts DirectX 12 Performance - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-write-combined-memory-impacts-direct-x-12-performance" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, write-combined (WC) memory configuration dramatically accelerates CPU-to-GPU data transfers by grouping individual memory writes into single, burst-rate bus transactions. Primarily backing D3D12HEAPTYPEUPLOAD heaps, WC memory bypasses the s" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-write-combined-memory-impacts-directx-12-performance">How
+Write-Combined Memory Impacts DirectX 12 Performance</h1>
+<p>In DirectX 12, write-combined (WC) memory configuration dramatically
+accelerates CPU-to-GPU data transfers by grouping individual memory
+writes into single, burst-rate bus transactions. Primarily backing
+<code>D3D12_HEAP_TYPE_UPLOAD</code> heaps, WC memory bypasses the
+standard L1, L2, and L3 CPU cache hierarchies to optimize
+high-throughput linear writes across the PCI Express (PCIe) bus. While
+this architecture significantly enhances CPU writing speed for per-frame
+dynamic resources like constant buffers and vertex data, it requires
+strict adherence to sequential write patterns and completely penalizes
+CPU read operations.</p>
+<h3 id="the-mechanics-of-write-combining">The Mechanics of
+Write-Combining</h3>
+<p>Standard system memory relies on cached write-back semantics. When a
+CPU core writes to write-back memory, it first fetches the target cache
+line into its local L1/L2 cache—a process called Read-For-Ownership
+(RFO)—modifies the data, and eventually flushes it back to RAM. This
+process introduces latency and pollutes the CPU cache with transient
+graphics data that the processor will not read again.</p>
+<p>Write-combined memory circumvents this overhead by treating the
+target memory region as weakly ordered and un-cached. Instead of writing
+directly to the standard cache hierarchy or issuing immediate, isolated
+memory writes:</p>
+<ol type="1">
+<li><strong>Internal Buffering:</strong> The CPU allocates internal
+hardware store buffers (often called Write-Combine Buffers or Fill
+Buffers).</li>
+<li><strong>Batching Writes:</strong> Consecutive writes to adjacent
+memory addresses accumulate inside these 64-byte buffers (matching the
+CPU cache line size).</li>
+<li><strong>Burst Flushing:</strong> Once a buffer is full, or when a
+serialization instruction executes, the entire 64-byte block transmits
+across the PCIe bus in a single burst transaction.</li>
+</ol>
+<p>By eliminating the RFO phase and minimizing bus transactions,
+write-combining allows the CPU to saturate the write bandwidth of system
+memory and PCIe lanes.</p>
+<h3 id="performance-gains-for-cpu-write-operations">Performance Gains
+for CPU Write Operations</h3>
+<p>In DirectX 12 rendering pipelines, the primary workload for
+write-combined memory involves frequently updated resources, such as
+uniform buffer objects, transform matrices, and dynamic procedural
+geometry mapped via <code>ID3D12Resource::Map</code>.</p>
+<ul>
+<li><strong>Elimination of Cache Eviction:</strong> Bypassing CPU caches
+preserves precious L2 and L3 cache space for game logic, physics, and AI
+threads rather than filling it with short-lived GPU data.</li>
+<li><strong>Maximum Write Bandwidth:</strong> Sequential streaming
+writes using SIMD intrinsics (such as SSE <code>_mm_stream_si128</code>
+or AVX equivalents) can write directly into WC buffers without pipeline
+stalls, approaching hardware-limit throughput.</li>
+<li><strong>Low Latency for Small Updates:</strong> Batching multiple
+4-byte or 8-byte updates into full 64-byte frames reduces memory
+interface contention.</li>
+</ul>
+<h3 id="pitfalls-and-performance-penalties">Pitfalls and Performance
+Penalties</h3>
+<p>While write-combined memory offers peak throughput for unidirectional
+streaming, architectural trade-offs severely punish unoptimized access
+patterns:</p>
+<ul>
+<li><strong>Catastrophic Read Penalty:</strong> Write-combined memory is
+strictly write-optimized. Reading from a mapped WC resource forces the
+CPU to bypass the cache and fetch data directly from uncached system RAM
+or across the PCIe link, causing extreme pipeline stalls. CPU reads can
+be orders of magnitude slower than reading from regular cached
+memory.</li>
+<li><strong>Non-Sequential Write Degradation:</strong> If the CPU writes
+data non-sequentially, with large strides, or partially updates cache
+lines without filling the 64-byte buffer, the hardware prematurely
+flushes the write-combining buffer. This fragments the data stream into
+small, high-overhead bus transactions, collapsing write bandwidth.</li>
+<li><strong>Store Buffer Exhaustion:</strong> Modern CPUs possess a
+limited number of write-combining buffers (typically between 8 and 12).
+Concurrently writing to multiple disconnected upload resources causes
+buffer thrashing, triggering premature flushes.</li>
+</ul>
+<h3 id="practical-guidelines-for-directx-12-developers">Practical
+Guidelines for DirectX 12 Developers</h3>
+<p>To maximize CPU writing performance in DirectX 12 upload heaps:</p>
+<ol type="1">
+<li><strong>Write Sequentially:</strong> Structure data structures so
+that the CPU writes in linear, contiguous blocks from start to
+finish.</li>
+<li><strong>Never Read Upload Memory:</strong> Never read from a pointer
+returned by <code>Map</code> on an upload heap. If an algorithm requires
+reading back data, calculate it in standard CPU heap memory first, then
+write the final result to the upload heap.</li>
+<li><strong>Use SIMD/Optimized Memcpy:</strong> Utilize memory-copy
+routines that take advantage of non-temporal stores or
+auto-vectorization to fill entire 64-byte cache lines consistently.</li>
+<li><strong>Finish Resources Individually:</strong> Complete writes to
+one dynamic resource before moving to another to avoid exceeding the
+CPU's hardware store buffer capacity.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

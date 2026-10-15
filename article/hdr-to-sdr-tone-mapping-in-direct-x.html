@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HDR to SDR Tone Mapping in DirectX - directx</title>
+    <meta name="description" content="Tone mapping in DirectX is a post-processing technique that compresses scene-referred High Dynamic Range (HDR) color values, which often exceed 1.0, into the standard [0.0, 1.0] range required by Standard Dynamic Range (SDR) displays. This article explain">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/hdr-to-sdr-tone-mapping-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="HDR to SDR Tone Mapping in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/hdr-to-sdr-tone-mapping-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Tone mapping in DirectX is a post-processing technique that compresses scene-referred High Dynamic Range (HDR) color values, which often exceed 1.0, into the standard [0.0, 1.0] range required by Standard Dynamic Range (SDR) displays. This article explain" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="hdr-to-sdr-tone-mapping-in-directx">HDR to SDR Tone Mapping in
+DirectX</h1>
+<p>Tone mapping in DirectX is a post-processing technique that
+compresses scene-referred High Dynamic Range (HDR) color values, which
+often exceed 1.0, into the standard [0.0, 1.0] range required by
+Standard Dynamic Range (SDR) displays. This article explains the
+technical mechanics of how DirectX implements this transformation using
+high-precision render targets, High-Level Shader Language (HLSL) math,
+luminance calculation, and tone mapping operators such as Reinhard and
+ACES.</p>
+<h3 id="the-hdr-rendering-pipeline-in-directx">The HDR Rendering
+Pipeline in DirectX</h3>
+<p>In a typical DirectX 11 or DirectX 12 rendering pipeline, scene
+lighting calculations produce physically based luminance values that can
+reach tens, hundreds, or thousands of nits. To preserve this data
+without clamping, the backbuffer is not rendered directly to a standard
+8-bit display format. Instead, the scene is rendered into an off-screen
+floating-point render target, commonly using formats like
+<code>DXGI_FORMAT_R16G16B16A16_FLOAT</code> or
+<code>DXGI_FORMAT_R11G11B10_FLOAT</code>.</p>
+<p>Once the full-range scene is rendered, a full-screen quad or compute
+shader pass samples the HDR texture, executes the tone mapping
+algorithm, and writes the resulting color into an SDR swap chain format,
+typically <code>DXGI_FORMAT_R8G8B8A8_UNORM</code> or
+<code>DXGI_FORMAT_R8G8B8A8_UNORM_SRGB</code>.</p>
+<h3 id="extracting-luminance">Extracting Luminance</h3>
+<p>Tone mapping can be executed on individual color channels or on
+overall pixel luminance. Operating strictly on individual RGB channels
+can lead to color and hue shifting as values approach 1.0. To avoid
+this, shaders frequently extract perceived luminance (<span
+class="math inline">\(Y\)</span>) using standard colorimetric weights
+(such as Rec. 709 coefficients):</p>
+<p><span class="math display">\[Y = 0.2126 \times R + 0.7152 \times G +
+0.0722 \times B\]</span></p>
+<p>Once the scalar luminance <span class="math inline">\(Y\)</span> is
+compressed into an SDR luminance <span
+class="math inline">\(Y_{sdr}\)</span>, the original color vector is
+rescaled:</p>
+<p><span class="math display">\[Color_{sdr} = Color_{hdr} \times \left(
+\frac{Y_{sdr}}{Y} \right)\]</span></p>
+<h3 id="tone-mapping-operators-hlsl-implementation">Tone Mapping
+Operators (HLSL Implementation)</h3>
+<p>The compression of values relies on non-linear mathematical functions
+called Tone Mapping Operators (TMOs). These functions have an asymptotic
+response that maps an infinite input <span class="math inline">\([0,
+\infty)\)</span> smoothly to <span class="math inline">\([0,
+1]\)</span>.</p>
+<h4 id="1-reinhard-operator">1. Reinhard Operator</h4>
+<p>The simplest curve is the Reinhard tone mapping operator. In
+HLSL:</p>
+<pre class="hlsl"><code>float3 ReinhardToneMapping(float3 hdrColor)
+{
+    return hdrColor / (hdrColor + 1.0f);
+}</code></pre>
+<p>As <code>hdrColor</code> approaches infinity, the output approaches
+<code>1.0</code>. A modified version allows developers to define a
+maximum luminance (<span class="math inline">\(L_{white}\)</span>) that
+maps directly to pure white:</p>
+<pre class="hlsl"><code>float ReinhardExtended(float L, float L_white)
+{
+    return (L * (1.0f + (L / (L_white * L_white)))) / (1.0f + L);
+}</code></pre>
+<h4 id="2-aces-filmic-operator">2. ACES Filmic Operator</h4>
+<p>Modern DirectX titles widely use approximations of the Academy Color
+Encoding System (ACES) filmic curve. This S-shaped curve provides toe
+compression (shadow contrast), a linear mid-section, and a shoulder
+(highlight desaturation), avoiding the washed-out look that basic
+operators can cause:</p>
+<pre class="hlsl"><code>float3 ACESFilm(float3 x)
+{
+    float a = 2.51f;
+    float b = 0.03f;
+    float c = 2.43f;
+    float d = 0.59f;
+    float e = 0.14f;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}</code></pre>
+<h3 id="exposure-and-color-space-encoding">Exposure and Color Space
+Encoding</h3>
+<p>Before tone mapping occurs, exposure is applied to scale the scene
+values up or down based on virtual camera settings:</p>
+<p><span class="math display">\[Color_{exposed} = Color_{hdr} \times
+2^{\text{Exposure}}\]</span></p>
+<p>After the tone mapping operator maps the high dynamic values into the
+linear <span class="math inline">\([0.0, 1.0]\)</span> boundary, the
+final step in the DirectX pixel or compute shader is applying gamma
+correction or encoding to the target color space (typically sRGB). If
+the swap chain target is set to <code>_SRGB</code>, the GPU hardware
+handles the linear-to-sRGB conversion automatically on write. If using a
+standard <code>_UNORM</code> format, the shader explicitly applies the
+gamma curve:</p>
+<pre class="hlsl"><code>float3 LinearToSRGB(float3 linearColor)
+{
+    return pow(abs(linearColor), 1.0f / 2.2f);
+}</code></pre>
+<p>This sequence transforms unbounded, physically based lighting into
+perceptual, display-ready pixels within the structural limits of an SDR
+monitor.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

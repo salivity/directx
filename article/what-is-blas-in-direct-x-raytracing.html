@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What Is BLAS in DirectX Raytracing? - directx</title>
+    <meta name="description" content="Bottom-Level Acceleration Structures (BLAS) are a foundational component of hardware-accelerated ray tracing in DirectX Raytracing (DXR). This article covers the fundamental purpose of a BLAS, how it formats and bounds geometry data, its role within the t">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/what-is-blas-in-direct-x-raytracing">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="What Is BLAS in DirectX Raytracing? - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/what-is-blas-in-direct-x-raytracing" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Bottom-Level Acceleration Structures (BLAS) are a foundational component of hardware-accelerated ray tracing in DirectX Raytracing (DXR). This article covers the fundamental purpose of a BLAS, how it formats and bounds geometry data, its role within the t" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="what-is-blas-in-directx-raytracing">What Is BLAS in DirectX
+Raytracing?</h1>
+<p>Bottom-Level Acceleration Structures (BLAS) are a foundational
+component of hardware-accelerated ray tracing in DirectX Raytracing
+(DXR). This article covers the fundamental purpose of a BLAS, how it
+formats and bounds geometry data, its role within the two-level
+acceleration structure hierarchy alongside the Top-Level Acceleration
+Structure (TLAS), and best practices for managing BLAS memory and
+updates for real-time performance.</p>
+<h3 id="the-role-of-acceleration-structures">The Role of Acceleration
+Structures</h3>
+<p>In traditional rasterization, the GPU processes triangles
+sequentially from the perspective of a camera. Ray tracing, however,
+requires testing arbitrary rays against millions of triangles from any
+point and direction in a scene. Testing each ray against every triangle
+individually is computationally prohibitive.</p>
+<p>To solve this, DXR uses Bounding Volume Hierarchies (BVHs), which
+recursively group geometric primitives inside hierarchical axis-aligned
+bounding boxes (AABBs). Instead of checking millions of triangles, a ray
+only tests the bounding boxes it intersects, drastically reducing
+computational overhead.</p>
+<h3 id="what-is-a-bottom-level-acceleration-structure-blas">What is a
+Bottom-Level Acceleration Structure (BLAS)?</h3>
+<p>A Bottom-Level Acceleration Structure is the lowest tier of this BVH
+hierarchy. While traditional 3D graphics pipelines pass raw vertex and
+index buffers directly into shaders, DXR requires these buffers to be
+compiled into a BLAS.</p>
+<p>A BLAS directly references and encompasses actual geometric data,
+such as:</p>
+<ul>
+<li><strong>Triangle meshes:</strong> Polygons defined by vertex, index,
+and transform buffers.</li>
+<li><strong>Procedural geometry:</strong> Primitives defined by custom
+AABBs, where ray-surface intersections are calculated using custom
+intersection shaders (e.g., hair, spheres, or volumetric clouds).</li>
+</ul>
+<p>The BLAS stores geometry in local object space rather than world
+space. Because of this, it represents the physical shape of an
+individual object or asset, independent of where that object is placed
+in the game world.</p>
+<h3 id="the-two-level-hierarchy-blas-vs-tlas">The Two-Level Hierarchy:
+BLAS vs. TLAS</h3>
+<p>DXR uses a two-level acceleration structure system to maximize
+performance and memory efficiency:</p>
+<ol type="1">
+<li><strong>Bottom-Level Acceleration Structure (BLAS):</strong>
+Contains the raw mesh data in object space.</li>
+<li><strong>Top-Level Acceleration Structure (TLAS):</strong> Contains a
+list of instances that point to various BLAS references. Each instance
+in the TLAS includes a <span class="math inline">\(3 \times 4\)</span>
+transformation matrix, flags, and an instance ID.</li>
+</ol>
+<p>This separation enables efficient <strong>geometry
+instancing</strong>. For example, a virtual forest can contain thousands
+of trees with varying positions, rotations, and scales. Instead of
+generating distinct acceleration structures for each tree, the GPU
+creates a single BLAS for the tree mesh. The TLAS then instances this
+BLAS thousands of times using lightweight transform matrices. This saves
+significant VRAM and allows the GPU to quickly traverse scenes.</p>
+<h3 id="building-and-managing-blas-in-dxr">Building and Managing BLAS in
+DXR</h3>
+<p>Creating a BLAS occurs directly on the GPU using the
+<code>BuildRaytracingAccelerationStructure</code> API call. The
+developer provides geometric descriptions
+(<code>D3D12_RAYTRACING_GEOMETRY_DESC</code>), allocates the required
+scratch memory for building, and designates the destination GPU
+buffer.</p>
+<p>Key considerations when working with BLAS include:</p>
+<ul>
+<li><strong>Static vs. Dynamic Geometry:</strong> Static objects (such
+as buildings and terrain) only require their BLAS to be built once
+during loading. Dynamic objects (such as skinned characters or
+destructible meshes) require their BLAS to be either refit (updated) or
+rebuilt entirely each frame.</li>
+<li><strong>Update vs. Rebuild:</strong> Updating a BLAS
+(<code>D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE</code>)
+is fast because it adjusts the existing bounding boxes without
+rearranging the tree topology. However, if the topology of the mesh
+changes significantly, a full rebuild is required to prevent degraded
+ray traversal performance.</li>
+<li><strong>Compaction:</strong> When a BLAS is initially built, the
+driver allocates an estimated memory footprint that is often larger than
+necessary. DXR provides a compaction mechanism that queries the final
+post-build size and copies the BLAS into a tightly packed memory buffer,
+significantly reducing overall VRAM consumption.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

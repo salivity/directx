@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectSR: Standardizing Game Upscaling APIs - directx</title>
+    <meta name="description" content="Microsoft’s DirectSR (DirectX Super Resolution) serves as a unified abstraction layer that standardizes super-resolution technologies across modern PC gaming. By bridging the gap between proprietary vendor solutions like NVIDIA DLSS, AMD FidelityFX Super">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-sr-standardizing-game-upscaling-ap-is">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectSR: Standardizing Game Upscaling APIs - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-sr-standardizing-game-upscaling-ap-is" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Microsoft’s DirectSR (DirectX Super Resolution) serves as a unified abstraction layer that standardizes super-resolution technologies across modern PC gaming. By bridging the gap between proprietary vendor solutions like NVIDIA DLSS, AMD FidelityFX Super" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directsr-standardizing-game-upscaling-apis">DirectSR:
+Standardizing Game Upscaling APIs</h1>
+<p>Microsoft’s DirectSR (DirectX Super Resolution) serves as a unified
+abstraction layer that standardizes super-resolution technologies across
+modern PC gaming. By bridging the gap between proprietary vendor
+solutions like NVIDIA DLSS, AMD FidelityFX Super Resolution (FSR), and
+Intel XeSS, DirectSR eliminates the need for developers to integrate
+multiple distinct Software Development Kits (SDKs). It provides a
+single, streamlined API within the DirectX 12 ecosystem, making
+high-performance upscaling widely accessible across diverse hardware
+configurations.</p>
+<h3 id="solving-the-fragmentation-of-upscaling-technologies">Solving the
+Fragmentation of Upscaling Technologies</h3>
+<p>Before DirectSR, developers faced a fragmented landscape. Modern
+upscaling relies on temporal data—such as motion vectors, depth buffers,
+and color histories—to reconstruct high-resolution frames from
+lower-resolution renders. While DLSS, FSR, and XeSS require
+fundamentally similar inputs, each framework relies on its own
+proprietary code paths, pipeline hooks, and maintenance cycles.</p>
+<p>Implementing all three technologies often proved resource-intensive,
+leading many developers to support only one vendor or delay upscaling
+features entirely. DirectSR resolves this bottleneck by defining a
+single common interface for temporal upscaling within the native DirectX
+runtime.</p>
+<h3 id="how-directsr-functions-as-a-universal-interface">How DirectSR
+Functions as a Universal Interface</h3>
+<p>DirectSR operates as a middleware API that standardizes the ingestion
+of graphical data. Instead of writing distinct render passes for each
+vendor:</p>
+<ol type="1">
+<li><strong>Unified Inputs:</strong> Developers pass motion vectors,
+depth, exposure, and jittered color buffers into a single standardized
+DirectX pipeline.</li>
+<li><strong>Dynamic Routing:</strong> DirectSR detects the user's
+graphics hardware and routes these parameters directly to the optimal
+native upscaler (such as DLSS on GeForce GPUs, or XeSS on Arc
+GPUs).</li>
+<li><strong>Integrated Fallbacks:</strong> DirectSR includes built-in
+software fallbacks, such as vendor-agnostic variants of AMD FSR,
+ensuring that super resolution functions even on hardware without
+dedicated tensor or matrix acceleration cores.</li>
+</ol>
+<h3 id="the-impact-on-game-development-and-players">The Impact on Game
+Development and Players</h3>
+<p>DirectSR significantly lowers the barrier to entry for game studios.
+Instead of updating individual SDKs as new versions of DLSS or FSR
+launch, studios target the DirectSR specification. Driver and runtime
+updates can then refresh the underlying upscaling implementations
+without requiring game-specific patches.</p>
+<p>For players, this standardization reduces platform disparity.
+DirectSR ensures that newer games launch with comprehensive upscaling
+support regardless of GPU manufacturer, maximizing framerates, reducing
+power consumption, and extending the lifespan of diverse gaming
+hardware.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

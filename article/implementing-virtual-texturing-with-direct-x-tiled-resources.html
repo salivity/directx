@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Implementing Virtual Texturing with DirectX Tiled Resources - directx</title>
+    <meta name="description" content="Virtual texturing allows rendering engines to stream and display massive texture datasets without exceeding physical video memory by loading only visible texture regions. DirectX Tiled Resources provide native hardware support for this technique, allowing">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/implementing-virtual-texturing-with-direct-x-tiled-resources">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Implementing Virtual Texturing with DirectX Tiled Resources - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/implementing-virtual-texturing-with-direct-x-tiled-resources" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Virtual texturing allows rendering engines to stream and display massive texture datasets without exceeding physical video memory by loading only visible texture regions. DirectX Tiled Resources provide native hardware support for this technique, allowing" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="implementing-virtual-texturing-with-directx-tiled-resources">Implementing
+Virtual Texturing with DirectX Tiled Resources</h1>
+<p>Virtual texturing allows rendering engines to stream and display
+massive texture datasets without exceeding physical video memory by
+loading only visible texture regions. DirectX Tiled Resources provide
+native hardware support for this technique, allowing developers to
+create massive virtual textures with sparse physical memory backing.
+This article explains the core concepts of virtual texturing and details
+the implementation process using the DirectX Tiled Resources API.</p>
+<h2 id="what-is-virtual-texturing">What is Virtual Texturing?</h2>
+<p>Virtual Texturing, often referred to as Sparse Virtual Texturing
+(SVT) or MegaTexturing, decouples a texture's logical dimensions from
+its physical memory footprint. Instead of loading an entire texture and
+its complete mipmap chain into VRAM, the texture is divided into small,
+uniform square regions called "tiles" or "pages" (commonly 64x64 to
+128x128 pixels).</p>
+<p>During rendering, the graphics engine determines which tiles are
+visible at the required mip levels for the current camera view. Only
+those specific tiles are loaded into a physical memory pool on the GPU.
+This eliminates redundant data loading, enables consistent memory usage
+regardless of scene complexity, and allows for texture resolutions that
+far exceed standard hardware limits (such as 64k x 64k textures).</p>
+<h2 id="directx-tiled-resources-overview">DirectX Tiled Resources
+Overview</h2>
+<p>DirectX Tiled Resources (available in Direct3D 11.2 and Direct3D 12)
+provide direct hardware support for sparse allocation. A tiled resource
+divides a texture's memory into fixed 64KB chunks.</p>
+<p>DirectX provides two main components for this feature:</p>
+<ul>
+<li><strong>Virtual Address Space Allocation:</strong> Large resources
+can be declared in virtual memory without committing physical memory
+upfront.</li>
+<li><strong>Physical Tile Mapping:</strong> A dedicated memory pool
+(heap) provides physical 64KB backing pages that can be dynamically
+mapped, unmapped, or shared across various coordinates in the virtual
+resource.</li>
+</ul>
+<h2 id="implementation-steps">Implementation Steps</h2>
+<h3 id="1-offline-data-preparation">1. Offline Data Preparation</h3>
+<p>Textures must be preprocessed into standardized page files:</p>
+<ul>
+<li>Split the source texture and all generated mip levels into uniform
+tiles that align with DirectX 64KB dimensions (for example, 128x128
+pixels for 32-bit RGBA formats).</li>
+<li>Store these tiles in a streamable package file with an index mapping
+mip levels and tile coordinates to file offsets.</li>
+</ul>
+<h3 id="2-creating-the-reserved-resource-and-tile-pool">2. Creating the
+Reserved Resource and Tile Pool</h3>
+<p>Using Direct3D 12:</p>
+<ul>
+<li>Create a reserved texture using
+<code>ID3D12Device::CreateReservedResource</code>. This reserves the
+virtual address space for your target resolution (e.g., 16384x16384)
+without allocating physical VRAM.</li>
+<li>Create a physical heap using <code>ID3D12Device::CreateHeap</code>
+with the
+<code>D3D12_HEAP_FLAG_DENY_BUFFERS | D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES</code>
+flags to serve as the physical tile pool.</li>
+</ul>
+<h3 id="3-determining-visibility-feedback-analysis">3. Determining
+Visibility (Feedback Analysis)</h3>
+<p>The rendering pipeline must determine which tiles are currently
+visible on screen. This can be accomplished through two methods:</p>
+<ul>
+<li><strong>DirectX 12 Sampler Feedback (Recommended):</strong> Use a
+Feedback Texture (<code>Texture2D&lt;DirectX::PackedMipInfo&gt;</code>)
+in your pixel shader to automatically record which mip levels and tiles
+are sampled during rendering.</li>
+<li><strong>Custom Visibility Buffer Pass:</strong> Render a
+low-resolution pass writing out the required tile IDs and mip levels to
+a readback buffer.</li>
+</ul>
+<h3 id="4-updating-tile-mappings">4. Updating Tile Mappings</h3>
+<p>After the feedback data is read by the streaming system:</p>
+<ol type="1">
+<li>Identify missing tiles that are requested by the shader.</li>
+<li>Load the required 64KB compressed blocks from disk or system RAM
+into staging buffers.</li>
+<li>Upload the loaded tiles into an available slot within the physical
+heap.</li>
+<li>Call <code>ID3D12CommandQueue::UpdateTileMappings</code> to link the
+coordinate in the reserved virtual texture to the corresponding physical
+tile in the heap.</li>
+<li>If physical memory is full, unmap least-recently-used (LRU) tiles to
+free space for incoming requests.</li>
+</ol>
+<h3 id="5-shader-sampling-and-fallbacks">5. Shader Sampling and
+Fallbacks</h3>
+<p>In HLSL, tiled resources are sampled like standard textures. However,
+when high-resolution tiles are still streaming, shaders need a fallback
+strategy to avoid rendering artifacts:</p>
+<ul>
+<li><strong>Mip Clamping:</strong> Clamp sampling to the highest
+resident mip level available for that coordinate.</li>
+<li><strong>Status Checking:</strong> Use HLSL intrinsics such as
+<code>CheckAccessFullyMapped</code> to determine if all sampled data is
+resident. If not, sample from a low-resolution base mip level that
+remains permanently resident in memory.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

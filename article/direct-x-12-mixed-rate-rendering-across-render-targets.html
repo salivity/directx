@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Mixed-Rate Rendering Across Render Targets - directx</title>
+    <meta name="description" content="DirectX 12 enables mixed-rate rendering across different render targets in a single pass through a combination of Variable Rate Shading (VRS), relaxed Render Target View (RTV) dimension requirements, and programmable shading rate combiners. By decoupling">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-mixed-rate-rendering-across-render-targets">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Mixed-Rate Rendering Across Render Targets - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-mixed-rate-rendering-across-render-targets" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 enables mixed-rate rendering across different render targets in a single pass through a combination of Variable Rate Shading (VRS), relaxed Render Target View (RTV) dimension requirements, and programmable shading rate combiners. By decoupling" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-mixed-rate-rendering-across-render-targets">DirectX
+12 Mixed-Rate Rendering Across Render Targets</h1>
+<p>DirectX 12 enables mixed-rate rendering across different render
+targets in a single pass through a combination of Variable Rate Shading
+(VRS), relaxed Render Target View (RTV) dimension requirements, and
+programmable shading rate combiners. By decoupling the pixel shading
+frequency from the physical target resolution and permitting disparate
+render target geometries, developers can dynamically allocate GPU
+compute power to high-frequency visual elements while reducing update
+rates for auxiliary buffers in a unified draw call.</p>
+<h3 id="variable-rate-shading-vrs-architecture">Variable Rate Shading
+(VRS) Architecture</h3>
+<p>At the core of mixed-rate execution is DirectX 12 Variable Rate
+Shading (Tier 1 and Tier 2). Rather than invoking a pixel shader once
+for every single pixel on every attached render target, the hardware can
+allocate a single pixel shader evaluation across a block of pixels—such
+as 1x1, 1x2, 2x1, 2x2, 2x4, or 4x4 coarse pixel regions.</p>
+<p>In a standard Multiple Render Target (MRT) setup, the pixel shader
+executes at the rate determined by the runtime and hardware combiners.
+Once computed, the generated output values are broadcast to the
+corresponding coarse samples across all simultaneously bound render
+targets, effectively altering the rate of calculation while preserving
+rasterization coverage.</p>
+<h3 id="relaxed-render-target-rules">Relaxed Render Target Rules</h3>
+<p>DirectX 12 removes the legacy DirectX requirement that all
+simultaneously bound RTVs must share the same pixel dimensions, bit
+depths, and sample counts. This capability, known as relaxed render
+target sizing, allows a single graphics pipeline state object (PSO) to
+bind multiple targets of varying physical sizes.</p>
+<p>When mixed-rate rendering is deployed:</p>
+<ul>
+<li>A full-resolution buffer (such as primary albedo or normal targets)
+can be bound alongside lower-resolution auxiliary buffers (such as
+ambient occlusion, indirect lighting, or subsurface scattering
+targets).</li>
+<li>The rasterizer relies on the viewport and scissor configurations to
+govern pixel generation.</li>
+<li>Pixel shaders output to lower-resolution targets via scaled
+viewports or coordinate transformation in shader code, enabling distinct
+update frequencies within a unified pass.</li>
+</ul>
+<h3 id="tier-2-shading-rate-combiners">Tier 2 Shading Rate
+Combiners</h3>
+<p>DirectX 12 Tier 2 VRS introduces screen-space shading rate images and
+per-primitive shading rate selection (<code>SV_ShadingRate</code> in
+HLSL). Developers can control shading rates on a per-surface or per-draw
+basis using configurable combiner states
+(<code>D3D12_SHADING_RATE_COMBINER</code>):</p>
+<ol type="1">
+<li><strong>Per-Draw Call (Tier 1):</strong> Specifies a coarse shading
+rate for the entire draw call.</li>
+<li><strong>Per-Primitive (Tier 2):</strong> Mesh or geometry shaders
+select coarse rates per-triangle, allowing detailed foreground geometry
+to evaluate at 1x1 while background geometry renders at 2x2 or 4x4.</li>
+<li><strong>Screen-Space Shading Rate Image (Tier 2):</strong> A
+low-resolution texture governs the shading frequency across the screen
+based on content, motion vectors, or gaze tracking in VR
+applications.</li>
+</ol>
+<p>When these combiners merge, the pipeline determines an effective
+shading rate for the pass, reducing unnecessary computations on targets
+that do not require high-frequency sampling.</p>
+<h3
+id="sv_rendertargetarrayindex-and-geometry-multiplexing">SV_RenderTargetArrayIndex
+and Geometry Multiplexing</h3>
+<p>To achieve true spatial mixed-rate rendering where different targets
+actively receive geometry rendered at different sampling densities,
+developers use <code>SV_RenderTargetArrayIndex</code> or
+<code>SV_ViewportArrayIndex</code> inside Amplification, Mesh, or
+Geometry Shaders.</p>
+<p>A single pass can route primitives to distinct render targets:</p>
+<ul>
+<li>High-detail primitives can be routed to Target 0 with an unscaled
+viewport.</li>
+<li>Primitives requiring lower update frequency can be redirected to
+Target 1, coupled to a half-resolution viewport.</li>
+</ul>
+<p>This allows the engine to output to multiple targets of differing
+granularities without issuing separate draw calls, bypassing pipeline
+reconfiguration penalties and CPU overhead.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

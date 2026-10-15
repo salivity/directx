@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DX11 Compute Shaders vs DX12 Async Compute - directx</title>
+    <meta name="description" content="This article examines the architectural and performance differences between DirectX 11 compute shaders and DirectX 12 asynchronous compute pipelines. While DirectX 11 introduced general-purpose GPU computing through a single synchronous queue, DirectX 12">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dx-11-compute-shaders-vs-dx-12-async-compute">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DX11 Compute Shaders vs DX12 Async Compute - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dx-11-compute-shaders-vs-dx-12-async-compute" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article examines the architectural and performance differences between DirectX 11 compute shaders and DirectX 12 asynchronous compute pipelines. While DirectX 11 introduced general-purpose GPU computing through a single synchronous queue, DirectX 12" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="dx11-compute-shaders-vs-dx12-async-compute">DX11 Compute Shaders
+vs DX12 Async Compute</h1>
+<p>This article examines the architectural and performance differences
+between DirectX 11 compute shaders and DirectX 12 asynchronous compute
+pipelines. While DirectX 11 introduced general-purpose GPU computing
+through a single synchronous queue, DirectX 12 exposes independent
+hardware command queues that enable true concurrent execution of
+graphics and compute workloads. Understanding these distinctions
+clarifies how modern rendering engines optimize GPU utilization, reduce
+latency, and eliminate pipeline bottlenecks.</p>
+<h3 id="execution-model-and-pipeline-architecture">Execution Model and
+Pipeline Architecture</h3>
+<p>In DirectX 11, compute shaders operate within a single, serialized
+timeline managed primarily by the graphics driver. Even though compute
+shaders process non-graphical workloads such as physics, culling, or
+post-processing, the GPU processes either a graphics task or a compute
+task at any given moment. Switching between graphics and compute
+workloads requires a context switch on the GPU, which can stall the
+pipeline and leave compute units temporarily idle while waiting for
+state transitions to complete.</p>
+<p>DirectX 12 shifts to an explicit, low-level architecture that exposes
+multiple hardware command queues directly to the developer:</p>
+<ul>
+<li><strong>Direct Queue:</strong> Handles standard rendering commands,
+rasterization, and compute work.</li>
+<li><strong>Compute Queue:</strong> Dedicated strictly to compute
+workloads without graphics pipeline overhead.</li>
+<li><strong>Copy Queue:</strong> Dedicated to memory transfers and
+resource streaming over PCIe.</li>
+</ul>
+<p>With DirectX 12 asynchronous compute, the compute queue operates
+independently of the direct queue. Workloads dispatched to the compute
+queue execute in parallel with rendering tasks on the direct queue,
+bypassing the need for a global pipeline flush.</p>
+<h3 id="hardware-utilization-and-pipeline-bubbles">Hardware Utilization
+and Pipeline Bubbles</h3>
+<p>A significant issue in DirectX 11 rendering loops is the presence of
+pipeline "bubbles"—moments where parts of the GPU remain underutilized.
+For example, during heavy rasterization or shadow map generation,
+fixed-function hardware is fully saturated, but Arithmetic Logic Units
+(ALUs) often sit idle. Conversely, heavy compute passes can saturate
+ALUs while memory bandwidth or rasterizers remain idle. Because DirectX
+11 processes tasks sequentially, it cannot interleave these workloads to
+balance the load.</p>
+<p>DirectX 12 asynchronous compute solves this by filling hardware
+execution gaps. While the direct queue is occupied with bandwidth-heavy
+or geometry-bound tasks (such as depth pre-passes or shadow rendering),
+the GPU can simultaneously schedule compute tasks (such as ambient
+occlusion, screen-space reflections, or physics calculations) to utilize
+idle ALUs. This simultaneous execution maximizes the saturation of the
+GPU’s shader cores and increases overall frame throughput.</p>
+<h3 id="synchronization-and-developer-control">Synchronization and
+Developer Control</h3>
+<p>The shift from DirectX 11 to DirectX 12 represents a transition from
+implicit driver-side management to explicit application-side
+synchronization:</p>
+<ul>
+<li><strong>DirectX 11 (Implicit):</strong> The driver determines how
+and when compute tasks are interleaved. Developers set inputs, dispatch
+the shader, and the runtime automatically ensures dependencies are met
+before subsequent graphics calls execute. While simple to implement,
+this design introduces driver overhead and prevents fine-grained
+scheduling optimizations.</li>
+<li><strong>DirectX 12 (Explicit):</strong> Synchronization between
+queues is handled manually using GPU fences and barriers. Developers
+explicitly define when the compute queue must wait for the direct queue,
+and vice versa. This grants fine-grained control over resource
+dependencies, allowing compute results to be delivered precisely when
+needed by the graphics pipeline without unnecessary waiting.</li>
+</ul>
+<h3 id="performance-and-latency-implications">Performance and Latency
+Implications</h3>
+<p>The architectural shift drastically improves latency-sensitive
+workloads. In DirectX 11, high-priority tasks (such as VR timewarp or
+asynchronous reprojection) must wait for the current draw call or
+compute dispatch to finish before executing. In DirectX 12,
+high-priority compute queues can preempt or run alongside standard
+rendering passes, ensuring critical frames are generated with
+predictable, ultra-low latency.</p>
+<p>When implemented correctly, DirectX 12 asynchronous compute yields
+significant frame-rate improvements and smoother frame times compared to
+DirectX 11, transforming compute shaders from an isolated sequential
+step into a continuous, parallel background processor.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

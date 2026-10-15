@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Root Constants for Low-Latency Shaders - directx</title>
+    <meta name="description" content="This article provides an overview of root constants in DirectX 12, explaining what they are, how their architectural design eliminates memory indirection to achieve minimal latency, and when to use them over standard constant buffers. By reading ahead, yo">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-root-constants-for-low-latency-shaders">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Root Constants for Low-Latency Shaders - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-root-constants-for-low-latency-shaders" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of root constants in DirectX 12, explaining what they are, how their architectural design eliminates memory indirection to achieve minimal latency, and when to use them over standard constant buffers. By reading ahead, yo" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-root-constants-for-low-latency-shaders">DirectX 12
+Root Constants for Low-Latency Shaders</h1>
+<p>This article provides an overview of root constants in DirectX 12,
+explaining what they are, how their architectural design eliminates
+memory indirection to achieve minimal latency, and when to use them over
+standard constant buffers. By reading ahead, you will understand how
+inlining 32-bit values directly into the root signature optimizes GPU
+execution and avoids standard memory access bottlenecks.</p>
+<hr />
+<h3 id="what-are-root-constants-in-directx-12">What Are Root Constants
+in DirectX 12?</h3>
+<p>In DirectX 12, the root signature defines the arguments that shaders
+expect, functioning similarly to a function signature in C++. While
+resources are typically bound using descriptors or root descriptors
+(pointers to memory), root constants allow you to inline raw 32-bit
+values directly into the root signature itself.</p>
+<p>Defined as an array of 32-bit values, root constants appear to the
+High-Level Shader Language (HLSL) as a standard Constant Buffer
+(<code>cbuffer</code>). However, instead of allocating a separate buffer
+resource in GPU memory and passing its address, the application passes
+the data directly into the command list using methods such as
+<code>SetGraphicsRoot32BitConstants</code> or
+<code>SetComputeRoot32BitConstants</code>.</p>
+<h3 id="how-root-constants-provide-low-latency-access">How Root
+Constants Provide Low-Latency Access</h3>
+<p>The primary advantage of root constants is the elimination of memory
+indirection.</p>
+<ol type="1">
+<li><strong>Zero Indirection:</strong> Standard Constant Buffer Views
+(CBVs) require the GPU to first read a descriptor to find the buffer's
+virtual address, then issue a memory load to retrieve the actual data
+from VRAM or caches. Root constants bypass this entire pipeline: the
+data lives directly in the root signature payload.</li>
+<li><strong>Immediate Register Mapping:</strong> Modern GPU command
+processors unpack root constants directly into specialized high-speed
+registers or immediate constant memory during command execution. When a
+shader stage executes, the values are already resident where the
+hardware needs them, removing the possibility of a cache miss on
+constant data.</li>
+<li><strong>No Dynamic Allocation Overhead:</strong> Because values are
+embedded directly in the command buffer, developers do not need to
+manage transient upload heaps, ring buffers, or dynamic sub-allocations
+for frequently changing scalar values.</li>
+</ol>
+<h3 id="cost-and-capacity-limitations">Cost and Capacity
+Limitations</h3>
+<p>The low latency of root constants comes with trade-offs regarding
+storage capacity.</p>
+<p>DirectX 12 limits the total size of a root signature to <strong>64
+DWORDs</strong> (256 bytes). Each resource binding consumes a portion of
+this budget:</p>
+<ul>
+<li>A Descriptor Table consumes 1 DWORD.</li>
+<li>A Root Descriptor consumes 2 DWORDs (a 64-bit GPU virtual
+address).</li>
+<li>A Root Constant consumes <strong>1 DWORD per 32-bit
+value</strong>.</li>
+</ul>
+<p>Because root constants directly consume the 64-DWORD limit on a 1:1
+basis, they must be used sparingly. Allocating large structs as root
+constants quickly exhausts the root signature space, leaving no room for
+descriptor tables or other resources, and can lead to command processor
+spilling on some hardware architectures.</p>
+<h3 id="best-use-cases">Best Use Cases</h3>
+<p>Root constants are best suited for high-frequency, low-volume data
+updates that vary on a per-draw or per-dispatch basis, such as:</p>
+<ul>
+<li><strong>Draw or Object IDs:</strong> Direct indices used for
+bindless descriptor indexing inside the shader.</li>
+<li><strong>Small Transforms:</strong> 2D screen offsets, scale factors,
+or compact matrices.</li>
+<li><strong>Per-Object Scalar Data:</strong> Material IDs, basic tint
+colors, UV offsets, or animation frame times.</li>
+</ul>
+<p>For large data sets or parameters that remain static across multiple
+draw calls, traditional Constant Buffer Views or Root Descriptors remain
+the preferred choice.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

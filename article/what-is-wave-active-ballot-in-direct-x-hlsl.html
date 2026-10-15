@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What Is WaveActiveBallot in DirectX HLSL? - directx</title>
+    <meta name="description" content="WaveActiveBallot is an intrinsic function in High-Level Shader Language (HLSL) introduced with Shader Model 6.0 that allows threads within a single GPU wave (or warp) to communicate without using shared memory. This article explains the fundamentals of Wa">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/what-is-wave-active-ballot-in-direct-x-hlsl">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="What Is WaveActiveBallot in DirectX HLSL? - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/what-is-wave-active-ballot-in-direct-x-hlsl" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="WaveActiveBallot is an intrinsic function in High-Level Shader Language (HLSL) introduced with Shader Model 6.0 that allows threads within a single GPU wave (or warp) to communicate without using shared memory. This article explains the fundamentals of Wa" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="what-is-waveactiveballot-in-directx-hlsl">What Is
+WaveActiveBallot in DirectX HLSL?</h1>
+<p><code>WaveActiveBallot</code> is an intrinsic function in High-Level
+Shader Language (HLSL) introduced with Shader Model 6.0 that allows
+threads within a single GPU wave (or warp) to communicate without using
+shared memory. This article explains the fundamentals of
+<code>WaveActiveBallot</code>, how it constructs a bitmask
+representation of boolean conditions across active lanes in a SIMD wave,
+and how developers utilize it to optimize compute workloads and
+eliminate thread divergence.</p>
+<h3 id="understanding-wave-level-execution">Understanding Wave-Level
+Execution</h3>
+<p>Modern GPUs execute groups of parallel threads synchronously in units
+known as waves (DirectX terminology), warps (NVIDIA), or wavefronts
+(AMD). Typically consisting of 32 or 64 lanes, every lane in a wave runs
+the same instruction concurrently.</p>
+<p>Before wave intrinsics were supported, individual lanes operated
+largely in isolation unless they synchronized through threadgroup shared
+memory (<code>groupshared</code>) or global memory using atomic
+operations. <code>WaveActiveBallot</code> circumvents this overhead by
+performing hardware-level lane communication directly across the SIMD
+vector registers.</p>
+<h3 id="how-waveactiveballot-queries-boolean-states">How
+WaveActiveBallot Queries Boolean States</h3>
+<p>The signature of the function is defined as:</p>
+<pre class="hlsl"><code>uint4 WaveActiveBallot(bool expr);</code></pre>
+<p>When called, each active lane in the wave evaluates its local boolean
+expression (<code>expr</code>). The GPU hardware collects these boolean
+results and consolidates them into a 128-bit bitmask distributed across
+a four-component vector of 32-bit unsigned integers
+(<code>uint4</code>).</p>
+<p>The mapping between lane index and bit position is deterministic:</p>
+<ul>
+<li><strong>Lane Index to Bit Mapping:</strong> Lane <code>N</code>
+corresponds to bit <code>(N % 32)</code> within component
+<code>N / 32</code>.</li>
+<li><strong>Component Allocation:</strong>
+<ul>
+<li>Component <code>x</code> stores results for lanes 0 through 31.</li>
+<li>Component <code>y</code> stores results for lanes 32 through
+63.</li>
+<li>Component <code>z</code> stores results for lanes 64 through
+95.</li>
+<li>Component <code>w</code> stores results for lanes 96 through
+127.</li>
+</ul></li>
+</ul>
+<p>If lane <code>N</code> is active and evaluates <code>expr</code> to
+<code>true</code>, bit <code>N</code> in the 128-bit vector is set to
+<code>1</code>. If lane <code>N</code> is inactive (for example, due to
+flow control or boundary conditions) or evaluates <code>expr</code> to
+<code>false</code>, the corresponding bit is set to <code>0</code>. The
+identical 128-bit mask is returned to every active lane in that wave
+simultaneously.</p>
+<h3 id="practical-applications-in-shaders">Practical Applications in
+Shaders</h3>
+<p>By providing an instantaneous snapshot of states across an entire
+wave, <code>WaveActiveBallot</code> enables several performance
+optimizations:</p>
+<ul>
+<li><strong>Counting and Compaction:</strong> Combining
+<code>WaveActiveBallot</code> with the intrinsic
+<code>countbits()</code> allows a wave to tally how many lanes meet a
+condition without issuing memory atomics.</li>
+<li><strong>First/Last Active Identification:</strong> Functions like
+<code>firstbitlow()</code> can interrogate the ballot result to
+designate a single "leader" lane to perform expensive shared operations
+(such as a single atomic add to global memory on behalf of the whole
+wave).</li>
+<li><strong>Early Exits:</strong> Shaders can quickly evaluate whether
+zero, some, or all lanes require an expensive calculation, allowing the
+wave to skip costly code paths dynamically.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

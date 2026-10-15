@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DXR 1.1 Inline Raytracing and Ray Queries Explained - directx</title>
+    <meta name="description" content="DirectX Raytracing (DXR) Tier 1.1 expands the capabilities of real-time raytracing in DirectX 12 by introducing inline raytracing via ray queries. This feature allows developers to execute ray traversal directly inside existing standard shader stages—such">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dxr-1-1-inline-raytracing-and-ray-queries-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DXR 1.1 Inline Raytracing and Ray Queries Explained - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dxr-1-1-inline-raytracing-and-ray-queries-explained" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX Raytracing (DXR) Tier 1.1 expands the capabilities of real-time raytracing in DirectX 12 by introducing inline raytracing via ray queries. This feature allows developers to execute ray traversal directly inside existing standard shader stages—such" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="dxr-11-inline-raytracing-and-ray-queries-explained">DXR 1.1
+Inline Raytracing and Ray Queries Explained</h1>
+<p>DirectX Raytracing (DXR) Tier 1.1 expands the capabilities of
+real-time raytracing in DirectX 12 by introducing inline raytracing via
+ray queries. This feature allows developers to execute ray traversal
+directly inside existing standard shader stages—such as compute, pixel,
+or vertex shaders—without relying on the heavy, state-driven raytracing
+pipeline introduced in DXR 1.0. This article explains how inline
+raytracing functions through ray queries, how it differs from
+traditional dynamic-dispatch raytracing, and where it provides the
+greatest performance and structural advantages.</p>
+<h3 id="the-shift-from-dynamic-dispatch-to-inline-raytracing">The Shift
+from Dynamic Dispatch to Inline Raytracing</h3>
+<p>In DXR Tier 1.0, raytracing required a dedicated execution pipeline
+initialized via <code>DispatchRays</code>. This pipeline relied on
+distinct, specialized raytracing shader stages—Ray Generation, Any Hit,
+Closest Hit, Miss, and Intersection shaders—coordinated through complex
+Shader Binding Tables (SBTs). While ideal for scenarios with diverse
+material types and multi-bounce global illumination, this dynamic
+dispatch model introduced substantial runtime scheduling overhead,
+pipeline state compilation costs, and state-management complexity for
+simple visibility checks.</p>
+<p>DXR Tier 1.1 addresses this by introducing inline raytracing. Rather
+than dispatching an entire dedicated raytracing pipeline, developers can
+invoke ray queries directly inside conventional HLSL shaders. Ray
+queries expose ray traversal as a set of intrinsic methods, giving the
+calling shader complete manual control over traversal, hit evaluation,
+and shading.</p>
+<h3 id="how-ray-queries-work-in-hlsl">How Ray Queries Work in HLSL</h3>
+<p>Ray queries function through the templated HLSL object
+<code>RayQuery&lt;RayFlags&gt;</code>. Traversal is driven synchronously
+inside the shader execution flow through a controlled loop rather than
+hardware-driven shader invocation.</p>
+<ol type="1">
+<li><p><strong>Initialization:</strong> The shader instantiates a
+<code>RayQuery</code> object and configures it using
+<code>TraceRayInline()</code>. This call takes the acceleration
+structure, ray flags, instance inclusion mask, and the ray description
+(origin, direction, and range limits).</p></li>
+<li><p><strong>Traversal Loop:</strong> The shader advances traversal by
+repeatedly calling the <code>Proceed()</code> method inside a loop:</p>
+<pre class="hlsl"><code>RayQuery&lt;RAY_FLAG_NONE&gt; q;
+q.TraceRayInline(TopLevelAS, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xFF, ray);
+while (q.Proceed())
+{
+    // Handle custom intersection or any-hit logic manually
+}</code></pre></li>
+<li><p><strong>Candidate Processing:</strong> During
+<code>Proceed()</code>, if the traversal hits non-opaque geometry or
+procedural primitives requiring shader intervention, the loop pauses and
+yields control back to the shader. The shader inspects the candidate hit
+using <code>q.CandidateType()</code>, performs alpha testing or custom
+intersection tests, and either accepts the hit via
+<code>q.CommitNonOpaqueTriangleHit()</code> or rejects it.</p></li>
+<li><p><strong>Final Result:</strong> Once <code>Proceed()</code>
+returns <code>false</code>, traversal is complete. The shader queries
+<code>q.CommittedStatus()</code> to check if a valid hit occurred and
+retrieves hit attributes (such as barycentrics, instance ID, and
+primitive ID) to perform custom lighting inline.</p></li>
+</ol>
+<h3 id="key-architectural-advantages">Key Architectural Advantages</h3>
+<ul>
+<li><strong>Any-Stage Availability:</strong> Ray queries can be executed
+in compute shaders, pixel shaders, or even amplification and mesh
+shaders, integrating directly into existing rasterization or G-buffer
+pipelines.</li>
+<li><strong>Elimination of Shader Binding Tables:</strong> Because hit
+processing and shading occur inline within the caller shader, developers
+do not need to configure hit groups or complex Shader Binding Tables for
+straightforward ray tests.</li>
+<li><strong>Reduced Register and Divergence Overhead:</strong> Standard
+raytracing pipelines often suffer from divergence when different hits
+invoke widely different hit shaders. Inline raytracing keeps the control
+flow localized, allowing the compiler to optimize register allocation
+and scheduling directly within the host shader.</li>
+<li><strong>Deterministic Execution:</strong> The host shader retains
+full authority over whether to continue searching, abort early, or limit
+traversal depth, providing precise control over worst-case performance
+scenarios.</li>
+</ul>
+<h3 id="practical-use-cases">Practical Use Cases</h3>
+<p>Inline raytracing through ray queries is primarily designed for
+lightweight, coherent ray casting tasks. Common implementations
+include:</p>
+<ul>
+<li><strong>Shadow Rays:</strong> Determining binary visibility between
+a surface point and a light source using
+<code>RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH</code>, bypassing any
+need for complex hit evaluation.</li>
+<li><strong>Ambient Occlusion:</strong> Sampling local hemisphere
+occlusion within a compute or pixel shader pass without
+context-switching to an asynchronous pipeline.</li>
+<li><strong>Screen-Space Fallbacks:</strong> Tracing short-range
+reflection or contact-shadow rays in compute passes where screen-space
+data is missing.</li>
+</ul>
+<p>While DXR 1.0 dynamic dispatch remains optimal for complex scenes
+with thousands of disparate materials requiring recursive shading, DXR
+Tier 1.1 ray queries make ray casting accessible as an on-demand
+primitive across the entire graphics pipeline.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

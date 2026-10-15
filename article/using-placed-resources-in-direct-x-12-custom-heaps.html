@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Using Placed Resources in DirectX 12 Custom Heaps - directx</title>
+    <meta name="description" content="In DirectX 12, placed resources provide explicit, low-level control over GPU virtual memory by mapping directly into pre-allocated memory heaps. By separating memory allocation from resource creation, developers can bypass driver-side allocation overhead,">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/using-placed-resources-in-direct-x-12-custom-heaps">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Using Placed Resources in DirectX 12 Custom Heaps - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/using-placed-resources-in-direct-x-12-custom-heaps" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, placed resources provide explicit, low-level control over GPU virtual memory by mapping directly into pre-allocated memory heaps. By separating memory allocation from resource creation, developers can bypass driver-side allocation overhead," />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="using-placed-resources-in-directx-12-custom-heaps">Using Placed
+Resources in DirectX 12 Custom Heaps</h1>
+<p>In DirectX 12, placed resources provide explicit, low-level control
+over GPU virtual memory by mapping directly into pre-allocated memory
+heaps. By separating memory allocation from resource creation,
+developers can bypass driver-side allocation overhead, implement
+resource aliasing, and optimize memory layouts according to hardware
+constraints. This article examines how placed resources leverage custom
+<code>ID3D12Heap</code> instances, the architectural mechanics behind
+offset mapping, and the specific requirements for alignment, resource
+aliasing, and hardware tiers.</p>
+<h3 id="the-decoupling-of-memory-and-resources">The Decoupling of Memory
+and Resources</h3>
+<p>Standard DirectX 12 resource allocation through
+<code>CreateCommittedResource</code> combines the allocation of a memory
+heap and the creation of a resource into a single call. While simple,
+this approach forces the driver to manage memory boundaries and prevents
+fine-grained spatial optimization.</p>
+<p>Placed resources decouple these systems through
+<code>ID3D12Device::CreatePlacedResource</code>. Instead of requesting
+memory from the driver at resource creation, the developer allocates a
+large chunk of physical or virtual memory upfront using
+<code>ID3D12Device::CreateHeap</code>. Placed resources are then
+instantiated inside that specific <code>ID3D12Heap</code> at explicit
+byte offsets.</p>
+<h3 id="creating-and-configuring-the-custom-heap">Creating and
+Configuring the Custom Heap</h3>
+<p>A custom heap is defined using the <code>D3D12_HEAP_DESC</code>
+structure and allocated once, typically during application
+initialization or scene loading:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>D3D12_HEAP_DESC heapDesc <span class="op">=</span> <span class="op">{};</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>heapDesc<span class="op">.</span>SizeInBytes <span class="op">=</span> totalHeapSize<span class="op">;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>heapDesc<span class="op">.</span>Properties<span class="op">.</span>Type <span class="op">=</span> D3D12_HEAP_TYPE_DEFAULT<span class="op">;</span> <span class="co">// Or D3D12_HEAP_TYPE_CUSTOM</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>heapDesc<span class="op">.</span>Alignment <span class="op">=</span> D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT<span class="op">;</span> <span class="co">// 64KB</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>heapDesc<span class="op">.</span>Flags <span class="op">=</span> D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES<span class="op">;</span></span></code></pre></div>
+<p>When using <code>D3D12_HEAP_TYPE_CUSTOM</code>, developers can
+explicitly set CPU page properties
+(<code>D3D12_CPU_PAGE_PROPERTY</code>) and memory pools
+(<code>D3D12_MEMORY_POOL</code>). This is particularly useful for
+optimizing access patterns on Unified Memory Architecture (UMA) systems,
+such as APUs or consoles, or tailoring cache coherency across
+non-uniform memory architectures.</p>
+<h3 id="mapping-placed-resources-to-offsets">Mapping Placed Resources to
+Offsets</h3>
+<p>Once the heap exists, placed resources are mapped into it without
+triggering kernel-mode memory allocations. The call requires the target
+heap, the byte offset, a resource description
+(<code>D3D12_RESOURCE_DESC</code>), and an initial state:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>device<span class="op">-&gt;</span>CreatePlacedResource<span class="op">(</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    pHeap<span class="op">,</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    offsetInBytes<span class="op">,</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">&amp;</span>resourceDesc<span class="op">,</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    D3D12_RESOURCE_STATE_COMMON<span class="op">,</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">nullptr</span><span class="op">,</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    IID_PPV_ARGS<span class="op">(&amp;</span>pResource<span class="op">)</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="op">);</span></span></code></pre></div>
+<p>Because memory allocation is isolated to the initial heap creation,
+creating and destroying placed resources incurs near-zero runtime CPU
+overhead. The runtime merely validates parameters and instantiates the
+resource interface pointing to the pre-reserved address range.</p>
+<h3 id="memory-aliasing-and-footprint-reduction">Memory Aliasing and
+Footprint Reduction</h3>
+<p>The primary architectural advantage of leveraging pre-allocated heaps
+with placed resources is resource aliasing. Two or more resources with
+non-overlapping lifetimes can occupy the exact same physical byte range
+within a heap.</p>
+<p>For example, a high-resolution transient render target used
+exclusively in an early depth pass can share the same memory range as a
+post-processing buffer used at the end of the frame. To ensure data
+integrity when reusing memory:</p>
+<ol type="1">
+<li>The developer must place an aliasing barrier
+(<code>D3D12_RESOURCE_ALIASING_BARRIER</code>) into the command
+list.</li>
+<li>The barrier informs the GPU driver that the memory layout is
+changing usage contexts, flushing relevant caches and handling metadata
+transitions.</li>
+</ol>
+<p>This technique reduces the peak Video RAM (VRAM) footprint of a
+rendering pipeline to only the maximum memory required by concurrently
+active resources, rather than the sum of all resources.</p>
+<h3 id="alignment-requirements-and-heap-tiers">Alignment Requirements
+and Heap Tiers</h3>
+<p>DirectX 12 imposes strict hardware alignment constraints when placing
+resources within a custom heap:</p>
+<ul>
+<li><strong>Buffers and Standard Textures:</strong> Must be aligned to
+64 KB (<code>D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT</code>).</li>
+<li><strong>Multi-Sampled (MSAA) Textures:</strong> Must be aligned to 4
+MB (<code>D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT</code>).</li>
+<li><strong>Small Textures:</strong> Certain textures with dimensions
+that fit within small footprints can use 4 KB alignment if explicitly
+configured.</li>
+</ul>
+<p>Additionally, the hardware's supported Resource Heap Tier dictates
+what resource types can coexist within the same custom heap:</p>
+<ul>
+<li><strong>Resource Heap Tier 1:</strong> Imposes categorization
+restrictions. Buffers, non-render-target/depth-stencil textures, and
+render-target/depth-stencil textures must reside in separate heaps or
+distinct, non-interleaved memory categories governed by
+<code>D3D12_HEAP_FLAGS</code>.</li>
+<li><strong>Resource Heap Tier 2:</strong> Removes categorization
+restrictions. Developers can arbitrarily place buffers, standard
+textures, and render targets within the same heap using
+<code>D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES</code>, enabling
+optimal memory packing and aliasing across all pipeline stages.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

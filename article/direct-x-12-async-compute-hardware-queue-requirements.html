@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Async Compute Hardware Queue Requirements - directx</title>
+    <meta name="description" content="Asynchronous compute in DirectX 12 enables modern GPUs to maximize hardware utilization by executing graphics, compute, and memory transfer operations concurrently rather than in sequence. To achieve true simultaneous execution rather than time-sliced con">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-async-compute-hardware-queue-requirements">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Async Compute Hardware Queue Requirements - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-async-compute-hardware-queue-requirements" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Asynchronous compute in DirectX 12 enables modern GPUs to maximize hardware utilization by executing graphics, compute, and memory transfer operations concurrently rather than in sequence. To achieve true simultaneous execution rather than time-sliced con" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-async-compute-hardware-queue-requirements">DirectX 12
+Async Compute Hardware Queue Requirements</h1>
+<p>Asynchronous compute in DirectX 12 enables modern GPUs to maximize
+hardware utilization by executing graphics, compute, and memory transfer
+operations concurrently rather than in sequence. To achieve true
+simultaneous execution rather than time-sliced context switching, a GPU
+must possess dedicated, independent hardware command engines capable of
+processing distinct queue types concurrently. This article outlines the
+specific hardware queue types required to deliver true asynchronous
+compute performance under DirectX 12.</p>
+<h3 id="1-direct-3d-queue">1. Direct (3D) Queue</h3>
+<p>In DirectX 12, this is represented by
+<code>D3D12_COMMAND_LIST_TYPE_DIRECT</code>. At the hardware level, this
+queue maps to the primary 3D graphics pipeline. It handles the complete
+rasterization pipeline, including draw calls, depth/stencil operations,
+geometry processing, pixel shading, and dispatching compute shaders. To
+support asynchronous compute, the hardware must treat this queue as an
+independent path that does not block or wait on compute-only pipelines
+unless explicitly synchronized via fence primitives.</p>
+<h3 id="2-compute-queue">2. Compute Queue</h3>
+<p>Represented by <code>D3D12_COMMAND_LIST_TYPE_COMPUTE</code>, this
+queue bypasses the graphics, geometry, and rasterization hardware
+entirely. To achieve true asynchronous compute, the GPU must have
+dedicated hardware compute engines—such as AMD's Asynchronous Compute
+Engines (ACE) or NVIDIA's independent hardware compute
+schedulers—running alongside the 3D engine. These hardware units must be
+able to schedule compute dispatches to vacant execution units
+(ALUs/SIMDs) while the Direct queue is simultaneously running
+rasterization or rendering passes.</p>
+<h3 id="3-copy-transfer-queue">3. Copy (Transfer) Queue</h3>
+<p>Represented by <code>D3D12_COMMAND_LIST_TYPE_COPY</code>, this queue
+maps directly to the GPU's dedicated DMA (Direct Memory Access) engines.
+While asynchronous compute primarily revolves around the simultaneous
+operation of the Direct and Compute queues, a dedicated hardware Copy
+engine is critical to prevent memory transfers (such as uploading
+textures or streaming geometry) from stalling the compute or graphics
+engines.</p>
+<h3 id="requirements-for-true-simultaneous-execution">Requirements for
+True Simultaneous Execution</h3>
+<p>For a GPU to execute these operations simultaneously rather than
+serially:</p>
+<ul>
+<li><strong>Independent Hardware Scheduling:</strong> The GPU silicon
+must feature physically discrete command processors or microcode-driven
+hardware schedulers for both the 3D engine and one or more compute
+engines.</li>
+<li><strong>Concurrent Dispatch Support:</strong> The driver and
+hardware architecture must support multi-engine execution, allowing
+waves or warps from both a Direct command list and a Compute command
+list to occupy the execution units simultaneously. If a GPU relies on a
+single hardware command processor, it will merely interleave workloads
+via software context switching, which introduces latency rather than
+achieving true asynchronous compute.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

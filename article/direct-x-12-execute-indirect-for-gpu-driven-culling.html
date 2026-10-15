@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 ExecuteIndirect for GPU-Driven Culling - directx</title>
+    <meta name="description" content="In modern real-time rendering, shifting visibility determination and draw call generation from the CPU to the GPU drastically minimizes synchronization stalls and API overhead. This article explains how the DirectX 12 method ID3D12GraphicsCommandList::Exe">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-execute-indirect-for-gpu-driven-culling">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 ExecuteIndirect for GPU-Driven Culling - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-execute-indirect-for-gpu-driven-culling" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In modern real-time rendering, shifting visibility determination and draw call generation from the CPU to the GPU drastically minimizes synchronization stalls and API overhead. This article explains how the DirectX 12 method ID3D12GraphicsCommandList::Exe" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-executeindirect-for-gpu-driven-culling">DirectX 12
+ExecuteIndirect for GPU-Driven Culling</h1>
+<p>In modern real-time rendering, shifting visibility determination and
+draw call generation from the CPU to the GPU drastically minimizes
+synchronization stalls and API overhead. This article explains how the
+DirectX 12 method
+<code>ID3D12GraphicsCommandList::ExecuteIndirect</code> serves as the
+critical bridge for GPU-driven rendering pipelines, enabling
+compute-based frustum and occlusion culling, dynamic draw generation,
+and massive draw call compaction entirely within GPU memory.</p>
+<h2 id="the-limitation-of-cpu-bound-culling">The Limitation of CPU-Bound
+Culling</h2>
+<p>Traditional rendering architectures perform scene traversal, bounding
+volume intersection tests, and visibility culling on the CPU. Once the
+visible set of meshes or instances is determined, the CPU records
+individual draw calls—such as <code>DrawIndexedInstanced</code>—into a
+command list.</p>
+<p>This approach introduces severe performance bottlenecks:</p>
+<ul>
+<li><strong>CPU Overhead:</strong> Processing hundreds of thousands of
+individual instances exhausts CPU cycles.</li>
+<li><strong>Latency and Stalls:</strong> Efficient occlusion culling
+requires depth buffer data from the GPU. Reading depth data back to the
+CPU introduces multi-frame latency or costly pipeline stalls.</li>
+<li><strong>Static Allocation:</strong> The CPU must issue draw calls
+based on conservative estimates or outdated visibility information to
+keep the GPU fed.</li>
+</ul>
+<h2 id="how-executeindirect-solves-the-problem">How ExecuteIndirect
+Solves the Problem</h2>
+<p><code>ID3D12GraphicsCommandList::ExecuteIndirect</code> allows the
+GPU to read its own generated data to execute draw, dispatch, or root
+parameter state changes. Instead of receiving explicit rendering
+parameters from the CPU, the GPU reads command arguments directly from
+an application-defined buffer (<code>ID3D12Resource</code>) located in
+VRAM.</p>
+<p>By utilizing <code>D3D12_COMMAND_SIGNATURE_DESC</code>, developers
+can define indirect commands containing draw arguments
+(<code>D3D12_DRAW_INDEXED_ARGUMENTS</code>), dispatch parameters, or
+dynamic resource bindings (root constants, descriptor tables, and
+vertex/index buffer views).</p>
+<h2 id="the-gpu-driven-culling-pipeline">The GPU-Driven Culling
+Pipeline</h2>
+<p>Using <code>ExecuteIndirect</code> to power culling transforms the
+rendering loop into a self-contained GPU workflow executed in three main
+phases:</p>
+<h3 id="1-compute-based-visibility-testing">1. Compute-Based Visibility
+Testing</h3>
+<p>Before rendering, a compute shader processes scene instances in
+parallel. Each instance's bounding box is tested against the current
+camera view:</p>
+<ul>
+<li><strong>Frustum Culling:</strong> Testing oriented bounding boxes
+(OBBs) or axis-aligned bounding boxes (AABBs) against the six camera
+view planes.</li>
+<li><strong>Occlusion Culling (Hi-Z):</strong> Projecting bounding
+volumes onto a Hierarchical Z-Buffer (depth pyramid) generated from the
+previous or current frame to discard fully hidden geometry.</li>
+<li><strong>Dynamic LOD Selection:</strong> Selecting the appropriate
+mesh detail level based on distance and screen-space size within the
+same pass.</li>
+</ul>
+<h3 id="2-argument-buffer-construction">2. Argument Buffer
+Construction</h3>
+<p>Instances that survive the visibility tests are written directly into
+an indirect argument buffer. A common approach involves:</p>
+<ul>
+<li>Maintaining a global atomic counter in an unordered access view
+(UAV) buffer to track the number of visible instances.</li>
+<li>Storing per-instance draw arguments sequentially, compacting the
+data so only visible geometry consumes draw commands.</li>
+<li>Alternatively, updating the <code>InstanceCount</code> field of a
+batched <code>DrawIndexedInstanced</code> command structure
+directly.</li>
+</ul>
+<h3 id="3-execution-via-the-command-list">3. Execution via the Command
+List</h3>
+<p>Once the compute shader completes and a resource barrier transitions
+the argument buffer to
+<code>D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT</code>, the application
+records <code>ExecuteIndirect</code>:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">m_commandList</span><span class="op">-&gt;</span>ExecuteIndirect<span class="op">(</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">m_commandSignature</span><span class="op">.</span>Get<span class="op">(),</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    maxCommandCount<span class="op">,</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">m_argumentBuffer</span><span class="op">.</span>Get<span class="op">(),</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    argumentBufferOffset<span class="op">,</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">m_countBuffer</span><span class="op">.</span>Get<span class="op">(),</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    countBufferOffset</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="op">);</span></span></code></pre></div>
+<p>By providing an optional <code>m_countBuffer</code>, the application
+instructs the hardware to read the exact number of commands to execute
+directly from a GPU counter. The CPU specifies only the maximum possible
+command count (<code>maxCommandCount</code>), completely eliminating the
+need for the CPU to know how many meshes survived the culling
+process.</p>
+<h2 id="core-advantages">Core Advantages</h2>
+<ul>
+<li><strong>Zero CPU-to-GPU Feedback Latency:</strong> Occlusion culling
+operates on the most up-to-date GPU depth representations without
+requiring CPU readbacks.</li>
+<li><strong>Massive Draw Call Reduction:</strong> Geometry processing
+scales with visible complexity rather than total scene complexity.
+Hidden objects are culled before entering the input assembler and vertex
+processing stages.</li>
+<li><strong>Pipeline Cohesion:</strong> Geometry generation, LOD
+selection, visibility culling, and final drawing execution reside
+entirely within GPU execution queues, freeing CPU threads for physics,
+AI, and game logic.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

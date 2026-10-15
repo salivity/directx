@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D3D12 Compute Queue Execution with Graphics Queues - directx</title>
+    <meta name="description" content="In DirectX 12, D3D12COMMANDLISTTYPECOMPUTE enables asynchronous compute execution by processing compute workloads on a dedicated queue alongside the main direct (graphics) queue. This article details the underlying multi-engine hardware architecture, how">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/d-3-d-12-compute-queue-execution-with-graphics-queues">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="D3D12 Compute Queue Execution with Graphics Queues - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/d-3-d-12-compute-queue-execution-with-graphics-queues" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, D3D12COMMANDLISTTYPECOMPUTE enables asynchronous compute execution by processing compute workloads on a dedicated queue alongside the main direct (graphics) queue. This article details the underlying multi-engine hardware architecture, how" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="d3d12-compute-queue-execution-with-graphics-queues">D3D12
+Compute Queue Execution with Graphics Queues</h1>
+<p>In DirectX 12, <code>D3D12_COMMAND_LIST_TYPE_COMPUTE</code> enables
+asynchronous compute execution by processing compute workloads on a
+dedicated queue alongside the main direct (graphics) queue. This article
+details the underlying multi-engine hardware architecture, how tasks
+execute concurrently, the mechanics of explicit synchronization via
+fences, and the resource barrier patterns required to avoid race
+conditions while maximizing GPU utilization.</p>
+<h3 id="multi-queue-architecture">Multi-Queue Architecture</h3>
+<p>DirectX 12 exposes the physical hardware engines of the GPU through
+separate command queue types:</p>
+<ul>
+<li><strong><code>D3D12_COMMAND_LIST_TYPE_DIRECT</code> (Graphics
+Queue):</strong> Can process draw commands, compute shaders, and copy
+operations. It interfaces with both fixed-function hardware
+(rasterizers, render-target outputs) and unified programmable shader
+cores.</li>
+<li><strong><code>D3D12_COMMAND_LIST_TYPE_COMPUTE</code> (Compute
+Queue):</strong> Bypasses graphics-specific stages entirely, submitting
+work directly to the GPU's compute engines and programmable cores.</li>
+<li><strong><code>D3D12_COMMAND_LIST_TYPE_COPY</code> (Copy
+Queue):</strong> Interfaces with DMA engines for memory transfers,
+operating independently of compute and graphics pipelines.</li>
+</ul>
+<p>By segregating these pipelines, applications can prevent long-running
+compute workloads from stalling critical rendering passes.</p>
+<h3 id="hardware-concurrency-async-compute">Hardware Concurrency (Async
+Compute)</h3>
+<p>Modern GPUs contain multiple hardware schedulers feeding unified
+arrays of compute units or streaming multiprocessors. During traditional
+rendering, graphics commands often fail to saturate all available
+execution units, creating pipeline bubbles during memory-bound
+operations, low-geometry draw calls, or fixed-function stages like
+rasterization.</p>
+<p>When a command list of type
+<code>D3D12_COMMAND_LIST_TYPE_COMPUTE</code> is executed on a compute
+queue, the hardware scheduler interleaves its thread groups
+(wavefronts/warps) into idle execution slots alongside active graphics
+work. This simultaneous execution maximizes arithmetic unit occupancy,
+memory bandwidth usage, and overall throughput without increasing total
+frame time.</p>
+<h3 id="cross-queue-synchronization-using-fences">Cross-Queue
+Synchronization Using Fences</h3>
+<p>Because graphics and compute queues execute asynchronously without
+implicit ordering, developers must manage dependencies explicitly using
+<code>ID3D12Fence</code>.</p>
+<ol type="1">
+<li><strong>Signaling Work Completion:</strong> The producer queue
+submits work and signals a fence value via
+<code>ID3D12CommandQueue::Signal(pFence, Value)</code>.</li>
+<li><strong>Waiting for Execution:</strong> The consumer queue stalls
+its execution pipeline until that value is reached using
+<code>ID3D12CommandQueue::Wait(pFence, Value)</code>.</li>
+</ol>
+<p>Crucially, <code>ID3D12CommandQueue::Wait</code> executes on the GPU.
+It does not block the CPU thread submitting the commands, allowing CPU
+record-and-submit loops to continue uninterrupted.</p>
+<h3 id="resource-state-transitions-across-queues">Resource State
+Transitions Across Queues</h3>
+<p>Resources shared between compute and graphics queues require
+cross-queue synchronization and state transitions:</p>
+<ul>
+<li><strong>Queue Ownership Transfers:</strong> To modify a resource on
+a compute queue that was previously bound to a graphics queue, the
+resource must transition to <code>D3D12_RESOURCE_STATE_COMMON</code>.
+The sending queue issues a transition barrier ending in
+<code>COMMON</code>, and the receiving queue issues a transition barrier
+starting from <code>COMMON</code> to the desired state (e.g.,
+<code>D3D12_RESOURCE_STATE_UNORDERED_ACCESS</code>).</li>
+<li><strong>Simultaneous Read Access:</strong> If a resource is used
+purely for read access (such as
+<code>D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE</code>) across both
+queues, and the resource was created with shared access flags, both
+engines can read from the resource concurrently without requiring
+explicit ownership transfer barriers, provided no writes occur
+simultaneously.</li>
+</ul>
+<h3 id="optimal-workload-pairings">Optimal Workload Pairings</h3>
+<p>To achieve measurable speedups, paired workloads should utilize
+complementary hardware resources:</p>
+<ul>
+<li><strong>Compute on Compute Queue:</strong> Depth downsampling,
+screen-space ambient occlusion (SSAO), clustered light culling, physics
+simulation, or skinning.</li>
+<li><strong>Graphics on Direct Queue:</strong> Shadow map generation,
+early Z pre-passes, or base geometry rasterization.</li>
+</ul>
+<p>Running two compute-heavy, cache-thrashing passes simultaneously will
+degrade performance due to cache eviction and register starvation.
+Effective utilization relies on pairing memory-latency-heavy tasks with
+compute-bound workloads.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

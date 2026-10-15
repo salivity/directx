@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screen-Space Subsurface Scattering in DirectX - directx</title>
+    <meta name="description" content="Screen-space subsurface scattering (SSSS) is an efficient rendering technique used in modern real-time graphics to simulate the way light penetrates, scatters within, and exits translucent materials such as skin, wax, and marble. This article explains the">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/screen-space-subsurface-scattering-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Screen-Space Subsurface Scattering in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/screen-space-subsurface-scattering-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Screen-space subsurface scattering (SSSS) is an efficient rendering technique used in modern real-time graphics to simulate the way light penetrates, scatters within, and exits translucent materials such as skin, wax, and marble. This article explains the" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="screen-space-subsurface-scattering-in-directx">Screen-Space
+Subsurface Scattering in DirectX</h1>
+<p>Screen-space subsurface scattering (SSSS) is an efficient rendering
+technique used in modern real-time graphics to simulate the way light
+penetrates, scatters within, and exits translucent materials such as
+skin, wax, and marble. This article explains the fundamental theory
+behind SSSS, highlights its advantages over traditional brute-force
+volumetric calculations, and provides a step-by-step breakdown of how to
+implement the technique within a DirectX pipeline using High-Level
+Shader Language (HLSL).</p>
+<h2 id="understanding-screen-space-subsurface-scattering">Understanding
+Screen-Space Subsurface Scattering</h2>
+<p>When light strikes a translucent surface, a portion reflects
+immediately as specular highlight, while the rest penetrates the
+surface, bounces among internal microscopic particles, and exits at
+nearby points. In offline rendering, this is simulated using the
+Bidirectional Scattering Surface Reflectance Distribution Function
+(BSSRDF). Because full volumetric path tracing or Monte Carlo sampling
+is computationally expensive for real-time applications, SSSS
+approximates this diffusion entirely in screen space.</p>
+<p>Instead of tracking light paths through 3D volume, SSSS models light
+diffusion as a post-processing filter applied to the rendered scene.
+Based on the observation that the scattering profile of human skin can
+be represented as a sum of Gaussian functions, the diffusion process can
+be approximated using a depth-aware blur applied to the diffuse lighting
+component of an image.</p>
+<h2 id="key-principles-of-ssss">Key Principles of SSSS</h2>
+<ol type="1">
+<li><strong>Separation of Lighting Components:</strong> Only diffuse
+light scatters beneath the surface. Specular reflections must be kept
+separate from the blur pass, as blurring highlights destroys the
+perception of surface detail.</li>
+<li><strong>Diffusion Profiles:</strong> Different wavelengths of light
+scatter at different distances. In human skin, red light penetrates and
+scatters significantly farther than green or blue light. The filter
+kernel accounts for this by applying per-channel Gaussian weights.</li>
+<li><strong>Depth-Aware Filtering:</strong> To prevent light from
+bleeding across discontinuities—such as from a character's nose onto the
+background wall—the filter uses depth values to scale the blur radius
+and reject samples that fall outside the local surface geometry.</li>
+</ol>
+<h2 id="implementing-ssss-in-directx">Implementing SSSS in DirectX</h2>
+<p>The implementation of SSSS in a DirectX 11 or DirectX 12 pipeline
+relies on a multi-pass post-processing approach using compute shaders or
+pixel shaders written in HLSL.</p>
+<h3 id="1-render-target-setup">1. Render Target Setup</h3>
+<p>During the main geometry pass, prepare the following buffers:</p>
+<ul>
+<li><strong>Diffuse Irradiance Target:</strong> Stores only the diffuse
+lighting on the subsurface material.</li>
+<li><strong>Specular Target:</strong> Stores specular highlights and
+non-scattering materials.</li>
+<li><strong>Depth/Stencil Buffer:</strong> Provides linear view-space
+depth for distance-based weighting.</li>
+<li><strong>Material Mask:</strong> Identifies which pixels correspond
+to subsurface-enabled geometry.</li>
+</ul>
+<h3 id="2-separable-filtering">2. Separable Filtering</h3>
+<p>A standard 2D convolution kernel with radius <span
+class="math inline">\(N\)</span> requires <span
+class="math inline">\(N^2\)</span> texture samples per pixel. SSSS
+optimizes this by splitting the 2D filter into two 1D passes:</p>
+<ul>
+<li><strong>Pass 1:</strong> Horizontal blur across the screen.</li>
+<li><strong>Pass 2:</strong> Vertical blur applied to the output of Pass
+1.</li>
+</ul>
+<p>This reduces the complexity from <span
+class="math inline">\(O(N^2)\)</span> to <span
+class="math inline">\(O(2N)\)</span>, making high-quality scattering
+practical at high frame rates.</p>
+<h3 id="3-hlsl-kernel-implementation">3. HLSL Kernel Implementation</h3>
+<p>The blur shader computes the final color by taking weighted samples
+along a 1D axis. Each sample's offset is scaled by the material's
+scattering radius and inversely proportional to the view-space depth of
+the center pixel to maintain constant physical size in world space.</p>
+<pre class="hlsl"><code>Texture2D&lt;float4&gt; gDiffuseTexture : register(t0);
+Texture2D&lt;float&gt;  gDepthTexture   : register(t1);
+SamplerState      gPointSampler   : register(s0);
+
+cbuffer SSSSConstants : register(b0)
+{
+    float2 gStepDirection;     // (1.0 / Width, 0) for horizontal, (0, 1.0 / Height) for vertical
+    float  gMaxScatteringRadius;
+    float  gDepthThreshold;
+};
+
+// Precomputed weights for a multi-Gaussian skin profile (RGB)
+static const float3 KernelWeights[3] = {
+    float3(0.233, 0.455, 0.649),
+    float3(0.100, 0.336, 0.344),
+    float3(0.118, 0.198, 0.000)
+};
+static const float KernelOffsets[3] = { 0.0, 1.5, 3.5 };
+
+float4 PS_SSSS(float4 pos : SV_Position, float2 uv : TEXCOORD) : SV_Target
+{
+    float centerDepth = gDepthTexture.Sample(gPointSampler, uv);
+    float3 centerColor = gDiffuseTexture.Sample(gPointSampler, uv).rgb;
+
+    // Calculate real-world scale based on depth
+    float2 step = (gStepDirection * gMaxScatteringRadius) / centerDepth;
+
+    float3 totalColor = centerColor * KernelWeights[0];
+    float3 totalWeight = KernelWeights[0];
+
+    [unroll]
+    for (int i = 1; i &lt; 3; ++i)
+    {
+        float2 offset = step * KernelOffsets[i];
+
+        // Sample both positive and negative directions
+        for (int dir = -1; dir &lt;= 1; dir += 2)
+        {
+            float2 sampleUV = uv + (offset * dir);
+            float sampleDepth = gDepthTexture.Sample(gPointSampler, sampleUV);
+
+            // Reject samples exceeding depth difference threshold
+            if (abs(centerDepth - sampleDepth) &lt; gDepthThreshold)
+            {
+                float3 sampleColor = gDiffuseTexture.Sample(gPointSampler, sampleUV).rgb;
+                totalColor += sampleColor * KernelWeights[i];
+                totalWeight += KernelWeights[i];
+            }
+        }
+    }
+
+    return float4(totalColor / totalWeight, 1.0);
+}</code></pre>
+<h3 id="4-recombination-pass">4. Recombination Pass</h3>
+<p>Once both horizontal and vertical passes are complete, a final
+composition pass blends the scattered diffuse image with the unblurred
+specular target, ambient occlusion, and any non-scattering geometry.
+This restores sharp surface reflections and fine pores over the smoothly
+diffused underlying tissue.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Root Signature Shader Stage Visibility - directx</title>
+    <meta name="description" content="In DirectX 12, the root signature acts as the foundational binding contract linking application-side memory to the GPU rendering pipeline. A critical component of this contract is the ability to restrict resource access to designated pipeline stages using">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-root-signature-shader-stage-visibility">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Root Signature Shader Stage Visibility - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-root-signature-shader-stage-visibility" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, the root signature acts as the foundational binding contract linking application-side memory to the GPU rendering pipeline. A critical component of this contract is the ability to restrict resource access to designated pipeline stages using" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-root-signature-shader-stage-visibility">DirectX 12
+Root Signature Shader Stage Visibility</h1>
+<p>In DirectX 12, the root signature acts as the foundational binding
+contract linking application-side memory to the GPU rendering pipeline.
+A critical component of this contract is the ability to restrict
+resource access to designated pipeline stages using shader visibility
+flags. By defining which shader stages can access specific root
+parameters, developers can optimize hardware resource utilization,
+reduce cache footprint, and improve overall GPU throughput across modern
+architectures.</p>
+<h2 id="the-role-of-shader-visibility-flags">The Role of Shader
+Visibility Flags</h2>
+<p>When defining root parameters—such as root constants, root
+descriptors, or descriptor tables—DirectX 12 requires each entry to
+specify a visibility level via the <code>D3D12_SHADER_VISIBILITY</code>
+enumeration. This setting governs access for specific stages of the
+graphics pipeline, including the vertex shader
+(<code>D3D12_SHADER_VISIBILITY_VERTEX</code>), pixel shader
+(<code>D3D12_SHADER_VISIBILITY_PIXEL</code>), geometry shader, hull
+shader, domain shader, mesh shader, and amplification shader. Developers
+can also use <code>D3D12_SHADER_VISIBILITY_ALL</code> to make a
+parameter globally accessible across the entire pipeline.</p>
+<h2 id="hardware-register-allocation-and-cache-efficiency">Hardware
+Register Allocation and Cache Efficiency</h2>
+<p>Modern graphics hardware typically partitions register files,
+descriptor caches, and internal binding tables across distinct hardware
+units tailored to specific shader stages. When a root parameter is
+configured with <code>D3D12_SHADER_VISIBILITY_ALL</code>, the driver
+must replicate or broadcast the descriptor binding across the hardware
+state of every active pipeline stage.</p>
+<p>By narrowing visibility to only the stage requiring the resource:</p>
+<ul>
+<li><strong>Register pressure is reduced:</strong> Hardware does not
+need to allocate descriptor storage in units that never read the
+resource.</li>
+<li><strong>Cache usage is optimized:</strong> Dedicated caches for
+vertex or pixel fetch pipelines remain uncluttered by unneeded state
+metadata.</li>
+<li><strong>Driver state updates are minimized:</strong> The GPU driver
+can emit minimal command packets when binding arguments, as it only
+targets the relevant pipeline registers.</li>
+</ul>
+<h2 id="visibility-across-different-parameter-types">Visibility Across
+Different Parameter Types</h2>
+<p>Shader visibility behaves consistently across all root parameter
+types, but its impact varies:</p>
+<ol type="1">
+<li><strong>Root Constants:</strong> Setting stage-specific visibility
+ensures that 32-bit push constants are loaded directly into the scalar
+or uniform registers of only the targeted shader unit, saving register
+budget for other stages.</li>
+<li><strong>Root Descriptors:</strong> Inlined buffer descriptors (CBVs,
+SRVs, UAVs) bound directly in the root signature consume internal driver
+slots. Restricting their visibility prevents redundant slot consumption
+across idle stages.</li>
+<li><strong>Descriptor Tables:</strong> Restricting descriptor tables
+guarantees that only the specified shader stage generates descriptor
+fetch operations into the descriptor heap.</li>
+</ol>
+<h2 id="best-practices-for-defining-visibility">Best Practices for
+Defining Visibility</h2>
+<p>To maximize hardware performance, the default configuration for root
+parameters should always be the most restrictive stage possible rather
+than <code>D3D12_SHADER_VISIBILITY_ALL</code>. The broad
+<code>ALL</code> flag should be reserved strictly for resources
+genuinely shared across stages—such as global scene constant buffers
+read by both vertex and pixel shaders. Applying tight visibility
+constraints ensures fine-grained control over GPU pipeline execution and
+allows hardware schedulers to run at peak efficiency.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

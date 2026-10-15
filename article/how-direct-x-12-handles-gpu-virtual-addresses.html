@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectX 12 Handles GPU Virtual Addresses - directx</title>
+    <meta name="description" content="DirectX 12 implements low-level memory virtualization by exposing 64-bit GPU Virtual Addresses (GPUVA) directly to applications, decoupling the logical layout of resources from physical video memory. By shifting memory management away from legacy, opaque">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-x-12-handles-gpu-virtual-addresses">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectX 12 Handles GPU Virtual Addresses - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-x-12-handles-gpu-virtual-addresses" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 implements low-level memory virtualization by exposing 64-bit GPU Virtual Addresses (GPUVA) directly to applications, decoupling the logical layout of resources from physical video memory. By shifting memory management away from legacy, opaque" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directx-12-handles-gpu-virtual-addresses">How DirectX 12
+Handles GPU Virtual Addresses</h1>
+<p>DirectX 12 implements low-level memory virtualization by exposing
+64-bit GPU Virtual Addresses (GPUVA) directly to applications,
+decoupling the logical layout of resources from physical video memory.
+By shifting memory management away from legacy, opaque driver
+abstractions to an explicit virtual address space governed by Windows
+Display Driver Model (WDDM) 2.0 and the hardware GPU Memory Management
+Unit (IOMMU/MMU), developers can directly manipulate addresses, reuse
+physical allocations, and perform efficient sparse memory binding.</p>
+<h3 id="the-gpu-virtual-address-space">The GPU Virtual Address
+Space</h3>
+<p>In DirectX 12, every resource allocated on the GPU is assigned a
+64-bit virtual memory address represented by the
+<code>D3D12_GPU_VIRTUAL_ADDRESS</code> type. Rather than referring to
+memory through driver-managed resource handles, shaders and command
+lists can reference allocations through raw memory pointers.</p>
+<p>The underlying operating system memory manager (VidMm via WDDM 2.0)
+works with the GPU's hardware page tables to map these virtual addresses
+to actual physical segments, whether located in dedicated VRAM (local
+memory) or system RAM (non-local memory). This virtualization prevents
+memory fragmentation at the API level, ensures application sandboxing,
+and allows the GPU to use a flat, uniform memory model.</p>
+<h3 id="explicit-resource-backing-models">Explicit Resource Backing
+Models</h3>
+<p>DirectX 12 provides three primary patterns for mapping GPU virtual
+addresses to physical backing stores, granting varying levels of control
+over virtualization:</p>
+<ul>
+<li><strong>Committed Resources:</strong> The simplest model, created
+via <code>CreateCommittedResource</code>. The API simultaneously
+allocates a contiguous range of GPU virtual address space and commits
+physical memory pages to back it.</li>
+<li><strong>Placed Resources:</strong> Created via
+<code>CreatePlacedResource</code> within a pre-allocated
+<code>ID3D12Heap</code>. This decouples the allocation of physical
+memory from the virtual address assignment, allowing multiple resources
+with distinct GPU virtual addresses to overlap and share the same
+physical memory footprint (aliasing) over different lifecycles.</li>
+<li><strong>Reserved Resources (Sparse/Tiled):</strong> Created via
+<code>CreateReservedResource</code>. This reserves a span of GPU virtual
+address space without allocating any backing physical memory. Physical
+64KB pages can later be mapped, unmapped, or remapped to these virtual
+addresses dynamically using <code>UpdateTileMappings</code> or
+<code>CopyTileMappings</code>.</li>
+</ul>
+<h3 id="the-gpu-memory-management-unit-and-page-tables">The GPU Memory
+Management Unit and Page Tables</h3>
+<p>Hardware-level virtualization is executed by the GPU MMU. When a
+command list references a <code>D3D12_GPU_VIRTUAL_ADDRESS</code>, the
+GPU MMU traverses a multi-level page table hierarchy similar to a CPU
+MMU:</p>
+<ol type="1">
+<li><strong>Page Directory Entry (PDE):</strong> Resolves the base
+address of the relevant page table.</li>
+<li><strong>Page Table Entry (PTE):</strong> Points to the physical 4KB
+or 64KB page in VRAM or system memory, while storing status flags such
+as read/write permissions and residency states.</li>
+<li><strong>Fault Handling:</strong> If an address is accessed while its
+corresponding page is not resident, the GPU triggers a page fault. In
+WDDM 2.0, this causes device removal
+(<code>DXGI_ERROR_DEVICE_REMOVED</code>), making residency management
+via <code>ID3D12Device::MakeResident</code> an explicit responsibility
+of the application.</li>
+</ol>
+<h3 id="practical-implications-for-modern-rendering">Practical
+Implications for Modern Rendering</h3>
+<p>Exposing virtual addresses directly unlocks performance optimizations
+that were impossible under traditional abstractions:</p>
+<ul>
+<li><strong>Root Descriptors:</strong> Developers can bypass descriptor
+heaps for buffers by passing raw GPU virtual addresses directly into the
+root signature via <code>SetComputeRootShaderResourceView</code> or
+<code>SetGraphicsRootConstantBufferView</code>.</li>
+<li><strong>Buffer Pointers in Shaders:</strong> GPU virtual addresses
+can be stored inside other buffers, enabling GPU-driven rendering
+techniques where the GPU traverses data structures (such as bounding
+volume hierarchies or linked lists) using pointer chasing without CPU
+intervention.</li>
+<li><strong>Ray Tracing Acceleration Structures:</strong> DirectX
+Raytracing (DXR) relies extensively on GPU virtual addresses to
+reference Bottom-Level and Top-Level Acceleration Structures
+(BLAS/TLAS), allowing dynamic linking of geometry instances directly
+within shader code.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Index Buffers Reduce Memory Bandwidth in DirectX - directx</title>
+    <meta name="description" content="In DirectX graphics programming, index buffers significantly reduce memory bandwidth consumption by eliminating redundant vertex data transmission and unlocking hardware-level caching. Instead of passing duplicate vertex structures for every polygon in a">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-index-buffers-reduce-memory-bandwidth-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Index Buffers Reduce Memory Bandwidth in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-index-buffers-reduce-memory-bandwidth-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX graphics programming, index buffers significantly reduce memory bandwidth consumption by eliminating redundant vertex data transmission and unlocking hardware-level caching. Instead of passing duplicate vertex structures for every polygon in a" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-index-buffers-reduce-memory-bandwidth-in-directx">How Index
+Buffers Reduce Memory Bandwidth in DirectX</h1>
+<p>In DirectX graphics programming, index buffers significantly reduce
+memory bandwidth consumption by eliminating redundant vertex data
+transmission and unlocking hardware-level caching. Instead of passing
+duplicate vertex structures for every polygon in a mesh, developers pass
+a collection of unique vertices accompanied by a compact list of integer
+indices. This architecture drastically decreases the physical footprint
+of geometry transferred across the memory bus and enables the GPU's
+Post-Transform Cache to reuse already processed vertex shader outputs,
+maximizing throughput during the vertex processing stage.</p>
+<h3 id="the-redundancy-of-non-indexed-geometry">The Redundancy of
+Non-Indexed Geometry</h3>
+<p>In a 3D triangle mesh, adjacent triangles frequently share edges and
+vertices. On average, a single vertex is shared by three to six
+different triangles.</p>
+<p>When rendering without an index buffer using unindexed draw calls
+(such as <code>Draw</code> in DirectX 11 or 12), the pipeline requires
+three complete vertices for every single triangle. A modern vertex
+structure typically contains 32 to 64 bytes of data, encompassing 3D
+positions, normal vectors, texture coordinates, and tangents. If six
+connected triangles share a vertex, that same multi-byte structure must
+be duplicated six times in memory and read repeatedly from VRAM, causing
+severe memory bandwidth saturation.</p>
+<h3 id="footprint-reduction-indices-vs-full-vertices">Footprint
+Reduction: Indices vs. Full Vertices</h3>
+<p>Index buffers resolve structural redundancy by decoupling vertex
+definition from triangle topology. Unique vertices are stored exactly
+once in a standard Vertex Buffer, while an Index Buffer stores the
+connectivity information using small integers—either 16-bit
+(<code>DXGI_FORMAT_R16_UINT</code>) or 32-bit
+(<code>DXGI_FORMAT_R32_UINT</code>).</p>
+<p>When defining a shared vertex across multiple triangles:</p>
+<ul>
+<li><strong>Without an index buffer:</strong> Redundant vertex fetches
+consume <span class="math inline">\(6 \times 32\text{ bytes} = 192\text{
+bytes}\)</span>.</li>
+<li><strong>With an index buffer:</strong> One unique vertex and six
+16-bit indices consume <span class="math inline">\(32\text{ bytes} + (6
+\times 2\text{ bytes}) = 44\text{ bytes}\)</span>.</li>
+</ul>
+<p>This substantial reduction in byte size means the GPU fetches far
+less data from device memory over high-speed buses into the Input
+Assembler (IA) stage, directly lowering external memory bandwidth
+demand.</p>
+<h3 id="exploiting-the-post-transform-vertex-cache">Exploiting the
+Post-Transform Vertex Cache</h3>
+<p>The primary bandwidth and processing optimization enabled by index
+buffers occurs inside the GPU via the Post-Transform Cache (also known
+as the output vertex cache).</p>
+<p>When DirectX executes an indexed draw command (such as
+<code>DrawIndexedInstanced</code>):</p>
+<ol type="1">
+<li><strong>Index Evaluation:</strong> The Input Assembler reads the
+index pointing to a vertex in the vertex buffer.</li>
+<li><strong>Cache Check:</strong> The hardware checks the Post-Transform
+Cache to determine if that specific index has already been processed by
+the Vertex Shader in recent operations.</li>
+<li><strong>Cache Hit:</strong> If the index is present in the cache,
+the GPU skips the Vertex Shader entirely and immediately forwards the
+cached transformed results to the rasterizer. This bypasses VRAM reads,
+internal memory bus traffic, and execution units.</li>
+<li><strong>Cache Miss:</strong> If the index is not in the cache, the
+vertex attributes are read from memory, the Vertex Shader executes, and
+the resulting transformed data is stored in the cache for subsequent
+reuse.</li>
+</ol>
+<p>Because indices explicitly identify identical vertices, the GPU can
+reliably track vertex reuse. Without an index buffer, the GPU cannot
+determine if two independent vertex entries in a stream represent the
+same mathematical point, forcing it to fetch the data from memory and
+execute the vertex shader for every single point of every primitive.</p>
+<h3 id="real-world-directx-impact">Real-World DirectX Impact</h3>
+<p>By binding an index buffer via <code>IASetIndexBuffer</code>, DirectX
+applications effectively minimize the total data volume passed through
+the memory hierarchy. The combination of smaller initial data footprints
+in VRAM and high hit rates in the GPU’s internal vertex caches prevents
+memory bus bottlenecks, leaving critical bandwidth available for texture
+streaming, compute operations, and rasterization passes.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Small Command List Performance Costs - directx</title>
+    <meta name="description" content="In DirectX 12, developers are granted low-level control over work generation and submission to maximize multithreaded rendering performance. However, closing and executing command lists that contain only a handful of draw calls introduces severe performan">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-small-command-list-performance-costs">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Small Command List Performance Costs - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-small-command-list-performance-costs" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, developers are granted low-level control over work generation and submission to maximize multithreaded rendering performance. However, closing and executing command lists that contain only a handful of draw calls introduces severe performan" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-small-command-list-performance-costs">DirectX 12
+Small Command List Performance Costs</h1>
+<p>In DirectX 12, developers are granted low-level control over work
+generation and submission to maximize multithreaded rendering
+performance. However, closing and executing command lists that contain
+only a handful of draw calls introduces severe performance penalties
+across both the CPU and GPU. Rather than improving parallel efficiency,
+dispatching micro-sized command lists leads to high API submission
+overhead, GPU command processor starvation, memory allocation
+inefficiencies, and pipeline bubbles that negate the advantages of
+explicit rendering control.</p>
+<h3 id="cpu-submission-overhead">CPU Submission Overhead</h3>
+<p>The primary CPU-side bottleneck stems from the
+<code>ID3D12CommandQueue::ExecuteCommandLists</code> API call. While
+DirectX 12 reduces driver overhead compared to DirectX 11, submission is
+not free. Each call to <code>ExecuteCommandLists</code> requires the
+user-mode driver and the operating system's kernel-mode graphics
+subsystem (D3D runtime and OS kernel) to track synchronization
+primitives, handle fence updates, and validate submission packages.
+Submitting dozens or hundreds of command lists containing only a few
+draw calls shifts the CPU cost from work recording to submission
+management, often consuming more CPU time than the actual generation of
+the draw commands.</p>
+<h3 id="gpu-front-end-and-command-processor-starvation">GPU Front-End
+and Command Processor Starvation</h3>
+<p>Modern graphics processing units rely on dedicated front-end command
+processors (CPs) to fetch, decode, and dispatch command streams to
+compute and rasterization hardware. Executing a command list requires
+the GPU to:</p>
+<ul>
+<li>Read and parse command buffer headers.</li>
+<li>Set up internal state tables.</li>
+<li>Execute preemption or context-switching mechanisms if needed.</li>
+</ul>
+<p>When a command list contains very few draw calls, the time the
+command processor spends parsing preamble instructions and transitioning
+between command streams exceeds the time spent executing the actual
+work. This starves the shader cores, creating "execution
+bubbles"—intervals where the execution units idle while waiting for the
+next command buffer to be fetched and decoded.</p>
+<h3 id="loss-of-hardware-state-coherence">Loss of Hardware State
+Coherence</h3>
+<p>Command lists are completely self-contained execution units.
+Inherited state between command lists is not maintained (with minor
+exceptions for certain descriptors), meaning that every command list
+must explicitly bind the required root signatures, pipeline state
+objects (PSOs), and descriptor tables. When work is fragmented into
+micro-lists:</p>
+<ul>
+<li>Redundant state changes cannot be optimized out across
+boundaries.</li>
+<li>The GPU must re-validate and frequently reload root arguments and
+shader stages.</li>
+<li>Hardware caches containing pipeline setup and primitive
+configurations are invalidated more frequently, lowering overall cache
+hit rates.</li>
+</ul>
+<h3 id="command-allocator-contention-and-overhead">Command Allocator
+Contention and Overhead</h3>
+<p>Command lists rely on <code>ID3D12CommandAllocator</code> to allocate
+memory for recorded commands. Using numerous tiny command lists
+complicates memory management. Command allocators request memory from
+the operating system in larger pages (typically 64 KB or larger).
+Populating these allocators with only minimal commands leads to
+fragmentation and high memory churn, as allocators cannot reclaim
+internal memory until the entire allocator is reset after GPU
+retirement.</p>
+<h3 id="mitigation-strategies">Mitigation Strategies</h3>
+<p>To maintain high throughput and avoid submission overhead, rendering
+systems should adhere to the following architectures:</p>
+<ul>
+<li><strong>Batch Command Lists by Logical Pass:</strong> A single
+command list should generally contain hundreds to thousands of draw
+calls, capturing an entire render pass or a substantial subset of a pass
+recorded across worker threads.</li>
+<li><strong>Consolidate Submissions:</strong> If multiple command lists
+must be recorded in parallel, batch them into an array and submit them
+in a single <code>ExecuteCommandLists</code> call rather than executing
+them individually.</li>
+<li><strong>Use Direct3D 12 Bundles:</strong> For small groups of
+recurring draw calls, use <code>D3D12_COMMAND_LIST_TYPE_BUNDLE</code>.
+Bundles compile and pre-bake draw calls and state setups so they can be
+executed inside a parent command list via <code>ExecuteBundle</code>
+with minimal driver and GPU processing overhead.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

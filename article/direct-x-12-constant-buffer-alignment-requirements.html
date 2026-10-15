@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Constant Buffer Alignment Requirements - directx</title>
+    <meta name="description" content="In DirectX 12, managing memory manually requires strict adherence to hardware-defined alignment specifications to prevent crashes and undefined behavior. This article details the mandatory 256-byte alignment rule for constant buffers, outlines the relevan">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-constant-buffer-alignment-requirements">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Constant Buffer Alignment Requirements - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-constant-buffer-alignment-requirements" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, managing memory manually requires strict adherence to hardware-defined alignment specifications to prevent crashes and undefined behavior. This article details the mandatory 256-byte alignment rule for constant buffers, outlines the relevan" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-constant-buffer-alignment-requirements">DirectX 12
+Constant Buffer Alignment Requirements</h1>
+<p>In DirectX 12, managing memory manually requires strict adherence to
+hardware-defined alignment specifications to prevent crashes and
+undefined behavior. This article details the mandatory 256-byte
+alignment rule for constant buffers, outlines the relevant Direct3D 12
+API constants, and demonstrates how to correctly align buffer sizes and
+memory offsets in application code.</p>
+<h3 id="the-minimum-byte-alignment-requirement">The Minimum Byte
+Alignment Requirement</h3>
+<p>In DirectX 12, the minimum byte alignment requirement for constant
+buffers is <strong>256 bytes</strong>.</p>
+<p>Any memory address used as the start of a constant buffer, as well as
+the allocated size declared in a Constant Buffer View (CBV), must be an
+exact multiple of 256 bytes. This requirement is strictly enforced by
+the Direct3D 12 runtime and GPU hardware. If a constant buffer view is
+created with an offset or size that is not 256-byte aligned, the DirectX
+debug layer will report an error, and descriptor creation will fail.</p>
+<h3 id="api-definition">API Definition</h3>
+<p>The Direct3D 12 API defines this requirement through the following
+constant:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT <span class="op">=</span> <span class="dv">256</span><span class="op">;</span></span></code></pre></div>
+<p>When defining a <code>D3D12_CONSTANT_BUFFER_VIEW_DESC</code>
+structure:</p>
+<ul>
+<li><strong><code>BufferLocation</code></strong>: The GPU virtual
+address (<code>D3D12_GPU_VIRTUAL_ADDRESS</code>) must be aligned to a
+multiple of 256 bytes.</li>
+<li><strong><code>SizeInBytes</code></strong>: The buffer size specified
+in the view must be a multiple of 256 bytes.</li>
+</ul>
+<h3 id="why-256-bytes-is-required">Why 256 Bytes Is Required</h3>
+<p>Modern GPU architectures use SIMD (Single Instruction, Multiple Data)
+pipelines and dedicated constant cache systems. Fetching data from
+constant memory requires cache-line boundary alignment to ensure optimal
+memory bandwidth and avoid cross-boundary memory reads. Rather than
+allowing variable hardware-specific alignments, DirectX 12 standardizes
+this across all compliant hardware at 256 bytes.</p>
+<h3 id="calculating-256-byte-alignment">Calculating 256-Byte
+Alignment</h3>
+<p>Because HLSL structures are typically smaller than 256 bytes,
+structures must be padded when calculating byte offsets and buffer
+allocation sizes.</p>
+<p>You can compute the 256-byte aligned size using standard bitwise
+arithmetic:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">constexpr</span> UINT AlignConstantBufferSize<span class="op">(</span>UINT byteSize<span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="op">{</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">(</span>byteSize <span class="op">+</span> <span class="dv">255</span><span class="op">)</span> <span class="op">&amp;</span> <span class="op">~</span><span class="dv">255</span><span class="op">;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Or by using the standard alignment helper macro:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">constexpr</span> UINT AlignConstantBufferSize<span class="op">(</span>UINT byteSize<span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="op">{</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">(</span>byteSize <span class="op">+</span> <span class="op">(</span>D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT <span class="op">-</span> <span class="dv">1</span><span class="op">))</span> </span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>           <span class="op">&amp;</span> <span class="op">~(</span>D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT <span class="op">-</span> <span class="dv">1</span><span class="op">);</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="practical-application">Practical Application</h3>
+<p>When allocating a sub-allocated upload heap or ring buffer for
+per-frame data:</p>
+<ol type="1">
+<li>Calculate the raw size of your C++ data structure.</li>
+<li>Pass that size to the alignment function to get the actual stride in
+bytes.</li>
+<li>Advance upload heap offsets by the aligned stride rather than the
+raw structure size.</li>
+<li>Pass the aligned value to
+<code>D3D12_CONSTANT_BUFFER_VIEW_DESC::SizeInBytes</code>.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dual-Paraboloid Mapping vs Cube Mapping in DirectX - directx</title>
+    <meta name="description" content="Dual-paraboloid mapping and cube mapping are two distinct techniques used in 3D graphics to capture and project 360-degree environment information for reflections, ambient lighting, and omnidirectional shadow maps. While cube mapping is the industry stand">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dual-paraboloid-mapping-vs-cube-mapping-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Dual-Paraboloid Mapping vs Cube Mapping in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dual-paraboloid-mapping-vs-cube-mapping-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Dual-paraboloid mapping and cube mapping are two distinct techniques used in 3D graphics to capture and project 360-degree environment information for reflections, ambient lighting, and omnidirectional shadow maps. While cube mapping is the industry stand" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="dual-paraboloid-mapping-vs-cube-mapping-in-directx">Dual-Paraboloid
+Mapping vs Cube Mapping in DirectX</h1>
+<p>Dual-paraboloid mapping and cube mapping are two distinct techniques
+used in 3D graphics to capture and project 360-degree environment
+information for reflections, ambient lighting, and omnidirectional
+shadow maps. While cube mapping is the industry standard due to
+dedicated hardware support and uniform sampling quality, dual-paraboloid
+mapping provides a compelling alternative designed to reduce render
+passes and memory overhead. This article explains the mechanics of
+dual-paraboloid mapping and directly contrasts its performance,
+rendering pipeline behavior, and image fidelity with cube mapping within
+the DirectX ecosystem.</p>
+<h2 id="what-is-dual-paraboloid-mapping">What is Dual-Paraboloid
+Mapping?</h2>
+<p>Dual-paraboloid mapping captures a complete spherical environment
+using two opposing parabolic projections: one facing forward and one
+facing backward. Each hemisphere covers a 180-degree field of view (or
+slightly more to allow overlap and prevent seam artifacts), mapped to a
+standard 2D texture coordinate space.</p>
+<p>In a rendering pipeline, a paraboloid projection functions by
+reflecting incoming rays off a theoretical parabolic mirror into an
+orthographic camera. In DirectX, this projection is computed
+mathematically in High-Level Shading Language (HLSL). Vertices or
+reflection vectors are transformed into view space, normalized, and
+converted into parabolic texture coordinates via the formula:</p>
+<p><span class="math display">\[u = \frac{x}{2(1 + z)} + 0.5\]</span>
+<span class="math display">\[v = \frac{y}{2(1 + z)} + 0.5\]</span></p>
+<p>Because the projection is non-linear, vertex positions mapped
+directly in vertex shaders can introduce curvature artifacts unless the
+geometry is densely tessellated. Alternatively, the mapping can be
+evaluated per-pixel when sampling an environment map.</p>
+<h2 id="what-is-cube-mapping">What is Cube Mapping?</h2>
+<p>Cube mapping encloses a central viewpoint within six orthogonal,
+planar faces (Positive X, Negative X, Positive Y, Negative Y, Positive
+Z, and Negative Z). Each face represents a 90-degree field of view
+rendered using standard linear perspective projection matrices.</p>
+<p>In DirectX, cube maps are represented by the <code>TextureCube</code>
+resource type. Sampling is handled natively by the GPU through a 3D
+directional vector using HLSL intrinsics like
+<code>TextureCube.Sample()</code>, with hardware automatically handling
+face selection, coordinate transformation, and seam filtering across
+face boundaries.</p>
+<h2
+id="comparing-dual-paraboloid-mapping-and-cube-mapping-in-directx">Comparing
+Dual-Paraboloid Mapping and Cube Mapping in DirectX</h2>
+<h3 id="render-target-passes-and-draw-calls">Render Target Passes and
+Draw Calls</h3>
+<p>The primary historical advantage of dual-paraboloid mapping is render
+efficiency for dynamic environments.</p>
+<ul>
+<li><strong>Dual-Paraboloid Mapping:</strong> Requires only two render
+passes (front and back) to capture an entire dynamic scene. These two
+hemispheres can be placed side-by-side into a single 2D render target
+view (RTV), minimizing render target switches and reducing CPU draw call
+overhead.</li>
+<li><strong>Cube Mapping:</strong> Traditionally requires six separate
+render passes, drastically increasing the CPU-to-GPU submission cost.
+While modern DirectX features (such as Geometry Shader layered rendering
+in DirectX 10/11 or viewport arrays and primitive instancing in DirectX
+12) allow rendering to all six faces in a single draw call, doing so can
+result in high vertex amplification overhead and uneven GPU
+rasterization balance.</li>
+</ul>
+<h3 id="hardware-acceleration-and-filtering">Hardware Acceleration and
+Filtering</h3>
+<ul>
+<li><strong>Cube Mapping:</strong> Modern graphics hardware includes
+dedicated silicon for cube maps. DirectX 10 introduced hardware-level
+seamless cube map filtering, which interpolates across face edges to
+eliminate visible boundaries automatically. Anisotropic filtering and
+mipmap generation work natively out of the box.</li>
+<li><strong>Dual-Paraboloid Mapping:</strong> Has no dedicated hardware
+sampling unit. Texture coordinates must be computed manually in HLSL.
+Because the projection is non-linear, standard anisotropic filtering and
+bilinear mipmapping can cause noticeable distortion and seams where the
+two paraboloids meet at their 180-degree rims.</li>
+</ul>
+<h3 id="geometric-and-sampling-distortion">Geometric and Sampling
+Distortion</h3>
+<ul>
+<li><strong>Cube Mapping:</strong> Linear perspective means geometric
+lines remain straight prior to rasterization, avoiding non-linear
+projection issues. Distortion is limited to the corners of the cube
+faces, where texel density varies by a factor of roughly <span
+class="math inline">\(3\sqrt{3} \approx 5.2\)</span> compared to the
+face centers.</li>
+<li><strong>Dual-Paraboloid Mapping:</strong> Suffers from severe
+non-linear distortion near the periphery of each paraboloid disk. When
+used for dynamic shadow mapping, low-poly geometry can visibly warp
+unless extra tessellation is applied, because GPUs perform linear
+interpolation of attributes across triangles, which clashes with
+parabolic projection curves.</li>
+</ul>
+<h3 id="memory-footprint-and-allocation">Memory Footprint and
+Allocation</h3>
+<ul>
+<li><strong>Cube Mapping:</strong> Allocates memory for six identical
+square textures. Dynamic cube maps can consume significant video memory
+(VRAM) bandwidth when clearing, rendering, and resolving multiple mip
+levels.</li>
+<li><strong>Dual-Paraboloid Mapping:</strong> Allocates two textures or
+a single rectangular 2D texture with a 2:1 aspect ratio. This yields a
+smaller overall memory footprint and lower memory bandwidth usage during
+dynamic generation, making it historically popular on constrained
+platforms.</li>
+</ul>
+<h2 id="summary-of-use-cases">Summary of Use Cases</h2>
+<p>In modern DirectX development, cube mapping remains the standard for
+static environment reflections, image-based lighting (IBL), and
+high-fidelity dynamic cubemaps due to native API integration, seamless
+filtering, and predictable linear geometry handling. Dual-paraboloid
+mapping is primarily useful as an optimization technique in scenarios
+where minimizing draw calls and render target switches takes precedence
+over edge fidelity, such as forward-rendered dynamic point-light shadow
+maps or low-cost secondary reflections in performance-critical
+scenes.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

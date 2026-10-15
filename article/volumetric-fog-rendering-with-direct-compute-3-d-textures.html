@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volumetric Fog Rendering with DirectCompute 3D Textures - directx</title>
+    <meta name="description" content="This article explores how modern volumetric fog techniques utilize 3D textures within DirectX DirectCompute to achieve physically-based atmospheric lighting. By discretizing the camera frustum into a three-dimensional grid of voxels—often called &quot;froxels&quot;">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/volumetric-fog-rendering-with-direct-compute-3-d-textures">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Volumetric Fog Rendering with DirectCompute 3D Textures - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/volumetric-fog-rendering-with-direct-compute-3-d-textures" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how modern volumetric fog techniques utilize 3D textures within DirectX DirectCompute to achieve physically-based atmospheric lighting. By discretizing the camera frustum into a three-dimensional grid of voxels—often called &quot;froxels&quot;" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="volumetric-fog-rendering-with-directcompute-3d-textures">Volumetric
+Fog Rendering with DirectCompute 3D Textures</h1>
+<p>This article explores how modern volumetric fog techniques utilize 3D
+textures within DirectX DirectCompute to achieve physically-based
+atmospheric lighting. By discretizing the camera frustum into a
+three-dimensional grid of voxels—often called "froxels"—graphics
+pipelines can decouple fog complexity from geometry density and screen
+resolution. The following sections break down how DirectCompute
+allocates these 3D textures, injects lighting and medium properties,
+performs parallel accumulation, and blends the final atmospheric volume
+into the scene.</p>
+<h3 id="frustum-aligned-3d-textures-froxels">Frustum-Aligned 3D Textures
+(Froxels)</h3>
+<p>Rather than storing volumetric data in world-space grids,
+DirectCompute implementations typically allocate a 3D texture aligned
+directly to the view frustum.</p>
+<ul>
+<li><strong>X and Y Dimensions:</strong> Mapped linearly across the
+screen's horizontal and vertical coordinates, often at a reduced
+fraction of the display resolution (e.g., <span
+class="math inline">\(160 \times 90\)</span>).</li>
+<li><strong>Z Dimension:</strong> Mapped non-linearly to depth. Because
+perspective projection compresses distance, depth slices are distributed
+exponentially or logarithmically. This grants high precision near the
+camera where visual details matter most, while coarser steps cover
+distant scenery.</li>
+</ul>
+<p>In DirectX, these textures are initialized as <code>Texture3D</code>
+resources and bound to compute pipelines as Unordered Access Views
+(UAVs) using <code>RWTexture3D&lt;float4&gt;</code>.</p>
+<h3 id="step-1-density-and-media-property-injection">Step 1: Density and
+Media Property Injection</h3>
+<p>The first compute pass determines the physical attributes of the
+participating medium at each voxel location:</p>
+<ol type="1">
+<li>A compute shader maps its 3D dispatch thread ID
+(<code>SV_DispatchThreadID</code>) to the corresponding froxel
+coordinate <span class="math inline">\((X, Y, Z)\)</span>.</li>
+<li>The shader converts the grid index into view-space coordinates using
+inverse projection transforms.</li>
+<li>Media properties, such as uniform fog density, height-based fog
+falloff, or 3D animated noise (e.g., Perlin-Worley noise), are
+evaluated.</li>
+<li>The output is written to a 3D texture containing absorption and
+scattering coefficients, often accompanied by phase function parameters
+(such as the Henyey-Greenstein asymmetry factor <span
+class="math inline">\(g\)</span>).</li>
+</ol>
+<h3 id="step-2-light-scattering-evaluation">Step 2: Light Scattering
+Evaluation</h3>
+<p>With medium properties established, a subsequent DirectCompute pass
+evaluates incoming radiance from scene light sources:</p>
+<ol type="1">
+<li><strong>Shadow Sampling:</strong> For directional, point, and spot
+lights, the compute shader transforms the froxel's position into shadow
+map spaces to determine visibility.</li>
+<li><strong>Phase Function Application:</strong> The shader computes the
+angle between the camera view vector and the incident light direction,
+applying the phase function to determine how much light scatters forward
+toward the viewer.</li>
+<li><strong>In-Scattering Storage:</strong> The accumulated in-scattered
+light multiplied by the scattering coefficient is written to an
+intermediate <code>RWTexture3D&lt;float4&gt;</code>, where the RGB
+channels store scattered radiance and the Alpha channel typically stores
+extinction.</li>
+</ol>
+<h3 id="step-3-ray-marching-and-accumulation-via-directcompute">Step 3:
+Ray Marching and Accumulation via DirectCompute</h3>
+<p>Once each froxel contains raw scattering and extinction values, the
+volume must be integrated from the near plane to the far plane along
+each view ray:</p>
+<ul>
+<li><strong>Thread Allocation:</strong> Compute shaders assign thread
+groups where each thread processes a single <span
+class="math inline">\((X, Y)\)</span> froxel column and iterates
+sequentially through the <span class="math inline">\(Z\)</span> slices,
+or they utilize parallel scan algorithms in group shared memory
+(LDS).</li>
+<li><strong>Numerical Integration:</strong> The shader marches through
+depth, accumulating in-scattered light while tracking optical thickness
+(transmittance) using Beer-Lambert's law: <span
+class="math display">\[\text{Transmittance}(d) = e^{-\sigma_t \cdot
+\Delta d}\]</span></li>
+<li><strong>Output:</strong> The final accumulated radiance and total
+transmittance are written to a final integration <code>Texture3D</code>.
+DirectCompute makes this pass efficient due to fast cache reuse when
+marching along continuous memory layouts.</li>
+</ul>
+<h3 id="step-4-final-scene-integration">Step 4: Final Scene
+Integration</h3>
+<p>The final step incorporates the volumetric fog into the fully
+rendered opaque and transparent scene buffers:</p>
+<ol type="1">
+<li>During a fullscreen pass or post-processing compute pass, the shader
+reads the scene's depth buffer.</li>
+<li>The linear scene depth and screen UVs are converted into the
+corresponding 3D texture UVW coordinate.</li>
+<li>Hardware trilinear filtering natively interpolates between the
+discrete froxel cells, eliminating stepping artifacts without the need
+for expensive per-pixel ray marching.</li>
+<li>The sampled in-scattering is added to the scene color, while the
+sampled transmittance scales the background scene luminance.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

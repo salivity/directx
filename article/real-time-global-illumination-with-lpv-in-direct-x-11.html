@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Global Illumination with LPV in DirectX 11 - directx</title>
+    <meta name="description" content="Light Propagation Volumes (LPV) approximate real-time global illumination by simulating the behavior of indirect light transfer on a discrete 3D spatial grid. Introduced by Crytek and optimized for modern graphics pipelines like DirectX 11, the technique">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/real-time-global-illumination-with-lpv-in-direct-x-11">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Real-Time Global Illumination with LPV in DirectX 11 - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/real-time-global-illumination-with-lpv-in-direct-x-11" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Light Propagation Volumes (LPV) approximate real-time global illumination by simulating the behavior of indirect light transfer on a discrete 3D spatial grid. Introduced by Crytek and optimized for modern graphics pipelines like DirectX 11, the technique" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="real-time-global-illumination-with-lpv-in-directx-11">Real-Time
+Global Illumination with LPV in DirectX 11</h1>
+<p>Light Propagation Volumes (LPV) approximate real-time global
+illumination by simulating the behavior of indirect light transfer on a
+discrete 3D spatial grid. Introduced by Crytek and optimized for modern
+graphics pipelines like DirectX 11, the technique bypasses expensive ray
+tracing by converting surface reflections into virtual point lights,
+injecting them into a volumetric grid, propagating the radiance to
+neighboring cells using spherical harmonics, and finally sampling the
+grid during scene shading. This enables dynamic indirect lighting
+effects, such as color bleeding, with fixed memory overhead and
+predictable runtime performance.</p>
+<h3
+id="1-generating-secondary-light-sources-via-reflective-shadow-maps">1.
+Generating Secondary Light Sources via Reflective Shadow Maps</h3>
+<p>The pipeline begins with the generation of Virtual Point Lights
+(VPLs). Instead of tracing secondary rays through the scene, the direct
+light sources render standard Reflective Shadow Maps (RSMs). In DirectX
+11, this is achieved by writing out multiple render targets from the
+light's point of view:</p>
+<ul>
+<li><strong>Depth/World Position:</strong> The spatial location where
+the direct light hits.</li>
+<li><strong>Surface Normals:</strong> The orientation of the illuminated
+surfaces.</li>
+<li><strong>Flux (Color and Intensity):</strong> The reflected direct
+irradiance, determined by the material's albedo and incoming light
+intensity.</li>
+</ul>
+<p>Each pixel in the RSM represents a VPL capable of bouncing secondary
+light back into the surrounding environment.</p>
+<h3 id="2-vpl-injection-into-the-3d-grid">2. VPL Injection into the 3D
+Grid</h3>
+<p>The scene is enclosed in a low-resolution regular 3D texture grid
+(often <span class="math inline">\(32^3\)</span> or <span
+class="math inline">\(64^3\)</span> cells). The VPLs extracted from the
+RSM are mapped into corresponding voxel cells within this volume.</p>
+<p>Because light radiates in specific directions rather than uniformly
+in all directions, directional radiance must be stored compactly within
+each voxel. LPV achieves this using low-order Spherical Harmonics
+(typically 2-band, utilizing 4 coefficients per RGB channel). In DirectX
+11, this data is packed into multiple 3D textures
+(<code>Texture3D</code> or <code>RWTexture3D</code> with four channels
+per texture, such as <code>DXGI_FORMAT_R16G16B16A16_FLOAT</code>).</p>
+<p>During injection, compute shaders read the VPL data, calculate the
+spherical harmonic projection based on the VPL's normal and flux, and
+accumulate the result into the corresponding cell's SH coefficients.</p>
+<h3 id="3-iterative-radiance-propagation">3. Iterative Radiance
+Propagation</h3>
+<p>Once injected, light must travel throughout the grid to illuminate
+neighboring space. This is executed through an iterative propagation
+algorithm using DirectX 11 Compute Shaders:</p>
+<ol type="1">
+<li><strong>Ping-Pong Texturing:</strong> Two sets of 3D textures
+alternate between reading and writing to maintain thread safety during
+dispatch.</li>
+<li><strong>Neighbor Transfer:</strong> For each cell, the compute
+shader gathers radiance from adjacent neighbors (usually 6 face-adjacent
+or 26 fully adjacent cells).</li>
+<li><strong>Solid Angle Projection:</strong> The radiance moving from
+cell <span class="math inline">\(A\)</span> to cell <span
+class="math inline">\(B\)</span> is calculated based on the solid angle
+subtended by the target cell face. The incoming directional distribution
+is re-projected onto the spherical harmonics basis and accumulated.</li>
+<li><strong>Iterations:</strong> This propagation step is executed
+iteratively (typically 4 to 8 times). Each iteration spreads the light
+one voxel unit further, simulating the scattering of indirect light over
+distance.</li>
+</ol>
+<h3 id="4-geometry-volumes-for-light-bleeding-prevention">4. Geometry
+Volumes for Light Bleeding Prevention</h3>
+<p>A common limitation of grid-based radiance transfer is "light
+bleeding," where light passes through thin geometry. To mitigate this, a
+secondary Geometry Volume (GV) is injected with blocking surfaces,
+typically derived from depth maps or voxelized meshes.</p>
+<p>The GV stores normal vectors and surface blocking factors. During the
+propagation compute pass, the shader checks the GV between adjacent
+cells. If an opposing surface normal exists, the propagation of light in
+that direction is attenuated or completely blocked.</p>
+<h3 id="5-final-sampling-and-shading">5. Final Sampling and Shading</h3>
+<p>During the final rendering pass (either forward or deferred), the
+main camera renders the scene. When evaluating the lighting equation in
+the pixel shader:</p>
+<ol type="1">
+<li>The pixel's world-space position is converted into the LPV's
+normalized 3D texture coordinates.</li>
+<li>The 3D texture is sampled using hardware-accelerated trilinear
+interpolation, producing smoothly blended spherical harmonic
+coefficients for that point in space.</li>
+<li>The pixel's surface normal is projected onto the spherical harmonics
+basis.</li>
+<li>A dot product between the sampled radiance coefficients and the
+normal's projection produces the final indirect irradiance value.</li>
+<li>This value is multiplied by the material’s diffuse albedo and added
+to the direct illumination term.</li>
+</ol>
+<p>By executing these phases entirely on the GPU using Compute Shaders
+and 3D textures, DirectX 11 handles fully dynamic geometry and lights
+without requiring precomputed lightmaps or complex data structures.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

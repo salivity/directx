@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Direct2D and Direct3D Interop with Shared Textures - directx</title>
+    <meta name="description" content="Direct2D and Direct3D interoperability allows developers to combine high-performance 2D vector graphics and DirectWrite typography with complex 3D rendering pipelines. This article explains how Direct2D interoperates with Direct3D surfaces using shared Di">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-2-d-and-direct-3-d-interop-with-shared-textures">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Direct2D and Direct3D Interop with Shared Textures - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-2-d-and-direct-3-d-interop-with-shared-textures" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Direct2D and Direct3D interoperability allows developers to combine high-performance 2D vector graphics and DirectWrite typography with complex 3D rendering pipelines. This article explains how Direct2D interoperates with Direct3D surfaces using shared Di" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="direct2d-and-direct3d-interop-with-shared-textures">Direct2D and
+Direct3D Interop with Shared Textures</h1>
+<p>Direct2D and Direct3D interoperability allows developers to combine
+high-performance 2D vector graphics and DirectWrite typography with
+complex 3D rendering pipelines. This article explains how Direct2D
+interoperates with Direct3D surfaces using shared DirectX Graphics
+Infrastructure (DXGI) textures, covering resource creation, surface
+wrapping, synchronization mechanisms, and the rendering workflow
+required to achieve seamless graphics integration.</p>
+<h3 id="the-role-of-dxgi">The Role of DXGI</h3>
+<p>DirectX Graphics Infrastructure (DXGI) serves as the common
+denominator between Direct2D and Direct3D. Because Direct2D is built on
+top of Direct3D, it does not communicate directly with Direct3D
+rendering pipelines. Instead, interoperability relies on DXGI surfaces.
+A Direct3D 2D texture (<code>ID3D11Texture2D</code> or Direct3D 12
+equivalent resource) that implements the <code>IDXGISurface</code>
+interface can be referenced by Direct2D, enabling both APIs to write to
+and read from the same underlying video memory.</p>
+<h3 id="configuring-the-direct3d-texture">Configuring the Direct3D
+Texture</h3>
+<p>To enable sharing, the Direct3D texture must be created with explicit
+flags compatible with both Direct2D rendering and cross-API sharing:</p>
+<ol type="1">
+<li><strong>Format Compatibility:</strong> Direct2D requires specific
+pixel formats, typically <code>DXGI_FORMAT_B8G8R8A8_UNORM</code> or
+<code>DXGI_FORMAT_R8G8B8A8_UNORM</code>.</li>
+<li><strong>Bind Flags:</strong> The texture must include
+<code>D3D11_BIND_RENDER_TARGET</code> so Direct2D can draw to it, and
+often <code>D3D11_BIND_SHADER_RESOURCE</code> so Direct3D can sample
+from it in subsequent passes.</li>
+<li><strong>Miscellaneous Flags for Sharing:</strong> When sharing
+resources across different Direct3D devices or processes, specify
+<code>D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX</code> or
+<code>D3D11_RESOURCE_MISC_SHARED_NTHANDLE</code>. Using a keyed mutex
+provides thread and device-safe synchronization.</li>
+</ol>
+<h3 id="creating-the-direct2d-target">Creating the Direct2D Target</h3>
+<p>Once the Direct3D texture is instantiated, it must be mapped into
+Direct2D's object model:</p>
+<ul>
+<li><strong>Query the DXGI Surface:</strong> Query the Direct3D texture
+for its <code>IDXGISurface</code> interface via
+<code>QueryInterface</code>.</li>
+<li><strong>Wrap with an ID2D1Bitmap:</strong> Using an existing
+Direct2D device context (<code>ID2D1DeviceContext</code>), call
+<code>CreateBitmapFromDxgiSurface</code>. Provide
+<code>D2D1_BITMAP_PROPERTIES1</code> that match the texture's pixel
+format and specify <code>D2D1_BITMAP_OPTIONS_TARGET</code>.</li>
+<li><strong>Set the Target:</strong> Assign the created Direct2D bitmap
+as the active target using
+<code>ID2D1DeviceContext::SetTarget</code>.</li>
+</ul>
+<h3 id="synchronization-via-keyed-mutex">Synchronization via Keyed
+Mutex</h3>
+<p>When sharing textures across devices or between independent Direct3D
+and Direct2D contexts, concurrent access to the GPU memory will cause
+race conditions and visual artifacts. A Keyed Mutex
+(<code>IDXGIKeyedMutex</code>) coordinates execution:</p>
+<ol type="1">
+<li><strong>Direct3D Writing:</strong> The Direct3D pipeline acquires
+the keyed mutex using <code>AcquireSync(0, timeout)</code>, performs its
+draw calls, and releases it using <code>ReleaseSync(1)</code>.</li>
+<li><strong>Direct2D Writing/Reading:</strong> Direct2D (or its hosting
+context) queries the <code>IDXGIKeyedMutex</code> interface from the
+shared surface, calls <code>AcquireSync(1, timeout)</code>, issues its
+draw commands, and then releases the lock with
+<code>ReleaseSync(0)</code>.</li>
+<li>If Direct2D and Direct3D operate on the exact same
+<code>ID3D11Device</code>, explicit keyed mutex synchronization is
+unnecessary; calling <code>Flush</code> or <code>EndDraw</code> ensures
+commands are submitted in the correct sequence.</li>
+</ol>
+<h3 id="rendering-workflow">Rendering Workflow</h3>
+<p>The standard execution loop follows a strict sequential pipeline:</p>
+<ol type="1">
+<li><strong>Direct3D Pass:</strong> The application renders 3D geometry
+to depth and color buffers, optionally writing intermediate results to
+the shared texture.</li>
+<li><strong>Context Transition:</strong> Direct3D flushes its command
+list or releases the keyed mutex to ensure pending GPU writes
+complete.</li>
+<li><strong>Direct2D Pass:</strong> Direct2D calls
+<code>ID2D1DeviceContext::BeginDraw()</code>. UI components, text, or 2D
+overlays are rendered directly onto the shared surface.</li>
+<li><strong>Finalization:</strong> Direct2D calls
+<code>ID2D1DeviceContext::EndDraw()</code>. This finalizes 2D command
+execution.</li>
+<li><strong>Presentation:</strong> The shared texture is either
+presented directly to the screen via the DXGI swap chain or bound as a
+shader resource in Direct3D for post-processing and composite
+rendering.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

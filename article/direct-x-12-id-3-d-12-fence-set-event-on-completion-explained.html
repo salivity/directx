@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 ID3D12Fence SetEventOnCompletion Explained - directx</title>
+    <meta name="description" content="The ID3D12Fence::SetEventOnCompletion method serves as a critical bridge between asynchronous GPU execution and the CPU thread in DirectX 12. It registers a Windows event handle to be signaled when a fence reaches or exceeds a designated value. By leverag">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-id-3-d-12-fence-set-event-on-completion-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 ID3D12Fence SetEventOnCompletion Explained - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-id-3-d-12-fence-set-event-on-completion-explained" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The ID3D12Fence::SetEventOnCompletion method serves as a critical bridge between asynchronous GPU execution and the CPU thread in DirectX 12. It registers a Windows event handle to be signaled when a fence reaches or exceeds a designated value. By leverag" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-id3d12fence-seteventoncompletion-explained">DirectX
+12 ID3D12Fence SetEventOnCompletion Explained</h1>
+<p>The <code>ID3D12Fence::SetEventOnCompletion</code> method serves as a
+critical bridge between asynchronous GPU execution and the CPU thread in
+DirectX 12. It registers a Windows event handle to be signaled when a
+fence reaches or exceeds a designated value. By leveraging this method,
+developers can cleanly pause CPU execution until the GPU has completed
+specific rendering tasks, preventing race conditions, managing memory
+lifetimes, and maintaining frame synchronization without wasting CPU
+cycles on active polling.</p>
+<h3 id="core-functionality">Core Functionality</h3>
+<p>In DirectX 12, the CPU and GPU operate asynchronously. When the CPU
+dispatches commands to an <code>ID3D12CommandQueue</code>, it does not
+block; instead, it continues executing instructions immediately. To
+synchronize these two processors, DirectX 12 provides fence objects
+(<code>ID3D12Fence</code>).</p>
+<p>The <code>ID3D12Fence::SetEventOnCompletion</code> method has the
+following signature:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>HRESULT SetEventOnCompletion<span class="op">(</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  UINT64 Value<span class="op">,</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  HANDLE hEvent</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="op">);</span></span></code></pre></div>
+<p>When called, it instructs the Direct3D runtime and driver to monitor
+the fence. When the fence's internal value becomes equal to or greater
+than <code>Value</code>, the operating system signals the specified
+event handle (<code>hEvent</code>).</p>
+<h3 id="role-in-cpu-synchronization">Role in CPU Synchronization</h3>
+<p>The primary purpose of <code>SetEventOnCompletion</code> is to
+implement thread-blocking CPU synchronization. The typical
+synchronization lifecycle follows this pattern:</p>
+<ol type="1">
+<li><strong>Queueing GPU Work:</strong> The CPU submits command lists to
+the command queue.</li>
+<li><strong>Signaling the Fence:</strong> The CPU schedules a fence
+update on the GPU timeline by calling
+<code>ID3D12CommandQueue::Signal(pFence, targetValue)</code>. This
+instruction is queued; the fence value will only change when the GPU
+finishes executing all prior commands in that queue.</li>
+<li><strong>Registering the Event:</strong> The CPU calls
+<code>pFence-&gt;SetEventOnCompletion(targetValue, hEvent)</code>.</li>
+<li><strong>Blocking the CPU Thread:</strong> The CPU waits for the
+event using Win32 synchronization APIs, such as
+<code>WaitForSingleObject</code> or
+<code>WaitForMultipleObjects</code>.</li>
+<li><strong>Wakeup and Resume:</strong> Once the GPU finishes processing
+the work up to the signal, the fence reaches <code>targetValue</code>,
+the OS signals <code>hEvent</code>, and the waiting CPU thread wakes up
+to proceed with the next task.</li>
+</ol>
+<h3 id="key-advantages-and-use-cases">Key Advantages and Use Cases</h3>
+<ul>
+<li><strong>Efficient Resource Utilization:</strong> Instead of
+continually polling the fence value with
+<code>ID3D12Fence::GetCompletedValue</code> in a spin-wait loop—which
+consumes 100% of a CPU core's capacity and drains
+power—<code>SetEventOnCompletion</code> allows the CPU thread to go to
+sleep. The operating system yields the core to other processes until the
+GPU completes its work.</li>
+<li><strong>Frame Buffering and Pacing:</strong> When cycling through
+backbuffers in a swap chain, the CPU must ensure that the GPU is not
+currently reading from or writing to a buffer before reusing it for a
+new frame. <code>SetEventOnCompletion</code> halts the CPU just before
+preparing a buffer if that buffer is still in flight on the GPU.</li>
+<li><strong>Safe Resource Destruction:</strong> Direct3D 12 resources
+cannot be released or modified while the GPU is executing commands that
+reference them. Developers use <code>SetEventOnCompletion</code> to
+flush the GPU queue and guarantee that resources are completely idle
+before deallocation.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

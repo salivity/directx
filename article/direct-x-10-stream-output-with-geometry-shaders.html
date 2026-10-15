@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 10 Stream Output with Geometry Shaders - directx</title>
+    <meta name="description" content="DirectX 10 introduced the Stream Output (SO) stage to allow the GPU to write primitive data directly to memory buffers before or instead of sending it to the rasterizer. By pairing this stage with the Geometry Shader, developers can dynamically generate,">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-10-stream-output-with-geometry-shaders">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 10 Stream Output with Geometry Shaders - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-10-stream-output-with-geometry-shaders" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 10 introduced the Stream Output (SO) stage to allow the GPU to write primitive data directly to memory buffers before or instead of sending it to the rasterizer. By pairing this stage with the Geometry Shader, developers can dynamically generate," />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-10-stream-output-with-geometry-shaders">DirectX 10
+Stream Output with Geometry Shaders</h1>
+<p>DirectX 10 introduced the Stream Output (SO) stage to allow the GPU
+to write primitive data directly to memory buffers before or instead of
+sending it to the rasterizer. By pairing this stage with the Geometry
+Shader, developers can dynamically generate, amplify, or modify geometry
+and store the results in GPU-accessible vertex buffers. This process
+enables advanced techniques such as multi-pass rendering, GPU-driven
+particle simulations, and dynamic level-of-detail without requiring
+costly round-trips back to the CPU.</p>
+<h3 id="the-role-of-the-geometry-shader">The Role of the Geometry
+Shader</h3>
+<p>The Geometry Shader (GS) sits between the Vertex Shader and the
+Stream Output stage. Unlike the Vertex Shader, which operates on single
+vertices in isolation, the Geometry Shader processes complete
+primitives—such as points, lines, or triangles—along with optional
+adjacency information.</p>
+<p>During execution, the Geometry Shader can modify incoming vertices,
+destroy primitives, or amplify geometry by emitting entirely new
+primitives. The output of the Geometry Shader is delivered via
+predefined HLSL output stream objects, such as
+<code>PointStream&lt;T&gt;</code>, <code>LineStream&lt;T&gt;</code>, or
+<code>TriangleStream&lt;T&gt;</code>.</p>
+<h3 id="configuring-the-stream-output-stage">Configuring the Stream
+Output Stage</h3>
+<p>To route geometry data from the shader to memory, the DirectX 10
+runtime requires a Geometry Shader created specifically with Stream
+Output support. This is accomplished using the
+<code>ID3D10Device::CreateGeometryShaderWithStreamOutput</code>
+method.</p>
+<p>When configuring this stage, an application defines an array of
+<code>D3D10_SO_DECLARATION_ENTRY</code> structures. This declaration
+specifies:</p>
+<ul>
+<li>Which output parameters from the GS should be captured (such as
+position, normal, or color).</li>
+<li>Which output buffer slot will receive the data.</li>
+<li>The component offset and component count for each captured
+attribute.</li>
+</ul>
+<p>DirectX 10 allows data to be streamed to up to four target buffers
+simultaneously, provided each buffer receives a single, contiguous
+stride of vertex attributes.</p>
+<h3 id="writing-primitives-to-memory-buffers">Writing Primitives to
+Memory Buffers</h3>
+<p>Once configured, vertex buffers created with the
+<code>D3D10_BIND_STREAM_OUTPUT</code> flag are bound to the pipeline
+using <code>ID3D10Device::SOSetTargets</code>. As the Geometry Shader
+emits primitives through its stream objects, the Stream Output stage
+processes the output according to standard topology rules:</p>
+<ol type="1">
+<li><strong>Topology Deconstruction:</strong> Primitives emitted by the
+GS are written out as sequential vertex lists. For instance, a
+<code>TriangleStream</code> emits lists of three vertices per triangle.
+If a triangle strip is output, the SO stage automatically converts it
+into an explicit, flattened triangle list in the destination
+buffer.</li>
+<li><strong>Buffer Striding:</strong> The SO stage tracks internal write
+offsets within the bound buffers. As vertices are written, the
+destination pointer advances by the stride specified during shader
+creation.</li>
+<li><strong>Truncation and Discarding:</strong> If an output buffer runs
+out of allocated space while a primitive is being processed, the
+incomplete primitive is discarded, preventing memory corruption or
+half-written geometry.</li>
+</ol>
+<h3 id="bypassing-rasterization-and-re-feeding-data">Bypassing
+Rasterization and Re-feeding Data</h3>
+<p>Stream Output can function concurrently with rasterization, or it can
+bypass it entirely. If an application only needs to perform geometry
+generation or simulation without rendering to the screen, it can disable
+the rasterization stage by binding a null pixel shader and detaching all
+render targets.</p>
+<p>After data is written to a stream-output buffer, the resulting buffer
+can be rebound as an input vertex buffer via
+<code>ID3D10Device::IASetVertexBuffers</code>. Because the exact number
+of primitives generated by the Geometry Shader is dynamic and maintained
+exclusively on the GPU, DirectX 10 provides the
+<code>ID3D10Device::DrawAuto</code> call. This method reads the
+internally tracked primitive count recorded by the Stream Output stage,
+eliminating the need for the CPU to query the GPU for the vertex count
+before executing subsequent render passes.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

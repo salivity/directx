@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX Raytracing Payload Limit and Performance - directx</title>
+    <meta name="description" content="This article examines the DirectX Raytracing (DXR) ray payload limit, explaining what the payload is, how the API handles data passing between shaders, and the direct impact of payload sizing on GPU register allocation, memory bandwidth, and overall shade">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-raytracing-payload-limit-and-performance">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX Raytracing Payload Limit and Performance - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-raytracing-payload-limit-and-performance" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article examines the DirectX Raytracing (DXR) ray payload limit, explaining what the payload is, how the API handles data passing between shaders, and the direct impact of payload sizing on GPU register allocation, memory bandwidth, and overall shade" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-raytracing-payload-limit-and-performance">DirectX
+Raytracing Payload Limit and Performance</h1>
+<p>This article examines the DirectX Raytracing (DXR) ray payload limit,
+explaining what the payload is, how the API handles data passing between
+shaders, and the direct impact of payload sizing on GPU register
+allocation, memory bandwidth, and overall shader performance.</p>
+<h2 id="what-is-the-dxr-ray-payload">What Is the DXR Ray Payload?</h2>
+<p>In DirectX Raytracing, a ray payload is a user-defined data structure
+passed as an <code>inout</code> parameter to <code>TraceRay()</code>. It
+serves as the primary communication bridge between the initiating shader
+(such as a Ray Generation shader) and the downstream shaders that
+evaluate the ray's trajectory (Closest Hit, Any Hit, and Miss shaders).
+Shaders write data such as hit distances, surface normals, material
+identifiers, and accumulated color directly into this structure.</p>
+<p>In DXR 1.0, the pipeline configuration specifies the maximum payload
+size across all shaders via the <code>RaytracingPipelineConfig</code>
+subobject. DXR 1.1 expanded this with
+<code>RaytracingPipelineConfig1</code>, allowing developers to set exact
+byte limits to help the compiler optimize memory allocation.</p>
+<h2 id="api-limits-vs-hardware-constraints">API Limits vs. Hardware
+Constraints</h2>
+<p>The DirectX specification establishes a formal upper bound on payload
+size—typically up to 4,096 bytes (4 KB). However, this architectural
+ceiling is theoretical. Writing a shader that uses anywhere near 4 KB of
+payload data will cause severe performance degradation on modern
+GPUs.</p>
+<p>Modern graphics hardware does not treat the payload as a static
+buffer in fast cache; instead, the compiler attempts to allocate the
+payload directly into GPU Vector General-Purpose Registers (VGPRs). When
+the payload size exceeds the available physical registers, the driver is
+forced to store the excess data in high-latency scratch memory
+(VRAM).</p>
+<h2 id="how-payload-size-influences-shader-performance">How Payload Size
+Influences Shader Performance</h2>
+<p>The size of the ray payload directly dictates several critical
+performance characteristics:</p>
+<h3 id="1-register-pressure-and-occupancy">1. Register Pressure and
+Occupancy</h3>
+<p>GPUs hide latency through massive parallelism by executing thousands
+of threads simultaneously organized into warps or wavefronts. Every byte
+added to a ray payload consumes additional registers. As register usage
+per thread increases, the GPU scheduler can maintain fewer active
+wavefronts concurrently on a Streaming Multiprocessor (SM) or Compute
+Unit (CU). This drop in occupancy diminishes the hardware’s ability to
+hide memory latency during texture sampling and acceleration structure
+traversal.</p>
+<h3 id="2-register-spilling">2. Register Spilling</h3>
+<p>If a ray payload becomes too large to fit within the register budget
+allocated for a shader stage, the compiler triggers register spilling.
+Spilled data is moved to local off-chip memory or private scratch
+buffers. Because ray traversal is already memory-bandwidth intensive,
+forcing the hardware to constantly read and write spilled payload states
+across hit stages creates severe memory pipeline stalls.</p>
+<h3 id="3-stack-overhead-in-recursive-ray-tracing">3. Stack Overhead in
+Recursive Ray Tracing</h3>
+<p>When shaders call <code>TraceRay()</code> recursively (for example,
+shooting reflection rays from within a Closest Hit shader), the current
+payload state must be preserved across ray calls. The GPU maintains a
+ray-tracing stack where it pushes the payload and local state before
+processing the child ray. A larger payload drastically scales the memory
+footprint of this stack by:</p>
+<p><span class="math display">\[\text{Total Stack Memory} =
+\text{Payload Size} \times \text{Recursion Depth} \times \text{Active
+Threads}\]</span></p>
+<p>This rapidly exhausts L1/L2 caches and forces expensive VRAM
+round-trips.</p>
+<h3 id="4-ray-divergence-and-serialization">4. Ray Divergence and
+Serialization</h3>
+<p>Ray payloads frequently introduce divergent code paths. When
+different rays in the same warp take distinct branches based on complex
+payload fields, execution must be serialized. Larger payloads also
+require more ALU instructions simply to pack, unpack, and initialize
+fields across different hit programs.</p>
+<h2 id="optimization-strategies-for-payloads">Optimization Strategies
+for Payloads</h2>
+<p>To minimize payload overhead and sustain high frame rates:</p>
+<ul>
+<li><strong>Split Payloads by Ray Type:</strong> Never use a single
+monolithic payload for every ray. A shadow ray only requires a single
+boolean or 1-bit flag (<code>IsHit</code>), while a primary radiance ray
+requires material and color attributes. Define separate structures and
+register distinct hit groups for each.</li>
+<li><strong>Pack Data Types:</strong> Quantize floating-point values
+wherever possible. Surface normals can often be packed into 32-bit
+octahedral representations or 16-bit half-floats instead of three 32-bit
+floats. Pack multiple boolean flags into a single bitfield.</li>
+<li><strong>Leverage Ray Queries:</strong> When full shader re-binding
+is unnecessary (such as for ambient occlusion or simple shadows),
+utilize DXR 1.1 Inline Raytracing (<code>RayQuery</code>). This executes
+traversal entirely within the calling shader, completely bypassing
+payload setup and stack overhead.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

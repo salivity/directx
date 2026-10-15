@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Two-Pass Occlusion Culling with DirectX Indirect Draws - directx</title>
+    <meta name="description" content="Two-pass occlusion culling is a GPU-driven rendering technique designed to eliminate non-visible geometry before rasterization without relying on expensive CPU-GPU synchronization. By utilizing temporal coherence, modern graphics pipelines test scene visi">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/two-pass-occlusion-culling-with-direct-x-indirect-draws">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Two-Pass Occlusion Culling with DirectX Indirect Draws - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/two-pass-occlusion-culling-with-direct-x-indirect-draws" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Two-pass occlusion culling is a GPU-driven rendering technique designed to eliminate non-visible geometry before rasterization without relying on expensive CPU-GPU synchronization. By utilizing temporal coherence, modern graphics pipelines test scene visi" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="two-pass-occlusion-culling-with-directx-indirect-draws">Two-Pass
+Occlusion Culling with DirectX Indirect Draws</h1>
+<p>Two-pass occlusion culling is a GPU-driven rendering technique
+designed to eliminate non-visible geometry before rasterization without
+relying on expensive CPU-GPU synchronization. By utilizing temporal
+coherence, modern graphics pipelines test scene visibility across two
+phases using compute shaders and a hierarchical depth buffer (Hi-Z).
+When combined with DirectX 12 compute pipelines and indirect draw calls
+(<code>ExecuteIndirect</code>), the GPU evaluates object visibility and
+issues its own draw commands autonomously, virtually eliminating CPU
+draw-call overhead and rendering stalls.</p>
+<h2 id="the-concept-of-two-pass-occlusion-culling">The Concept of
+Two-Pass Occlusion Culling</h2>
+<p>Traditional CPU-side occlusion culling requires reading back depth
+data from the GPU, which introduces multiple frames of latency and
+pipeline stalls. Single-pass GPU culling often suffers from a
+"chicken-and-egg" problem: you cannot test an object's visibility until
+you have drawn the occluders, but you do not know which occluders to
+draw without testing them.</p>
+<p>Two-pass occlusion culling resolves this by exploiting temporal
+coherence—the principle that an object visible in frame <span
+class="math inline">\(N-1\)</span> is overwhelmingly likely to remain
+visible in frame <span class="math inline">\(N\)</span>. The technique
+breaks frame rendering into two distinct execution steps:</p>
+<ol type="1">
+<li><strong>First Pass:</strong> Render the geometry that was visible in
+the previous frame to build an initial depth buffer.</li>
+<li><strong>Second Pass:</strong> Test all previously invisible geometry
+against this updated depth buffer. If any previously occluded objects
+have become visible (such as an object moving out from behind a wall),
+render them to complete the scene.</li>
+</ol>
+<h2 id="the-hi-z-buffer-requirement">The Hi-Z Buffer Requirement</h2>
+<p>Both passes rely on a Hierarchical Depth Buffer (Hi-Z), which is a
+full mipmap chain of the scene's depth buffer. In the Hi-Z pyramid, each
+pixel in a higher mip level stores the maximum (furthest) depth of the
+corresponding <span class="math inline">\(2 \times 2\)</span> texels
+from the finer mip level (assuming a standard reversed-Z configuration,
+where depth ranges from 1.0 at the near plane to 0.0 at the far
+plane).</p>
+<p>A compute shader can test an object's screen-space bounding box
+against the Hi-Z buffer in a single texture fetch by sampling a mip
+level where the bounding box spans approximately one to two texels.</p>
+<h2
+id="orchestration-with-directx-compute-and-indirect-draws">Orchestration
+with DirectX Compute and Indirect Draws</h2>
+<p>DirectX 12 enables this entire architecture to run on the GPU via
+compute shaders, unordered access views (UAVs), and indirect argument
+buffers executed via
+<code>ID3D12GraphicsCommandList::ExecuteIndirect</code>.</p>
+<h3 id="phase-1-re-projecting-and-rendering-visible-objects">Phase 1:
+Re-Projecting and Rendering Visible Objects</h3>
+<ol type="1">
+<li><strong>Hi-Z Downsample:</strong> At the start of the frame, the
+final depth buffer from the previous frame is downsampled into a Hi-Z
+mip chain using a compute shader.</li>
+<li><strong>First Culling Compute Pass:</strong> A compute shader
+evaluates all objects that were marked <em>visible</em> in the previous
+frame. It transforms each object's axis-aligned bounding box (AABB) into
+the current frame's projection space and tests it against the previous
+frame's Hi-Z.</li>
+<li><strong>Indirect Argument Generation:</strong> For every instance
+that passes the test, the compute shader appends drawing parameters
+(index count, instance count, start index, base vertex, start instance)
+into a <code>D3D12_DRAW_INDEXED_ARGUMENTS</code> structured buffer using
+atomic operations.</li>
+<li><strong>First Indirect Draw:</strong> The command list transitions
+the argument buffer to an indirect argument state and issues
+<code>ExecuteIndirect</code>. The GPU immediately draws only the passing
+instances, generating an initial depth buffer for the current
+frame.</li>
+</ol>
+<h3 id="phase-2-updating-depth-and-catching-false-occlusions">Phase 2:
+Updating Depth and Catching False Occlusions</h3>
+<ol type="1">
+<li><strong>Hi-Z Generation from Pass 1:</strong> A compute pass creates
+a new Hi-Z mip chain based on the depth buffer just generated by the
+first draw pass.</li>
+<li><strong>Second Culling Compute Pass:</strong> A compute shader now
+tests all objects that were marked <em>invisible</em> or
+<em>occluded</em> in the previous frame. It tests their current-frame
+AABBs against the newly updated Hi-Z buffer.</li>
+<li><strong>Second Indirect Argument Generation:</strong> Any object
+that passes this test represents newly revealed geometry (false
+negatives from the first pass). Their drawing arguments are appended to
+a second indirect argument buffer.</li>
+<li><strong>Second Indirect Draw:</strong> The command list executes a
+second <code>ExecuteIndirect</code> call, rendering only the newly
+visible geometry into the current render targets.</li>
+</ol>
+<h2 id="visibility-state-persistence">Visibility State Persistence</h2>
+<p>To maintain temporal coherence across frames, the GPU stores a
+visibility bitmask or state buffer in a default heap. When the compute
+shaders determine an object's visibility status in either pass, they
+update this buffer using UAV writes. In frame <span
+class="math inline">\(N+1\)</span>, the compute shader reads this state
+to categorize instances into the first or second pass pools, creating a
+continuous, self-correcting feedback loop.</p>
+<h2 id="architectural-advantages">Architectural Advantages</h2>
+<ul>
+<li><strong>Zero CPU Readback:</strong> Occlusion queries do not touch
+the CPU, avoiding multi-frame stalls and PCI-e transfer
+bottlenecks.</li>
+<li><strong>Minimal Overdraw:</strong> Heavily occluded regions, complex
+interiors, and densely populated environments bypass the pixel pipeline
+almost entirely.</li>
+<li><strong>No "Popping" Artifacts:</strong> Unlike single-frame
+predictive culling, the second pass guarantees that any object that
+suddenly becomes visible is rendered in the same frame before the back
+buffer is presented.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

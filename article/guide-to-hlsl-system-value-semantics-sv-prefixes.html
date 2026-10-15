@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guide to HLSL System-Value Semantics (SV Prefixes) - directx</title>
+    <meta name="description" content="This article provides an overview of system-generated values in DirectX High-Level Shader Language (HLSL), distinguished by their SV prefix. You will learn what these system-value semantics are, how the Direct3D graphics pipeline interprets them, and how">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/guide-to-hlsl-system-value-semantics-sv-prefixes">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Guide to HLSL System-Value Semantics (SV Prefixes) - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/guide-to-hlsl-system-value-semantics-sv-prefixes" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of system-generated values in DirectX High-Level Shader Language (HLSL), distinguished by their SV prefix. You will learn what these system-value semantics are, how the Direct3D graphics pipeline interprets them, and how" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="guide-to-hlsl-system-value-semantics-sv-prefixes">Guide to HLSL
+System-Value Semantics (SV Prefixes)</h1>
+<p>This article provides an overview of system-generated values in
+DirectX High-Level Shader Language (HLSL), distinguished by their
+<code>SV_</code> prefix. You will learn what these system-value
+semantics are, how the Direct3D graphics pipeline interprets them, and
+how common examples like <code>SV_Position</code>,
+<code>SV_Target</code>, and compute shader identifiers function across
+different rendering stages.</p>
+<hr />
+<h3 id="what-are-hlsl-semantics">What Are HLSL Semantics?</h3>
+<p>In HLSL, a semantic is a string attached to a shader input or output
+parameter that defines how the data is used. In legacy DirectX (DirectX
+9), semantics primarily mapped data between the application's vertex
+buffer declarations and shader inputs (such as <code>POSITION</code> or
+<code>TEXCOORD0</code>).</p>
+<p>Starting with Direct3D 10 and continuing through Direct3D 11 and
+Direct3D 12, Microsoft introduced <strong>System-Value
+semantics</strong>, denoted by the <code>SV_</code> prefix.</p>
+<hr />
+<h3 id="what-does-the-sv_-prefix-mean">What Does the <code>SV_</code>
+Prefix Mean?</h3>
+<p>The <code>SV_</code> prefix stands for <strong>System Value</strong>.
+Unlike standard user-defined semantics that merely pass arbitrary data
+from one stage to another, system-value semantics have explicit,
+predefined meanings to the GPU's fixed-function pipeline and the
+Direct3D runtime.</p>
+<p>When a variable uses an <code>SV_</code> semantic, the GPU hardware
+or the shader compiler monitors or manipulates that value directly.
+Depending on whether it is an input or an output, an SV semantic tells
+the pipeline either:</p>
+<ol type="1">
+<li>To feed specific hardware-generated data into the shader.</li>
+<li>To consume the shader's output to control a fixed-function hardware
+stage (such as the rasterizer or the output merger).</li>
+</ol>
+<hr />
+<h3 id="common-system-value-semantics-by-stage">Common System-Value
+Semantics by Stage</h3>
+<h4 id="1-rasterization-and-vertex-processing">1. Rasterization and
+Vertex Processing</h4>
+<ul>
+<li><strong><code>SV_Position</code></strong>:
+<ul>
+<li><strong>As an Output (Vertex/Geometry Shader):</strong> Directs the
+rasterizer to use this 4D vector (<code>float4</code>) as the
+homogeneous clip-space position of the vertex. The rasterizer performs
+perspective division and viewport clipping based on this value.</li>
+<li><strong>As an Input (Pixel Shader):</strong> Represents the
+screen-space pixel coordinates <span class="math inline">\((x, y, z,
+1/w)\)</span>, allowing pixel shaders to know the exact pixel location
+currently being shaded.</li>
+</ul></li>
+<li><strong><code>SV_VertexID</code></strong>: A system-generated
+unsigned integer (<code>uint</code>) passed into a vertex shader
+indicating the index of the vertex currently being processed.</li>
+<li><strong><code>SV_InstanceID</code></strong>: A system-generated
+unsigned integer (<code>uint</code>) passed into a vertex shader
+identifying the per-instance index during instanced draw calls.</li>
+</ul>
+<h4 id="2-pixel-shader-and-output-merger">2. Pixel Shader and Output
+Merger</h4>
+<ul>
+<li><strong><code>SV_Target</code> (or
+<code>SV_Target[n]</code>)</strong>: Instructs the Output Merger stage
+to write the shader's color output to a specific render target slot
+(where <code>n</code> ranges from 0 to 7).</li>
+<li><strong><code>SV_Depth</code></strong>: Allows the pixel shader to
+manually override the depth value written to the depth buffer for that
+pixel, rather than using the interpolated clip-space depth.</li>
+<li><strong><code>SV_Coverage</code></strong>: Specifies a bitmask
+representing MSAA (Multi-Sample Anti-Aliasing) sample coverage for the
+current pixel.</li>
+<li><strong><code>SV_IsFrontFace</code></strong>: A boolean input
+indicating whether the primitive currently being rendered is
+front-facing or back-facing.</li>
+</ul>
+<h4 id="3-compute-shaders">3. Compute Shaders</h4>
+<p>Compute shaders rely heavily on system values to coordinate parallel
+thread execution:</p>
+<ul>
+<li><strong><code>SV_GroupID</code></strong>: The 3D index of the thread
+group within the overall dispatch grid.</li>
+<li><strong><code>SV_GroupThreadID</code></strong>: The 3D index of an
+individual thread within its specific thread group.</li>
+<li><strong><code>SV_DispatchThreadID</code></strong>: The globally
+unique 3D index of a thread across the entire dispatch call (calculated
+as <code>GroupID * ThreadGroupSize + GroupThreadID</code>).</li>
+<li><strong><code>SV_GroupIndex</code></strong>: A flattened 1D index of
+a thread within a thread group, often used to index into thread-group
+shared memory (<code>groupshared</code>).</li>
+</ul>
+<h4 id="4-tessellation-stages">4. Tessellation Stages</h4>
+<ul>
+<li><strong><code>SV_TessFactor</code></strong>: Defines the
+tessellation factors applied to the outer edges of a patch.</li>
+<li><strong><code>SV_InsideTessFactor</code></strong>: Defines the
+tessellation factors applied to the interior of a patch.</li>
+</ul>
+<hr />
+<h3 id="why-system-values-matter">Why System Values Matter</h3>
+<ul>
+<li><strong>Hardware Communication:</strong> They bridge programmable
+shader stages with fixed-function pipeline hardware, such as
+rasterizers, depth testers, and blend units.</li>
+<li><strong>Compiler Validation:</strong> The HLSL compiler strictly
+validates the data types, component counts, and pipeline stages
+associated with <code>SV_</code> prefixes. Using an invalid type with an
+SV semantic results in a compilation error.</li>
+<li><strong>Efficiency:</strong> Features like <code>SV_VertexID</code>
+and <code>SV_InstanceID</code> enable procedural drawing and geometry
+instancing without requiring explicit per-vertex buffer streams for
+IDs.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DXR Any-Hit Shader: Alpha Testing and Performance - directx</title>
+    <meta name="description" content="This article explores the function of the Any-Hit shader in DirectX Raytracing (DXR) and examines its traditional role in evaluating alpha-tested materials such as foliage and fences. It details the operational mechanics of the shader during hardware ray">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dxr-any-hit-shader-alpha-testing-and-performance">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DXR Any-Hit Shader: Alpha Testing and Performance - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dxr-any-hit-shader-alpha-testing-and-performance" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores the function of the Any-Hit shader in DirectX Raytracing (DXR) and examines its traditional role in evaluating alpha-tested materials such as foliage and fences. It details the operational mechanics of the shader during hardware ray" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="dxr-any-hit-shader-alpha-testing-and-performance">DXR Any-Hit
+Shader: Alpha Testing and Performance</h1>
+<p>This article explores the function of the Any-Hit shader in DirectX
+Raytracing (DXR) and examines its traditional role in evaluating
+alpha-tested materials such as foliage and fences. It details the
+operational mechanics of the shader during hardware ray traversal,
+analyzes the significant performance penalties associated with frequent
+invocations, and explains why developers should restrict its usage in
+high-performance rendering pipelines.</p>
+<h3 id="what-is-the-any-hit-shader-in-dxr">What is the Any-Hit Shader in
+DXR?</h3>
+<p>In DirectX Raytracing, the Any-Hit shader is an optional programmable
+stage within the ray tracing pipeline that executes during ray
+traversal. When a ray intersects a primitive, the hardware checks if
+that primitive is associated with an Any-Hit shader. If it is, traversal
+pauses, and the Any-Hit shader executes to evaluate the candidate
+intersection before the hit is definitively confirmed.</p>
+<p>Unlike the Closest-Hit shader—which executes only once per ray after
+the traversal completes and identifies the nearest valid surface—the
+Any-Hit shader can execute multiple times along a single ray's path.
+Inside this shader, developers can inspect primitive attributes, sample
+textures, and determine whether to accept the hit or discard it using
+the intrinsic functions <code>AcceptHitAndEndSearch()</code> or
+<code>IgnoreHit()</code>.</p>
+<h3 id="the-role-of-any-hit-shaders-in-alpha-testing">The Role of
+Any-Hit Shaders in Alpha Testing</h3>
+<p>The primary use case for Any-Hit shaders is handling partially
+transparent surfaces, commonly known as alpha-tested, masked, or cutout
+geometry. Modern hardware ray tracing units test intersections against
+coarse geometric primitives (usually triangles), with no native
+knowledge of texture data or material properties.</p>
+<p>When a ray intersects a polygon mapped with a cutout texture—such as
+a leaf with transparent borders—the Any-Hit shader is called to resolve
+visibility. The shader samples the material's alpha channel at the
+intersection UV coordinates:</p>
+<ul>
+<li>If the alpha value exceeds a defined threshold, the intersection is
+accepted, and traversal either continues or halts (for occlusion
+rays).</li>
+<li>If the alpha value falls below the threshold, the shader calls
+<code>IgnoreHit()</code>, instructing the traversal engine to disregard
+the intersection and continue testing subsequent geometry.</li>
+</ul>
+<h3 id="why-any-hit-shaders-should-be-used-sparingly">Why Any-Hit
+Shaders Should Be Used Sparingly</h3>
+<p>While functionally convenient, relying heavily on Any-Hit shaders
+introduces substantial performance bottlenecks.</p>
+<h4 id="1-interrupting-fixed-function-hardware-traversal">1.
+Interrupting Fixed-Function Hardware Traversal</h4>
+<p>Modern GPUs feature dedicated Ray Tracing Cores (RT Cores) optimized
+to process bounding volume hierarchy (BVH) traversal and ray-triangle
+intersection tests entirely in fixed-function hardware. When an Any-Hit
+shader is encountered, the hardware cannot resolve the hit
+automatically. Traversal must halt, transfer execution state to the
+programmable compute units (Streaming Multiprocessors / Compute Units),
+run the shader code, and then return control back to the fixed-function
+traversal hardware. This round-trip context switch significantly
+increases execution latency.</p>
+<h4 id="2-out-of-order-traversal-and-redundant-evaluations">2.
+Out-of-Order Traversal and Redundant Evaluations</h4>
+<p>Hardware BVH traversal does not guarantee that candidate
+intersections are tested in strict depth order from front to back.
+Consequently, an Any-Hit shader may execute for distant, background
+surfaces that ultimately end up occluded by nearer, fully opaque
+geometry. Every rejected hit consumes memory bandwidth, texture cache,
+and register space for an operation that contributes nothing to the
+final image.</p>
+<h4 id="3-thread-divergence-and-latency">3. Thread Divergence and
+Latency</h4>
+<p>Ray tracing relies on executing groups of rays concurrently in warps
+or wavefronts. When rays encounter varying amounts of alpha-tested
+geometry, execution divergence occurs. Threads that complete their
+traversal early must stall and wait for sibling threads that are
+actively executing Any-Hit shaders. This divergence degrades GPU
+occupancy and compounds the cost of texture sampling within the
+traversal loop.</p>
+<h3 id="optimization-strategies">Optimization Strategies</h3>
+<p>To minimize Any-Hit overhead, graphics pipelines should adopt several
+mitigation techniques:</p>
+<ul>
+<li><strong>Enforce Opaque Flags:</strong> Mark fully opaque geometry
+with <code>RAY_FLAG_FORCE_OPAQUE</code> or the
+<code>D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE</code> descriptor to bypass
+the Any-Hit stage entirely.</li>
+<li><strong>Geometry Modeling:</strong> Model silhouettes more tightly
+with additional geometric detail rather than relying on large
+transparent texture areas, shifting the burden from programmable shading
+to efficient hardware intersection tests.</li>
+<li><strong>Opacity Micromaps (OMMs):</strong> Utilize newer hardware
+extensions like Opacity Micromaps where available. OMMs bake alpha
+cutout states directly into micro-triangles within the BVH, allowing the
+fixed-function RT hardware to evaluate alpha masks without calling the
+Any-Hit shader.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

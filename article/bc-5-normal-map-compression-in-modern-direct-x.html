@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BC5 Normal Map Compression in Modern DirectX - directx</title>
+    <meta name="description" content="BC5 texture compression optimizes tangent-space normal maps in modern DirectX rendering by dedicating two independent 8-bit compression channels exclusively to the X and Y normal vectors. Because tangent-space normal vectors are normalized to unit length,">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/bc-5-normal-map-compression-in-modern-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="BC5 Normal Map Compression in Modern DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/bc-5-normal-map-compression-in-modern-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="BC5 texture compression optimizes tangent-space normal maps in modern DirectX rendering by dedicating two independent 8-bit compression channels exclusively to the X and Y normal vectors. Because tangent-space normal vectors are normalized to unit length," />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="bc5-normal-map-compression-in-modern-directx">BC5 Normal Map
+Compression in Modern DirectX</h1>
+<p>BC5 texture compression optimizes tangent-space normal maps in modern
+DirectX rendering by dedicating two independent 8-bit compression
+channels exclusively to the X and Y normal vectors. Because
+tangent-space normal vectors are normalized to unit length, the Z
+component can be omitted entirely from the texture asset and
+reconstructed computationally in the pixel shader. This approach cuts
+texture memory usage in half relative to uncompressed formats,
+eliminates cross-channel compression crosstalk, and provides superior
+gradient fidelity compared to legacy block-compression schemes like BC1
+or BC3.</p>
+<h3 id="eliminating-the-z-axis-redundancy">Eliminating the Z-Axis
+Redundancy</h3>
+<p>A standard tangent-space normal map represents three-dimensional
+vector offsets <span class="math inline">\((X, Y, Z)\)</span> relative
+to a surface's geometric normal. Because these vectors represent
+directions, they have a normalized length of 1:</p>
+<p><span class="math display">\[\sqrt{X^2 + Y^2 + Z^2} = 1\]</span></p>
+<p>In tangent space, normals almost universally point outward from the
+surface, meaning the <span class="math inline">\(Z\)</span> component
+(the surface normal axis) is strictly non-negative (<span
+class="math inline">\(Z \ge 0\)</span>). With this constraint, storing
+<span class="math inline">\(Z\)</span> is mathematically redundant. The
+hardware only needs to sample <span class="math inline">\(X\)</span> and
+<span class="math inline">\(Y\)</span> from the texture, allowing the
+graphics pipeline to derive <span class="math inline">\(Z\)</span>
+dynamically:</p>
+<p><span class="math display">\[Z = \sqrt{1 - X^2 - Y^2}\]</span></p>
+<p>Discarding the third channel instantly frees up memory without losing
+directional data, setting the foundation for two-channel
+compression.</p>
+<h3 id="the-bc5-data-structure">The BC5 Data Structure</h3>
+<p>In the DirectX Graphics Infrastructure (DXGI), BC5 is exposed
+primarily via <code>DXGI_FORMAT_BC5_UNORM</code> and
+<code>DXGI_FORMAT_BC5_SNORM</code>. Architecturally, BC5 consists of two
+BC4 compression blocks joined together:</p>
+<ul>
+<li><strong>Footprint:</strong> A single BC5 block covers a 4x4 texel
+footprint and consumes 128 bits (16 bytes), yielding an effective rate
+of 8 bits per pixel (bpp).</li>
+<li><strong>Channel Independence:</strong> The first 64 bits encode the
+red channel (<span class="math inline">\(X\)</span> vector), and the
+remaining 64 bits encode the green channel (<span
+class="math inline">\(Y\)</span> vector).</li>
+<li><strong>Endpoint Interpolation:</strong> For each channel, the block
+stores two 8-bit endpoint values followed by a 4x4 lookup table of 3-bit
+indices. The GPU interpolates either six or eight intermediate values
+between the two endpoints depending on their numerical
+relationship.</li>
+</ul>
+<p>Because the <span class="math inline">\(X\)</span> and <span
+class="math inline">\(Y\)</span> axes are handled by completely separate
+64-bit sub-blocks, there is zero mathematical interference between the
+horizontal and vertical surface slopes.</p>
+<h3 id="overcoming-legacy-compression-artifacts">Overcoming Legacy
+Compression Artifacts</h3>
+<p>Earlier rendering pipelines commonly packed normal maps into BC1
+(DXT1) or BC3 (DXT5) formats, both of which introduce severe visual
+defects:</p>
+<ol type="1">
+<li><strong>Shared Color Palettes (BC1):</strong> BC1 compresses RGB
+channels together along a single 3D vector line in RGB color space. If a
+surface requires variations along the X axis that do not correlate
+directly with the Y axis, BC1 attempts to find an intermediate
+compromise, causing severe blockiness, color bleeding, and directional
+errors.</li>
+<li><strong>DXT5nm Workarounds (BC3):</strong> A common legacy trick
+placed <span class="math inline">\(X\)</span> in the BC3 Alpha channel
+(which has dedicated 8-bit endpoints similar to BC4) and <span
+class="math inline">\(Y\)</span> in the Green channel, while discarding
+Red and Blue. While an improvement, the Green channel was still tied to
+the shared 5:6:5 RGB endpoint system, creating an imbalance in precision
+between axes.</li>
+</ol>
+<p>BC5 completely resolves these issues. By granting both <span
+class="math inline">\(X\)</span> and <span
+class="math inline">\(Y\)</span> their own dedicated 8-bit precision
+endpoints and 3-bit index tables, gradients remain smooth, precision is
+evenly distributed across both dimensions, and lighting calculations
+remain stable under grazing view angles.</p>
+<h3 id="reconstruction-in-the-hlsl-pipeline">Reconstruction in the HLSL
+Pipeline</h3>
+<p>Modern DirectX pixel shaders sample BC5 textures using standard
+sampler states and perform the vector reconstruction using fast
+arithmetic logic unit (ALU) instructions.</p>
+<p>When sampling <code>DXGI_FORMAT_BC5_UNORM</code>, values are read in
+the <span class="math inline">\([0, 1]\)</span> range and must be
+remapped to the <span class="math inline">\([-1, 1]\)</span> range. When
+using <code>DXGI_FORMAT_BC5_SNORM</code>, the hardware delivers values
+directly in the signed <span class="math inline">\([-1, 1]\)</span>
+range, skipping manual remapping.</p>
+<p>A standard HLSL implementation using an unsigned BC5 texture proceeds
+as follows:</p>
+<pre class="hlsl"><code>Texture2D normalMap : register(t0);
+SamplerState defaultSampler : register(s0);
+
+float3 ReconstructNormal(float2 uv)
+{
+    // Sample X and Y from the two-channel BC5 texture
+    float2 normalXY = normalMap.Sample(defaultSampler, uv).rg;
+
+    // Unpack from [0, 1] to [-1, 1]
+    normalXY = normalXY * 2.0f - 1.0f;
+
+    // Reconstruct the Z component
+    float normalZ = sqrt(saturate(1.0f - dot(normalXY, normalXY)));
+
+    return float3(normalXY, normalZ);
+}</code></pre>
+<p>Modern GPU architectures execute the <code>dot</code>,
+<code>saturate</code>, and <code>sqrt</code> (or reciprocal square root
+<code>rsqrt</code>) instructions in a fraction of a clock cycle.
+Offloading the storage of the third channel to the ALU represents an
+optimal trade-off: memory bandwidth—historically the primary bottleneck
+in real-time rendering—is conserved at the cost of a virtually
+unnoticeable compute footprint.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

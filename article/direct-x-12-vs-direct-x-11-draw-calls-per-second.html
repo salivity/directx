@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 vs DirectX 11: Draw Calls Per Second - directx</title>
+    <meta name="description" content="This article explores the substantial difference in draw call throughput between DirectX 11 and DirectX 12. While DirectX 11 suffers from architectural bottlenecks that limit CPU-to-GPU command generation to a single thread, DirectX 12 re-engineers this p">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-vs-direct-x-11-draw-calls-per-second">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 vs DirectX 11: Draw Calls Per Second - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-vs-direct-x-11-draw-calls-per-second" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores the substantial difference in draw call throughput between DirectX 11 and DirectX 12. While DirectX 11 suffers from architectural bottlenecks that limit CPU-to-GPU command generation to a single thread, DirectX 12 re-engineers this p" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-vs-directx-11-draw-calls-per-second">DirectX 12 vs
+DirectX 11: Draw Calls Per Second</h1>
+<p>This article explores the substantial difference in draw call
+throughput between DirectX 11 and DirectX 12. While DirectX 11 suffers
+from architectural bottlenecks that limit CPU-to-GPU command generation
+to a single thread, DirectX 12 re-engineers this pipeline to allow
+parallel command list generation across multiple CPU cores. By comparing
+their maximum dispatch capacities, this guide illustrates how API-level
+design changes directly impact the volume of draw calls a modern engine
+can achieve.</p>
+<p>In a well-optimized DirectX 11 pipeline, the application is
+fundamentally constrained by a single-threaded immediate context. Even
+on high-end hardware, a standard DirectX 11 implementation tops out
+between 5,000 and 10,000 draw calls per frame at 60 frames per second,
+which equates to roughly 300,000 to 600,000 draw calls per second.
+Highly tuned synthetic microbenchmarks can occasionally push this number
+toward 1,000,000 to 2,000,000 draw calls per second, but the single-core
+CPU driver bottleneck prevents scaling beyond that ceiling regardless of
+available processor cores.</p>
+<p>In contrast, a well-optimized DirectX 12 engine can dispatch between
+20,000,000 and over 50,000,000 draw calls per second on modern
+multi-core processors. In synthetic environments such as the 3DMark API
+Overhead Feature Test, multi-threaded DirectX 12 implementations
+routinely achieve 30,000,000 to 60,000,000 draw calls per second on
+contemporary 8-core and 16-core CPUs.</p>
+<p>The primary factors enabling this 10x to 50x increase include:</p>
+<ul>
+<li><strong>Multi-Threaded Command Recording:</strong> Unlike DirectX
+11's deferred contexts, which had significant driver-side overhead,
+DirectX 12 allows multiple CPU threads to record graphics commands into
+independent command lists simultaneously with virtually zero lock
+contention.</li>
+<li><strong>Pre-Baked Pipeline State Objects (PSOs):</strong> DirectX 11
+compiles shaders and state states dynamically at runtime, causing driver
+stalls. DirectX 12 moves PSO compilation to initialization time,
+reducing the per-draw CPU overhead down to simple memory address
+binding.</li>
+<li><strong>Direct Hardware Queues:</strong> DirectX 12 bypasses the
+operating system's heavy driver validation layer during the draw
+execution phase, submitting large bundles of pre-recorded command lists
+directly to the GPU's command processor.</li>
+</ul>
+<p>While synthetic tests demonstrate throughput exceeding 50 million
+calls per second, production game engines rarely consume this full
+theoretical limit. In real-world gaming scenarios, CPU budgets must also
+account for physics, artificial intelligence, and scene traversal.
+Consequently, modern DirectX 12 games typically target 30,000 to 100,000
+draw calls per frame (equivalent to 1,800,000 to 6,000,000 per second at
+60 FPS), enabling complex, dense environments that would instantly
+bottleneck a DirectX 11 renderer.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

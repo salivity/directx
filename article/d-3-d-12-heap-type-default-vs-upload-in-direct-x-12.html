@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D3D12_HEAP_TYPE_DEFAULT vs UPLOAD in DirectX 12 - directx</title>
+    <meta name="description" content="In DirectX 12, memory allocation is explicitly managed by the developer, with D3D12HEAPTYPEDEFAULT and D3D12HEAPTYPEUPLOAD representing two foundational memory configurations for resource data flow. While the default heap is optimized exclusively for maxi">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/d-3-d-12-heap-type-default-vs-upload-in-direct-x-12">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="D3D12_HEAP_TYPE_DEFAULT vs UPLOAD in DirectX 12 - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/d-3-d-12-heap-type-default-vs-upload-in-direct-x-12" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, memory allocation is explicitly managed by the developer, with D3D12HEAPTYPEDEFAULT and D3D12HEAPTYPEUPLOAD representing two foundational memory configurations for resource data flow. While the default heap is optimized exclusively for maxi" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="d3d12_heap_type_default-vs-upload-in-directx-12">D3D12_HEAP_TYPE_DEFAULT
+vs UPLOAD in DirectX 12</h1>
+<p>In DirectX 12, memory allocation is explicitly managed by the
+developer, with <code>D3D12_HEAP_TYPE_DEFAULT</code> and
+<code>D3D12_HEAP_TYPE_UPLOAD</code> representing two foundational memory
+configurations for resource data flow. While the default heap is
+optimized exclusively for maximum GPU performance with no direct CPU
+visibility, the upload heap acts as a bridge, enabling the CPU to
+efficiently write data that the GPU can consume. Understanding the
+architectural differences, access patterns, and typical use cases of
+these two heaps is essential for avoiding performance bottlenecks and
+pipeline stalls in modern graphics programming.</p>
+<h3 id="memory-location-and-architecture">Memory Location and
+Architecture</h3>
+<ul>
+<li><strong><code>D3D12_HEAP_TYPE_DEFAULT</code></strong>: This heap
+resides in GPU-local physical memory (VRAM) on discrete graphics cards.
+It is physically closer to the GPU compute cores and memory controllers,
+providing the highest possible bandwidth and lowest latency for GPU read
+and write operations.</li>
+<li><strong><code>D3D12_HEAP_TYPE_UPLOAD</code></strong>: On systems
+with discrete GPUs, this heap typically resides in system RAM or in a
+specialized CPU-visible VRAM aperture (via Resizable BAR / Smart Access
+Memory). It is physically accessible to the CPU host controller and
+visible to the GPU over the PCIe bus.</li>
+</ul>
+<h3 id="cpu-and-gpu-access-permissions">CPU and GPU Access
+Permissions</h3>
+<p>The primary technical divide between these heaps is how the CPU and
+GPU are permitted to interact with the underlying memory:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Feature</th>
+<th style="text-align: left;"><code>D3D12_HEAP_TYPE_DEFAULT</code></th>
+<th style="text-align: left;"><code>D3D12_HEAP_TYPE_UPLOAD</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>CPU Read</strong></td>
+<td style="text-align: left;">Not allowed (cannot be mapped)</td>
+<td style="text-align: left;">Allowed, but extremely slow
+(uncached)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>CPU Write</strong></td>
+<td style="text-align: left;">Not allowed (cannot be mapped)</td>
+<td style="text-align: left;">Optimized (Write-Combined memory)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>GPU Read</strong></td>
+<td style="text-align: left;">Optimized (Full VRAM bandwidth)</td>
+<td style="text-align: left;">Slower (Limited by PCIe bus
+bandwidth)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>GPU Write</strong></td>
+<td style="text-align: left;">Optimized (Render Targets, UAVs)</td>
+<td style="text-align: left;">Not recommended / heavily constrained</td>
+</tr>
+</tbody>
+</table>
+<p>Because <code>D3D12_HEAP_TYPE_DEFAULT</code> cannot be mapped into
+CPU address space, any attempt to call <code>ID3D12Resource::Map</code>
+on a default resource will fail.</p>
+<p>Conversely, <code>D3D12_HEAP_TYPE_UPLOAD</code> uses Write-Combined
+(WC) CPU caching semantics. Write-combining optimizes sequential CPU
+writes by buffering them into cache lines before sending them to the
+bus, but it bypasses CPU caches. Consequently, reading from an upload
+heap with the CPU causes massive performance penalties due to cache
+misses and bus roundtrips.</p>
+<h3 id="typical-use-cases">Typical Use Cases</h3>
+<h4 id="when-to-use-d3d12_heap_type_default">When to Use
+<code>D3D12_HEAP_TYPE_DEFAULT</code></h4>
+<p>Default heaps should be used for any resource that remains on the GPU
+for multiple frames or requires intensive GPU-side read/write
+bandwidth:</p>
+<ul>
+<li>Static vertex and index buffers</li>
+<li>Textures and mipmap chains</li>
+<li>Render Targets and Depth-Stencil buffers</li>
+<li>Unordered Access Views (UAVs) used in compute shaders</li>
+</ul>
+<h4 id="when-to-use-d3d12_heap_type_upload">When to Use
+<code>D3D12_HEAP_TYPE_UPLOAD</code></h4>
+<p>Upload heaps are designed for transient data or resources that must
+be updated frequently by the CPU:</p>
+<ul>
+<li>Staging buffers used to transfer assets (textures, meshes) from
+system RAM to default GPU memory</li>
+<li>Constant Buffers (CBVs) that are updated once per frame or once per
+draw call</li>
+<li>Dynamic vertex buffers for procedural or immediate-mode rendering
+(e.g., UI overlays, debug lines)</li>
+</ul>
+<h3 id="common-transfer-workflow">Common Transfer Workflow</h3>
+<p>Because textures and static buffers achieve the best performance
+inside <code>D3D12_HEAP_TYPE_DEFAULT</code>, but the CPU cannot write to
+default memory directly, DirectX 12 uses a two-step staging pattern:</p>
+<ol type="1">
+<li><strong>Allocate an Intermediate Resource:</strong> Create an upload
+buffer using <code>D3D12_HEAP_TYPE_UPLOAD</code>.</li>
+<li><strong>CPU Population:</strong> Map the upload buffer, write source
+data from system memory, and unmap (or leave persistently mapped).</li>
+<li><strong>GPU Copy:</strong> Record a copy command on a direct or copy
+command list using <code>CopyResource</code> or
+<code>CopyBufferRegion</code> to move the data from the upload resource
+to the target resource in <code>D3D12_HEAP_TYPE_DEFAULT</code>.</li>
+<li><strong>Transition Barrier:</strong> Execute a resource barrier
+transitioning the default resource from
+<code>D3D12_RESOURCE_STATE_COPY_DEST</code> to its intended usage state
+(e.g., <code>D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE</code>).</li>
+<li><strong>Reclaim Staging Memory:</strong> Once the GPU completes the
+copy command list (tracked via fences), the upload buffer can be freed
+or reused.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

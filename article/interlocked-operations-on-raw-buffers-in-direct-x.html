@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interlocked Operations on Raw Buffers in DirectX - directx</title>
+    <meta name="description" content="In DirectX compute kernels, thousands of threads execute concurrently and often need to write to the same memory addresses within raw buffers (RWByteAddressBuffer). Without synchronization, simultaneous access causes data races, torn writes, and unpredict">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/interlocked-operations-on-raw-buffers-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Interlocked Operations on Raw Buffers in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/interlocked-operations-on-raw-buffers-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX compute kernels, thousands of threads execute concurrently and often need to write to the same memory addresses within raw buffers (RWByteAddressBuffer). Without synchronization, simultaneous access causes data races, torn writes, and unpredict" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="interlocked-operations-on-raw-buffers-in-directx">Interlocked
+Operations on Raw Buffers in DirectX</h1>
+<p>In DirectX compute kernels, thousands of threads execute concurrently
+and often need to write to the same memory addresses within raw buffers
+(<code>RWByteAddressBuffer</code>). Without synchronization,
+simultaneous access causes data races, torn writes, and unpredictable
+output. Interlocked operations solve this by performing atomic
+read-modify-write transactions directly at the hardware memory
+controller or cache level, ensuring that memory updates occur
+sequentially and without thread collisions. This article explains how
+interlocked operations operate on raw buffers, how the GPU enforces
+atomicity, and the best practices for maintaining both thread safety and
+high performance.</p>
+<h3 id="the-race-condition-problem-in-raw-buffers">The Race Condition
+Problem in Raw Buffers</h3>
+<p>A raw buffer in High-Level Shader Language (HLSL) is represented as a
+<code>ByteAddressBuffer</code> or <code>RWByteAddressBuffer</code>.
+These buffers lack structured data layouts; instead, they treat memory
+as a contiguous block of bytes accessed via 32-bit aligned byte
+offsets.</p>
+<p>When multiple compute shader threads attempt to update the same
+32-bit address using standard read and write instructions:</p>
+<ol type="1">
+<li>Thread A reads the current value from the buffer.</li>
+<li>Thread B reads the same value before Thread A finishes writing its
+update.</li>
+<li>Both threads compute their updates independently.</li>
+<li>Both threads write their values back, causing one thread's update to
+overwrite and discard the other.</li>
+</ol>
+<p>This standard read-modify-write cycle is non-atomic. Because GPU
+wavefronts (or warps) execute in lockstep across SIMD lanes, resource
+contention on identical byte addresses occurs frequently.</p>
+<h3 id="how-hardware-guarantees-atomicity">How Hardware Guarantees
+Atomicity</h3>
+<p>Interlocked operations eliminate race conditions by converting the
+multi-step read-modify-write cycle into a single, indivisible hardware
+transaction.</p>
+<p>When an HLSL intrinsic such as <code>InterlockedAdd</code> is invoked
+on an <code>RWByteAddressBuffer</code>:</p>
+<ul>
+<li><strong>Memory Controller Arbitration:</strong> The request is
+routed to the GPU’s L2 cache or memory controllers, which house
+dedicated atomic arithmetic logic units (ALUs).</li>
+<li><strong>Serialization at the Cache Line:</strong> If multiple
+threads target the exact same 32-bit offset, the memory controller
+serializes the operations at the hardware level.</li>
+<li><strong>Indivisible Execution:</strong> The read, computation, and
+write-back occur in an uninterruptible cycle for each request. No
+intervening memory access from any other thread can read intermediate
+data or write a competing value.</li>
+</ul>
+<p>Because this synchronization occurs at the memory architecture level,
+it requires no software locks, operating system semaphores, or thread
+context switches.</p>
+<h3 id="common-hlsl-interlocked-functions-on-raw-buffers">Common HLSL
+Interlocked Functions on Raw Buffers</h3>
+<p>HLSL provides a family of interlocked intrinsics tailored for
+<code>RWByteAddressBuffer</code> resources. These operations require
+byte offsets that are strictly multiples of 4 (32-bit aligned):</p>
+<ul>
+<li><code>InterlockedAdd(dest, value, original_value)</code>: Atomically
+adds a value to the target 32-bit integer.</li>
+<li><code>InterlockedMin(dest, value, original_value)</code> and
+<code>InterlockedMax(...)</code>: Compares and updates the target with
+the minimum or maximum value.</li>
+<li><code>InterlockedOr(...)</code>, <code>InterlockedAnd(...)</code>,
+<code>InterlockedXor(...)</code>: Executes bitwise manipulation
+atomically.</li>
+<li><code>InterlockedExchange(dest, value, original_value)</code>: Sets
+a new value and retrieves the previous value atomically.</li>
+<li><code>InterlockedCompareExchange(dest, compare_value, value, original_value)</code>:
+Replaces the target value only if it matches <code>compare_value</code>.
+This forms the foundation for lock-free algorithms on the GPU.</li>
+</ul>
+<p>In each intrinsic, retrieving the <code>original_value</code> is
+optional, but doing so allows threads to obtain a unique index, such as
+an allocation slot in a shared global append counter.</p>
+<h3 id="addressing-performance-bottlenecks-and-contention">Addressing
+Performance Bottlenecks and Contention</h3>
+<p>While interlocked operations guarantee correctness, excessive
+contention can severely degrade compute performance. When thousands of
+threads attempt atomic operations on the same memory address
+simultaneously, execution collapses from massive parallelism into
+sequential execution at the memory controller.</p>
+<p>To maintain thread safety while maximizing throughput:</p>
+<ol type="1">
+<li><strong>Use Wave Intrinsics First:</strong> Before writing to global
+raw buffers, use wave-level operations (such as
+<code>WaveActiveSum</code>) to aggregate values across all active lanes
+in a wave. Only a single lane per wave then needs to execute the
+<code>InterlockedAdd</code> to the raw buffer, cutting global atomic
+operations by a factor of 32 or 64.</li>
+<li><strong>Utilize <code>groupshared</code> Memory:</strong> For
+algorithms requiring workgroup-wide coordination, use interlocked
+operations on fast, on-chip <code>groupshared</code> memory first. Once
+the threadgroup resolves its local updates, a single thread updates the
+global <code>RWByteAddressBuffer</code>.</li>
+<li><strong>Minimize Contention Hotspots:</strong> Stagger memory
+offsets or use hashing strategies to distribute atomic operations across
+multiple cache lines whenever possible.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

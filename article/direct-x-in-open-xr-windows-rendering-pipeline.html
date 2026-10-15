@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX in OpenXR Windows Rendering Pipeline - directx</title>
+    <meta name="description" content="DirectX serves as the foundational graphics infrastructure within the OpenXR rendering pipeline on Windows, enabling high-performance frame rendering, cross-process texture sharing, and final display composition. In the OpenXR ecosystem, DirectX bridges t">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-in-open-xr-windows-rendering-pipeline">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX in OpenXR Windows Rendering Pipeline - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-in-open-xr-windows-rendering-pipeline" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX serves as the foundational graphics infrastructure within the OpenXR rendering pipeline on Windows, enabling high-performance frame rendering, cross-process texture sharing, and final display composition. In the OpenXR ecosystem, DirectX bridges t" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-in-openxr-windows-rendering-pipeline">DirectX in OpenXR
+Windows Rendering Pipeline</h1>
+<p>DirectX serves as the foundational graphics infrastructure within the
+OpenXR rendering pipeline on Windows, enabling high-performance frame
+rendering, cross-process texture sharing, and final display composition.
+In the OpenXR ecosystem, DirectX bridges the gap between client virtual
+reality (VR) or augmented reality (AR) applications and the
+hardware-specific runtime. It facilitates low-latency image handoffs,
+distortion correction, and head-tracking synchronization to ensure
+smooth immersion on head-mounted displays (HMDs).</p>
+<h3 id="api-binding-and-swapchain-allocation">API Binding and Swapchain
+Allocation</h3>
+<p>The OpenXR architecture abstracts underlying graphics APIs through
+extensions, primarily <code>XR_KHR_D3D11_enable</code> and
+<code>XR_KHR_D3D12_enable</code> on Windows platforms. When an
+application initializes an OpenXR session, it queries the runtime for
+DirectX device requirements to ensure the game engine and the runtime
+utilize compatible physical GPU adapters.</p>
+<p>Once initialized, the client application requests swapchains via the
+OpenXR runtime. Instead of the application creating its own render
+targets directly for display, the runtime uses DirectX to allocate
+swapchain textures. The runtime returns an array of Direct3D 11 or
+Direct3D 12 texture interfaces to the application. The application then
+binds these DirectX textures as render targets, draws the left- and
+right-eye views according to predicted head poses, and submits the
+finished frames back to the OpenXR runtime queue.</p>
+<h3 id="zero-copy-cross-process-sharing">Zero-Copy Cross-Process
+Sharing</h3>
+<p>OpenXR runtimes on Windows typically operate as dedicated background
+services separated from the client application's process. Passing
+high-resolution, high-framerate stereo textures between processes via
+standard system memory would introduce unacceptable latency and
+bandwidth bottlenecks.</p>
+<p>DirectX resolves this through DXGI (DirectX Graphics Infrastructure)
+shared resource handles. When an OpenXR swapchain is allocated, the
+runtime creates textures with shared resource flags. Using DirectX
+inter-process communication mechanisms, such as NT handles, the runtime
+provides the client process direct GPU access to these textures. This
+allows the application to render into the surface and signal completion,
+enabling the runtime compositor to read the identical memory addresses
+directly on the GPU without costly copying operations.</p>
+<h3 id="compositor-execution-and-timewarp">Compositor Execution and
+Timewarp</h3>
+<p>Once the client application releases a swapchain image, the OpenXR
+runtime compositor assumes control using its own DirectX rendering
+pipeline. The compositor executes several critical operations:</p>
+<ul>
+<li><strong>Layer Composition:</strong> It blends multiple OpenXR
+layers, including the primary 3D world projection layer, 2D user
+interfaces (quad layers), and passthrough camera feeds.</li>
+<li><strong>Reprojection (Timewarp/Spacewarp):</strong> If the
+application fails to hit the target framerate or if new tracking data
+becomes available immediately before scanout, the compositor uses
+DirectX compute or pixel shaders to reproject the rendered image to
+match the most recent head pose.</li>
+<li><strong>Lens Distortion and Chromatic Aberration
+Correction:</strong> VR displays require geometric and color
+pre-distortion to counteract physical lens characteristics. The
+compositor renders the final image through a distortion mesh using
+DirectX shaders.</li>
+</ul>
+<h3 id="hardware-synchronization-and-presentation">Hardware
+Synchronization and Presentation</h3>
+<p>The final phase of the pipeline relies on DirectX to present frames
+to the display hardware with minimal latency. OpenXR runtimes use
+DirectX synchronization primitives, such as DXGI fences and timeline
+semaphores, to synchronize execution between the client rendering
+thread, runtime composition, and GPU hardware queues.</p>
+<p>Through DXGI, the runtime bypasses traditional desktop window
+management (DWM) composition when targeting dedicated VR displays in
+direct mode. This ensures direct-to-display scanning, precise VSync
+timing, and reduced input-to-photon latency essential for preventing
+motion sickness.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

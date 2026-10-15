@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 4K Texture Streaming and VRAM Management - directx</title>
+    <meta name="description" content="Modern DirectX titles manage memory-intensive 4K assets within limited VRAM by using dynamic mipmap streaming, sparse virtual texturing, hardware-accelerated feedback loops, and high-throughput data loading APIs. Rather than storing uncompressed or fully">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-4-k-texture-streaming-and-vram-management">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 4K Texture Streaming and VRAM Management - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-4-k-texture-streaming-and-vram-management" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Modern DirectX titles manage memory-intensive 4K assets within limited VRAM by using dynamic mipmap streaming, sparse virtual texturing, hardware-accelerated feedback loops, and high-throughput data loading APIs. Rather than storing uncompressed or fully" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-4k-texture-streaming-and-vram-management">DirectX 4K
+Texture Streaming and VRAM Management</h1>
+<p>Modern DirectX titles manage memory-intensive 4K assets within
+limited VRAM by using dynamic mipmap streaming, sparse virtual
+texturing, hardware-accelerated feedback loops, and high-throughput data
+loading APIs. Rather than storing uncompressed or fully resolved 4K
+textures in memory at all times, modern game engines split assets into
+granular chunks and load only the visible, high-resolution portions
+required for the current camera frame. Through features natively
+supported in DirectX 12 and DirectX 12 Ultimate—such as Tiled Resources,
+Sampler Feedback, and DirectStorage—developers can maintain pristine
+visual fidelity while strictly enforcing a fixed VRAM budget.</p>
+<h3 id="tiled-resources-and-virtual-texturing">Tiled Resources and
+Virtual Texturing</h3>
+<p>DirectX 12 utilizes Tiled Resources (hardware-level sparse texturing)
+to separate virtual memory allocation from physical memory allocation. A
+4K texture can occupy a massive virtual address space, but physical VRAM
+is allocated only in uniform 64 KB tiles.</p>
+<p>When an object is rendered far away or partially occluded, the engine
+maps physical VRAM pages solely to the low-resolution mipmaps or the
+visible surfaces of the model. Regions of the texture that are obscured,
+off-screen, or too distant to require fine detail consume no physical
+VRAM. This prevents the GPU from wasting memory on texels that
+contribute nothing to the final rendered image.</p>
+<h3 id="sampler-feedback">Sampler Feedback</h3>
+<p>Historically, game engines relied on the CPU to calculate camera
+distance and predict which texture mip levels were needed, which often
+led to over-allocation or visual popping. DirectX 12 Ultimate introduced
+Sampler Feedback, moving this analysis entirely to the GPU.</p>
+<p>During shader execution, the GPU writes directly to a low-overhead
+feedback map that records the exact mip levels and texture tiles
+accessed by the pixel or compute shaders. The engine reads this feedback
+to determine precise memory requirements with zero CPU-side guesswork.
+If a camera gets closer to an asset, the engine detects that
+higher-detail 4K tiles are being requested and schedules them for
+immediate streaming.</p>
+<h3 id="dynamic-mipmap-budgeting-and-eviction">Dynamic Mipmap Budgeting
+and Eviction</h3>
+<p>Game engines maintain strict VRAM budgets using DirectX residency
+APIs (<code>ID3D12Device::MakeResident</code> and <code>Evict</code>).
+Textures are stored on storage drives as a chain of progressively
+smaller mipmaps.</p>
+<p>Engines universally load low-resolution "base" mips (often 256x256 or
+512x512) into a permanent memory pool to serve as fallbacks. When
+available VRAM approaches its limit, the streaming manager dynamically
+drops the highest 4K mip levels from objects outside the view frustum or
+moving away from the viewer. This frees physical memory pages to be
+remapped to incoming assets without dropping frames or triggering
+out-of-memory errors.</p>
+<h3 id="directstorage-and-gpu-decompression">DirectStorage and GPU
+Decompression</h3>
+<p>A primary bottleneck of streaming 4K assets is moving gigabytes of
+data from storage to VRAM without causing frame stutters. Microsoft's
+DirectStorage API optimizes this pipeline by bypassing traditional OS
+file-system overhead and handling high-bandwidth I/O queues directly
+tailored to modern NVMe drives.</p>
+<p>Paired with GPU-accelerated decompression (such as GDeflate),
+compressed 4K texture tiles are transferred directly from the drive into
+GPU memory and decompressed on the compute shaders in parallel. This
+allows the streaming system to load multi-megabyte 4K texture updates
+within milliseconds, eliminating visible pop-in and enabling smooth
+asset transitions even within narrow VRAM margins.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

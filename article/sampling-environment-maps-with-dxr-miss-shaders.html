@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sampling Environment Maps with DXR Miss Shaders - directx</title>
+    <meta name="description" content="In DirectX Raytracing (DXR), rays that fail to intersect any geometric primitive in the Top-Level Acceleration Structure invoke the miss shader. This article explains how the miss shader intercepts these missed rays, extracts their world-space direction v">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/sampling-environment-maps-with-dxr-miss-shaders">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Sampling Environment Maps with DXR Miss Shaders - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/sampling-environment-maps-with-dxr-miss-shaders" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX Raytracing (DXR), rays that fail to intersect any geometric primitive in the Top-Level Acceleration Structure invoke the miss shader. This article explains how the miss shader intercepts these missed rays, extracts their world-space direction v" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="sampling-environment-maps-with-dxr-miss-shaders">Sampling
+Environment Maps with DXR Miss Shaders</h1>
+<p>In DirectX Raytracing (DXR), rays that fail to intersect any
+geometric primitive in the Top-Level Acceleration Structure invoke the
+miss shader. This article explains how the miss shader intercepts these
+missed rays, extracts their world-space direction vectors, and converts
+that data to sample equirectangular environment textures, sample
+cubemaps, or calculate mathematical procedural sky gradients directly
+onto the ray payload.</p>
+<h3 id="the-role-of-the-miss-shader">The Role of the Miss Shader</h3>
+<p>When a ray is dispatched using the <code>TraceRay()</code> intrinsic
+function in High-Level Shading Language (HLSL), the hardware traverses
+the acceleration structure. If the ray does not hit an instance bounding
+box or primitive within its valid parametric range (<span
+class="math inline">\(T_{min}\)</span> to <span
+class="math inline">\(T_{max}\)</span>), traversal terminates, and the
+pipeline executes the miss shader specified by the
+<code>MissShaderIndex</code> argument.</p>
+<p>The primary task of the miss shader is to resolve the background
+radiance—typically an ambient color, a static skybox, an image-based
+lighting (IBL) environment map, or a dynamic procedural atmosphere—and
+write that value back to the ray payload.</p>
+<h3 id="retrieving-ray-direction">Retrieving Ray Direction</h3>
+<p>To sample any directional background, the miss shader needs to
+determine the orientation of the missed ray. DXR provides built-in
+intrinsic functions to inspect ray properties. The miss shader retrieves
+the normalized world-space direction vector using:</p>
+<pre class="hlsl"><code>float3 rayDir = WorldRayDirection();</code></pre>
+<p>Because environment maps represent infinitely distant backgrounds,
+the ray's origin (<code>WorldRayOrigin()</code>) is generally ignored
+unless volumetric atmospheric effects or local spherical projections are
+being calculated.</p>
+<h3 id="sampling-texture-based-environment-maps">Sampling Texture-Based
+Environment Maps</h3>
+<p>Environment textures are typically stored as either Cubemaps
+(<code>TextureCube</code>) or Equirectangular (Latitude-Longitude) maps
+(<code>Texture2D</code>).</p>
+<h4 id="1-cubemap-sampling">1. Cubemap Sampling</h4>
+<p>Cubemaps represent the simplest implementation because hardware
+samplers directly accept 3D directional vectors:</p>
+<pre class="hlsl"><code>TextureCube&lt;float4&gt; g_EnvironmentCubemap : register(t0);
+SamplerState g_LinearSampler : register(s0);
+
+[shader(&quot;miss&quot;)]
+void MissShader(inout RayPayload payload)
+{
+    float3 dir = WorldRayDirection();
+    payload.radiance = g_EnvironmentCubemap.SampleLevel(g_LinearSampler, dir, 0).rgb;
+}</code></pre>
+<p><em>Note on Texture Filtering:</em> Miss shaders are executed per-ray
+rather than in conventional <span class="math inline">\(2 \times
+2\)</span> pixel quads. Because screen-space derivatives (<span
+class="math inline">\(ddx\)</span>, <span
+class="math inline">\(ddy\)</span>) are undefined during ray tracing,
+standard <code>Sample()</code> calls cannot automatically determine mip
+levels. Developers must use <code>SampleLevel()</code> with an explicit
+LOD, or calculate anisotropic footprints manually using ray cone
+techniques.</p>
+<h4 id="2-equirectangular-spherical-mapping">2. Equirectangular
+(Spherical) Mapping</h4>
+<p>If the environment map is stored as a 2D panorama, the 3D direction
+vector must be transformed into 2D normalized UV coordinates via
+spherical trigonometry:</p>
+<p><span class="math display">\[u = 0.5 + \frac{\text{atan2}(z,
+x)}{2\pi}\]</span> <span class="math display">\[v = 0.5 -
+\frac{\arcsin(y)}{\pi}\]</span></p>
+<p>In HLSL:</p>
+<pre class="hlsl"><code>Texture2D&lt;float4&gt; g_EquirectangularMap : register(t0);
+SamplerState g_LinearSampler : register(s0);
+
+#define PI 3.14159265359
+
+[shader(&quot;miss&quot;)]
+void MissShader(inout RayPayload payload)
+{
+    float3 dir = normalize(WorldRayDirection());
+
+    float2 uv;
+    uv.x = 0.5f + (atan2(dir.z, dir.x) / (2.0f * PI));
+    uv.y = 0.5f - (asin(dir.y) / PI);
+
+    payload.radiance = g_EquirectangularMap.SampleLevel(g_LinearSampler, uv, 0).rgb;
+}</code></pre>
+<h3 id="sampling-procedural-sky-domes">Sampling Procedural Sky
+Domes</h3>
+<p>Rather than reading high-resolution textures from memory, miss
+shaders can calculate sky radiance analytically. This reduces memory
+bandwidth and allows for dynamic changes such as day-night cycles and
+weather adjustments.</p>
+<h4 id="simple-directional-gradients">Simple Directional Gradients</h4>
+<p>Basic procedural skies blend between horizon and zenith colors using
+the vertical component (<span class="math inline">\(y\)</span>) of the
+direction vector:</p>
+<pre class="hlsl"><code>cbuffer SkyData : register(b0)
+{
+    float3 g_ZenithColor;
+    float3 g_HorizonColor;
+    float3 g_SunDirection;
+    float3 g_SunColor;
+};
+
+[shader(&quot;miss&quot;)]
+void MissShader(inout RayPayload payload)
+{
+    float3 dir = WorldRayDirection();
+    
+    // Smoothstep gradient based on elevation angle
+    float elevation = saturate(dir.y);
+    float3 sky = lerp(g_HorizonColor, g_ZenithColor, elevation);
+
+    // Analytic sun disc highlight
+    float sunDot = dot(dir, normalize(g_SunDirection));
+    if (sunDot &gt; 0.9995f) 
+    {
+        sky += g_SunColor * 10.0f;
+    }
+
+    payload.radiance = sky;
+}</code></pre>
+<h4 id="atmospheric-scattering-models">Atmospheric Scattering
+Models</h4>
+<p>For higher physical accuracy, the miss shader can implement models
+like Preetham or Bruneton. These algorithms evaluate Rayleigh scattering
+(molecules causing blue daylight) and Mie scattering (particulates
+causing haze and glare around the sun) on the fly, using
+<code>dot(WorldRayDirection(), g_SunDirection)</code> as the phase angle
+input.</p>
+<h3 id="updating-the-ray-payload">Updating the Ray Payload</h3>
+<p>Once the radiance is either sampled from a texture or mathematically
+evaluated, the result is assigned directly to the user-defined
+<code>inout RayPayload</code> structure. The miss shader returns, and
+control yields back to the original caller (such as a ray generation or
+closest hit shader), where the sampled radiance is integrated into the
+final lighting calculation.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

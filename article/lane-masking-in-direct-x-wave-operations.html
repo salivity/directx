@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lane Masking in DirectX Wave Operations - directx</title>
+    <meta name="description" content="Lane masking in DirectX wave operations is the hardware mechanism that tracks which SIMD lanes are active during parallel shader execution, directly governing how wave intrinsics compute and share data. In DirectX 12 and Shader Model 6.0+, threads are exe">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/lane-masking-in-direct-x-wave-operations">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lane Masking in DirectX Wave Operations - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/lane-masking-in-direct-x-wave-operations" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lane masking in DirectX wave operations is the hardware mechanism that tracks which SIMD lanes are active during parallel shader execution, directly governing how wave intrinsics compute and share data. In DirectX 12 and Shader Model 6.0+, threads are exe" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lane-masking-in-directx-wave-operations">Lane Masking in DirectX
+Wave Operations</h1>
+<p>Lane masking in DirectX wave operations is the hardware mechanism
+that tracks which SIMD lanes are active during parallel shader
+execution, directly governing how wave intrinsics compute and share
+data. In DirectX 12 and Shader Model 6.0+, threads are executed
+simultaneously in lockstep groups called waves (typically 32 or 64 lanes
+wide). When control flow diverges, or when wave intrinsics are invoked,
+lane masking uses internal bitmasks to dynamically enable or disable
+specific lanes, ensuring that operations like reductions, prefix sums,
+and ballots only process data from valid, currently participating
+threads.</p>
+<h2 id="simd-architecture-and-the-execution-mask">SIMD Architecture and
+the Execution Mask</h2>
+<p>Graphics Processing Units execute shader code using Single
+Instruction, Multiple Data (SIMD) vector units. In this model, a single
+instruction is broadcast to multiple arithmetic logic units (ALUs), each
+acting as an individual lane corresponding to a single shader
+thread.</p>
+<p>Because all lanes share a single program counter, execution
+divergence (such as an <code>if/else</code> conditional) cannot branch
+physically on a per-thread basis. Instead, the hardware relies on an
+<strong>execution mask</strong> (or active mask). The execution mask is
+a hardware-level bitfield where each bit corresponds to a lane in the
+wave:</p>
+<ul>
+<li>A bit value of <code>1</code> indicates the lane is active and
+should commit its results.</li>
+<li>A bit value of <code>0</code> indicates the lane is masked off
+(inactive), causing the hardware to suppress state changes and memory
+writes for that cycle.</li>
+</ul>
+<p>When a branch diverges, the GPU first executes the <code>if</code>
+path with a mask representing only the threads that evaluated the
+condition to <code>true</code>. Subsequently, it flips the mask to
+execute the <code>else</code> path for the remaining threads before
+reaching a reconvergence point where the original mask is restored.</p>
+<h2 id="wave-operations-and-lane-participation">Wave Operations and Lane
+Participation</h2>
+<p>DirectX wave intrinsics operate strictly over the subset of lanes
+that are currently active according to the execution mask. Inactive
+lanes do not contribute to wave-wide aggregations:</p>
+<ul>
+<li><strong>Wave Reductions (<code>WaveActiveSum</code>,
+<code>WaveActiveMax</code>, etc.):</strong> When a reduction is
+executed, the SIMD unit aggregates values solely from lanes whose bit is
+set in the current execution mask. Masked-off lanes are ignored,
+preventing undefined or stale register values from polluting the
+aggregate result.</li>
+<li><strong>Prefix Operations (<code>WavePrefixSum</code>,
+<code>WavePrefixCountBits</code>):</strong> Prefix operations compute
+running totals across lanes with indices lower than the current lane.
+Inactive lanes are skipped during accumulation, meaning an active lane
+receives the sum of only the <em>active</em> preceding lanes.</li>
+<li><strong>Lane Broadcasting (<code>WaveReadLaneAt</code>,
+<code>WaveReadLaneFirst</code>):</strong> If an intrinsic requests data
+from an inactive lane, the result is undefined. Consequently, developers
+must ensure through lane masking or uniform logic that the source lane
+is active.</li>
+</ul>
+<h2 id="explicit-masking-with-waveactiveballot">Explicit Masking with
+WaveActiveBallot</h2>
+<p>DirectX allows shaders to explicitly query and manipulate the current
+active lane mask using <code>WaveActiveBallot()</code>. This function
+evaluates a boolean condition across all lanes in the wave and returns a
+<code>uint4</code> bitmask representing which active lanes evaluated the
+expression to <code>true</code>.</p>
+<pre class="hlsl"><code>// Query the active mask for threads meeting a condition
+bool condition = (inputData &gt; 0.0f);
+uint4 activeMask = WaveActiveBallot(condition);
+
+// Query total active threads participating in this wave
+uint activeCount = WaveActiveCountBits(condition);</code></pre>
+<p>The ballot operation intersects the user-provided condition with the
+hardware's internal execution mask. Even if a lane passes
+<code>true</code> to the ballot, it will be marked as <code>0</code> in
+the resulting <code>uint4</code> if the lane was already masked out by
+divergent control flow prior to calling the intrinsic.</p>
+<h2 id="quad-operations-and-helper-lanes">Quad Operations and Helper
+Lanes</h2>
+<p>Pixel shaders introduce an exception to standard wave masking through
+helper lanes. To compute screen-space derivatives (<code>ddx</code>,
+<code>ddy</code>), the GPU processes pixels in 2x2 quads. If a quad
+crosses a primitive boundary, threads corresponding to pixels outside
+the triangle are launched as inactive "helper lanes."</p>
+<p>Standard wave operations like <code>WaveActiveSum</code> ignore
+helper lanes because their mask bit is unset. However, quad-specific
+intrinsics (<code>QuadReadAcrossX</code>, <code>QuadReadAcrossY</code>,
+<code>QuadReadAcrossDiagonal</code>) can sample values directly from
+helper lanes within the same 2x2 quad, provided those helper lanes were
+populated during instruction execution to compute finite
+differences.</p>
+<h2 id="hardware-performance-implications">Hardware Performance
+Implications</h2>
+<p>Lane masking maintains functional correctness during divergence, but
+it directly impacts SIMD efficiency. When half the lanes in a 64-lane
+wave are masked off, ALU utilization drops to 50%. The hardware still
+issues the instruction across the full vector unit; masked lanes merely
+discard the computed results. Structuring algorithms to minimize
+divergence, or using <code>WaveActiveAllTrue</code> and
+<code>WaveActiveAllEqual</code> to detect uniform paths, allows shaders
+to bypass branch evaluation and maintain a fully populated lane
+mask.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLSL Constant Buffer Alignment Rules in DirectX - directx</title>
+    <meta name="description" content="In DirectX High-Level Shader Language (HLSL), constant buffers (cbuffer) group uniform data to be sent from the CPU to the GPU. To ensure efficient access, the hardware requires constant buffer data to adhere to strict 16-byte memory alignment and packing">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/hlsl-constant-buffer-alignment-rules-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="HLSL Constant Buffer Alignment Rules in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/hlsl-constant-buffer-alignment-rules-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX High-Level Shader Language (HLSL), constant buffers (cbuffer) group uniform data to be sent from the CPU to the GPU. To ensure efficient access, the hardware requires constant buffer data to adhere to strict 16-byte memory alignment and packing" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="hlsl-constant-buffer-alignment-rules-in-directx">HLSL Constant
+Buffer Alignment Rules in DirectX</h1>
+<p>In DirectX High-Level Shader Language (HLSL), constant buffers
+(<code>cbuffer</code>) group uniform data to be sent from the CPU to the
+GPU. To ensure efficient access, the hardware requires constant buffer
+data to adhere to strict 16-byte memory alignment and packing rules.
+Mismatches between C++ host struct layouts and HLSL constant buffer
+layouts lead to silent data corruption, making an exact understanding of
+HLSL packing behavior essential for rendering development.</p>
+<h3 id="the-16-byte-128-bit-register-rule">The 16-Byte (128-Bit)
+Register Rule</h3>
+<p>HLSL organizes constant buffers into an array of 4-component 32-bit
+registers (equivalent to a <code>float4</code> or 16 bytes:
+<code>x</code>, <code>y</code>, <code>z</code>, and <code>w</code>).</p>
+<ul>
+<li>Every register is exactly 16 bytes wide.</li>
+<li>Variables are packed into the current register sequentially as long
+as they fit without crossing the 16-byte boundary.</li>
+<li>A single variable cannot straddle two 16-byte registers. If a
+variable does not completely fit into the remaining space of the current
+register, it is pushed entirely to the beginning of the next 16-byte
+register.</li>
+</ul>
+<p>For example, if a buffer defines a <code>float3</code> (12 bytes)
+followed by a <code>float2</code> (8 bytes):</p>
+<ol type="1">
+<li>The <code>float3</code> occupies <code>register0.xyz</code> (bytes
+0–11).</li>
+<li>The <code>float2</code> requires 8 bytes, but only 4 bytes remain in
+<code>register0</code> (<code>register0.w</code>).</li>
+<li>The compiler leaves <code>register0.w</code> empty as padding and
+places the <code>float2</code> at <code>register1.xy</code> (bytes
+16–23).</li>
+</ol>
+<h3 id="array-alignment-rules">Array Alignment Rules</h3>
+<p>Arrays in HLSL constant buffers do not pack tightly by default:</p>
+<ul>
+<li>Every element in an array is aligned to a 16-byte boundary.</li>
+<li>Even if an array holds scalar values (like <code>float</code> or
+<code>int</code>), each element consumes a full 16-byte register,
+leaving the remaining 12 bytes unused.</li>
+<li>For instance, <code>float values[4]</code> consumes 64 bytes (four
+separate 16-byte registers), not 16 bytes.</li>
+</ul>
+<h3 id="matrix-alignment-rules">Matrix Alignment Rules</h3>
+<p>Matrices are treated as collections of vectors:</p>
+<ul>
+<li>By default, HLSL treats matrices as <strong>column-major</strong>
+unless configured otherwise via compiler flags or the
+<code>row_major</code> keyword.</li>
+<li>In a column-major matrix, each column is placed into a separate
+16-byte register. A <code>float4x4</code> occupies 4 registers (64
+bytes).</li>
+<li>A <code>float3x3</code> matrix occupies three 16-byte registers;
+each 3-component vector takes 12 bytes of a register, leaving the 4th
+component (<code>.w</code>) as unused padding.</li>
+</ul>
+<h3 id="structure-and-nested-type-rules">Structure and Nested Type
+Rules</h3>
+<p>When defining custom structs within a <code>cbuffer</code>:</p>
+<ul>
+<li>The start of a struct is always aligned to a 16-byte boundary.</li>
+<li>Nested structs do not pack into trailing space from preceding
+variables.</li>
+<li>The total size of a struct is rounded up to a multiple of 16 bytes
+before any subsequent variable begins.</li>
+</ul>
+<h3 id="controlling-alignment-with-packoffset">Controlling Alignment
+with <code>packoffset</code></h3>
+<p>To eliminate ambiguity and prevent unexpected compiler packing, HLSL
+provides the <code>packoffset</code> keyword. This forces a variable to
+occupy an exact register and sub-component location:</p>
+<pre class="hlsl"><code>cbuffer SceneData : register(b0)
+{
+    float4x4 viewProj : packoffset(c0);
+    float3 lightDir   : packoffset(c4.x);
+    float lightIntensity : packoffset(c4.w); // Explicitly fills the unused space after float3
+};</code></pre>
+<h3 id="cpu-to-gpu-synchronization-best-practices">CPU-to-GPU
+Synchronization Best Practices</h3>
+<p>To avoid alignment errors between C++ and HLSL:</p>
+<ol type="1">
+<li><strong>Sort by Size:</strong> Declare variables in descending order
+of size (<code>float4</code> / matrices first, followed by
+<code>float3</code>, <code>float2</code>, and scalars).</li>
+<li><strong>Explicit Padding:</strong> Always declare explicit dummy
+variables in both C++ and HLSL to fill unused components (e.g., pairing
+a <code>float3</code> with a <code>float</code> to complete a 16-byte
+block).</li>
+<li><strong>Array Packing:</strong> Avoid arrays of scalars; use
+<code>float4</code> arrays instead and unpack the components manually in
+shader logic.</li>
+<li><strong>Buffer Size Constraint:</strong> The total size of any
+constant buffer allocated in DirectX 11 and DirectX 12 must be a
+multiple of 256 bytes when bound to the pipeline.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectML Acceleration for TensorFlow and PyTorch in WSL2 - directx</title>
+    <meta name="description" content="DirectML brings high-performance, hardware-accelerated machine learning workloads to TensorFlow and PyTorch inside Windows Subsystem for Linux 2 (WSL2) by bridging Linux-based frameworks with the host Windows DirectX 12 stack. By leveraging Microsoft&#39;s GP">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-ml-acceleration-for-tensor-flow-and-py-torch-in-wsl-2">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectML Acceleration for TensorFlow and PyTorch in WSL2 - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-ml-acceleration-for-tensor-flow-and-py-torch-in-wsl-2" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectML brings high-performance, hardware-accelerated machine learning workloads to TensorFlow and PyTorch inside Windows Subsystem for Linux 2 (WSL2) by bridging Linux-based frameworks with the host Windows DirectX 12 stack. By leveraging Microsoft&#39;s GP" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="directml-acceleration-for-tensorflow-and-pytorch-in-wsl2">DirectML
+Acceleration for TensorFlow and PyTorch in WSL2</h1>
+<p>DirectML brings high-performance, hardware-accelerated machine
+learning workloads to TensorFlow and PyTorch inside Windows Subsystem
+for Linux 2 (WSL2) by bridging Linux-based frameworks with the host
+Windows DirectX 12 stack. By leveraging Microsoft's GPU virtualization
+architecture, DirectML enables developers to utilize diverse GPU
+hardware—including AMD, Intel, Nvidia, and Qualcomm—within a native
+Linux environment without requiring proprietary vendor-specific Linux
+drivers.</p>
+<h3 id="the-virtualization-bridge-dxgkrnl-and-devdxg">The Virtualization
+Bridge: dxgkrnl and /dev/dxg</h3>
+<p>WSL2 runs a complete Linux kernel inside a lightweight virtual
+machine. To expose the host system’s GPU to this guest environment,
+Microsoft introduced a virtualized GPU driver known as
+<code>dxgkrnl</code> into the WSL2 Linux kernel.</p>
+<p>When WSL2 initializes, <code>dxgkrnl</code> exposes a virtualization
+device node at <code>/dev/dxg</code>. This virtual device establishes a
+low-latency communication channel between the Linux user space and the
+Windows Direct3D graphics kernel on the host OS. Rather than passing
+through the entire physical GPU PCIe device, WSL2 shares the host GPU
+resources, allowing both the Windows host and Linux guest to share the
+hardware concurrently.</p>
+<h3 id="the-direct3d-12-user-mode-driver">The Direct3D 12 User-Mode
+Driver</h3>
+<p>Above the kernel layer, WSL2 includes a specialized Linux user-mode
+driver: <code>libd3d12.so</code>. This library provides a functional
+Direct3D 12 API surface directly inside Linux.</p>
+<p>When an application inside WSL2 issues graphics or compute commands,
+<code>libd3d12.so</code> packages these calls and forwards them across
+the <code>/dev/dxg</code> boundary to the Windows host D3D12 runtime.
+The host runtime then hands the commands off to the installed Windows
+GPU driver, which executes the workload directly on the physical
+hardware.</p>
+<h3 id="directml-as-the-execution-engine">DirectML as the Execution
+Engine</h3>
+<p>DirectML is a low-level, hardware-agnostic API built directly on top
+of Direct3D 12. It provides high-performance implementations of
+mathematical operations standard in neural networks, such as matrix
+multiplications, 2D/3D convolutions, activations, and pooling
+layers.</p>
+<p>Because DirectML abstracts the hardware behind the DirectX 12 compute
+model, it compiles these operations into optimized GPU compute shaders
+at runtime. When running inside WSL2, the DirectML library translates
+framework-level tensor operations into D3D12 compute dispatches, which
+stream through <code>libd3d12.so</code> directly to the host GPU.</p>
+<h3 id="framework-integration-pytorch-and-tensorflow">Framework
+Integration: PyTorch and TensorFlow</h3>
+<p>Machine learning frameworks communicate with DirectML using
+framework-specific plugins and packages:</p>
+<ul>
+<li><strong>PyTorch:</strong> Acceleration is enabled via the
+<code>torch-directml</code> extension package. It registers a custom
+backend device (accessible via <code>torch_directml.device()</code>).
+When tensors and model parameters are moved to this device, PyTorch
+routes the forward and backward computation graphs through DirectML
+operator kernels instead of the default CPU or CUDA backends.</li>
+<li><strong>TensorFlow:</strong> Acceleration is delivered via the
+<code>tensorflow-directml</code> distribution. DirectML acts as a
+registered device vendor within the TensorFlow runtime, intercepting
+execution graphs and mapping supported TensorFlow operations directly to
+DirectML compute kernels.</li>
+</ul>
+<p>Through this multi-layered pipeline—traversing the framework plugin,
+DirectML, <code>libd3d12.so</code>, the <code>/dev/dxg</code> device
+interface, and the host Windows display driver—developers achieve
+cross-vendor, near-native GPU acceleration inside their WSL2 development
+workflows.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

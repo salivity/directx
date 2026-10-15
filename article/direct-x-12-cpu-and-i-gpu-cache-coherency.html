@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 CPU and iGPU Cache Coherency - directx</title>
+    <meta name="description" content="In DirectX 12, cache coherency between the CPU and an integrated GPU (iGPU) determines how updates to shared physical memory are synchronized between both processing units. Because iGPUs physically reside on the same die or package as the CPU and share sy">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-cpu-and-i-gpu-cache-coherency">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 CPU and iGPU Cache Coherency - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-cpu-and-i-gpu-cache-coherency" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, cache coherency between the CPU and an integrated GPU (iGPU) determines how updates to shared physical memory are synchronized between both processing units. Because iGPUs physically reside on the same die or package as the CPU and share sy" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-cpu-and-igpu-cache-coherency">DirectX 12 CPU and iGPU
+Cache Coherency</h1>
+<p>In DirectX 12, cache coherency between the CPU and an integrated GPU
+(iGPU) determines how updates to shared physical memory are synchronized
+between both processing units. Because iGPUs physically reside on the
+same die or package as the CPU and share system RAM, DirectX 12 exposes
+low-level architecture queries, memory heap definitions, and explicit
+synchronization models to manage whether the hardware automatically
+synchronizes caches or requires software-driven mitigation to avoid
+stale data.</p>
+<h3 id="the-unified-memory-architecture-uma-distinction">The Unified
+Memory Architecture (UMA) Distinction</h3>
+<p>Integrated GPUs operate under Unified Memory Architecture (UMA),
+eliminating the physical separation between CPU system memory and GPU
+video memory. However, sharing physical RAM does not automatically
+guarantee shared, coherent caches.</p>
+<p>DirectX 12 exposes this hardware capability through the
+<code>D3D12_FEATURE_DATA_ARCHITECTURE</code> query via two boolean
+properties: <code>UMA</code> and <code>CacheCoherentUMA</code>.</p>
+<ul>
+<li><strong>Non-Coherent UMA (<code>UMA = TRUE</code>,
+<code>CacheCoherentUMA = FALSE</code>):</strong> The CPU and iGPU share
+system RAM, but their internal caches are not automatically synchronized
+by hardware. If the CPU writes data to its local L1/L2/L3 caches, the
+iGPU reading from system memory will see stale data unless the CPU
+caches are explicitly bypassed or flushed.</li>
+<li><strong>Cache-Coherent UMA
+(<code>CacheCoherentUMA = TRUE</code>):</strong> The hardware features
+bidirectional hardware snooping or a shared Last-Level Cache (LLC) /
+System-Level Cache (SLC). When the iGPU requests data, the interconnect
+queries or invalidates the CPU caches automatically, ensuring both
+processors see the most recent write without explicit software
+intervention.</li>
+</ul>
+<h3 id="heap-types-and-cpu-cache-properties">Heap Types and CPU Cache
+Properties</h3>
+<p>To maintain performance and prevent data hazards across varying
+hardware, DirectX 12 uses predefined heap types and CPU page properties
+that determine how the CPU cache interacts with shared buffers:</p>
+<ol type="1">
+<li><strong>Upload Heaps (<code>D3D12_HEAP_TYPE_UPLOAD</code>):</strong>
+By default, upload heaps are mapped with Write-Combined (WC) CPU caching
+semantics. Write-combining bypasses the CPU’s L1/L2/L3 data caches,
+buffering writes in internal CPU store buffers before committing them
+directly to main memory. Because data is never placed in standard CPU
+cache lines, the iGPU can read the modified memory directly from RAM
+without requiring manual cache invalidation, even on non-coherent
+systems.</li>
+<li><strong>Readback Heaps
+(<code>D3D12_HEAP_TYPE_READBACK</code>):</strong> These heaps are
+configured for CPU reading and are typically marked as uncached or
+write-back, optimized for the CPU to drain data generated by the
+GPU.</li>
+<li><strong>Custom Heaps (<code>D3D12_HEAP_TYPE_CUSTOM</code>):</strong>
+When <code>CacheCoherentUMA</code> is supported, developers can create
+custom heaps with <code>D3D12_CPU_PAGE_PROPERTY_WRITE_BACK</code>. This
+enables the CPU to cache reads and writes with standard L1–L3 cache
+lines. On coherent hardware, the iGPU can read this data directly from
+the CPU's cache or via snoop cycles, eliminating the performance penalty
+of uncached or write-combined access.</li>
+</ol>
+<h3 id="software-synchronization-and-explicit-api-contracts">Software
+Synchronization and Explicit API Contracts</h3>
+<p>Even with hardware cache coherency, DirectX 12 enforces a
+split-barrier model to govern execution order and memory visibility:</p>
+<ul>
+<li><strong>Memory Mapping (<code>Map</code> /
+<code>Unmap</code>):</strong> DirectX 12 does not require calls to
+<code>Unmap</code> to make CPU writes visible to the GPU. Instead, the
+developer specifies a <code>D3D12_RANGE</code> during mapping and
+unmapping. On non-coherent systems, the driver uses these ranges to
+determine which regions require explicit cache flushing. On
+cache-coherent systems, these ranges serve primarily as hints for
+internal driver tracking.</li>
+<li><strong>Resource Barriers:</strong> While CPU-to-GPU cache
+synchronization is handled by the memory controller, snooping, or
+write-combining buffers, the GPU’s internal caches (such as its L1/L2
+texture and render target caches) are independent. Developers must issue
+<code>ID3D12GraphicsCommandList::ResourceBarrier</code> transitions to
+flush and invalidate internal GPU caches when transitioning resources
+between writable and readable states.</li>
+<li><strong>Execution Synchronization:</strong> Hardware coherency
+guarantees that memory operations are eventually visible, but it does
+not guarantee execution order. Developers must use
+<code>ID3D12Fence</code> objects to ensure the CPU has finished writing
+to a buffer before the iGPU's command queue begins executing workloads
+that depend on that data.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

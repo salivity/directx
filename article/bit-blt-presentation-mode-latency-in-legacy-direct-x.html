@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BitBlt Presentation Mode Latency in Legacy DirectX - directx</title>
+    <meta name="description" content="Legacy Bit-Block Transfer (BitBlt) presentation modes in older DirectX versions introduced significant latency because they relied on copying pixel data to intermediate surfaces managed by the operating system rather than displaying them directly. Under t">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/bit-blt-presentation-mode-latency-in-legacy-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="BitBlt Presentation Mode Latency in Legacy DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/bit-blt-presentation-mode-latency-in-legacy-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Legacy Bit-Block Transfer (BitBlt) presentation modes in older DirectX versions introduced significant latency because they relied on copying pixel data to intermediate surfaces managed by the operating system rather than displaying them directly. Under t" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="bitblt-presentation-mode-latency-in-legacy-directx">BitBlt
+Presentation Mode Latency in Legacy DirectX</h1>
+<p>Legacy Bit-Block Transfer (BitBlt) presentation modes in older
+DirectX versions introduced significant latency because they relied on
+copying pixel data to intermediate surfaces managed by the operating
+system rather than displaying them directly. Under this model,
+particularly within the Desktop Window Manager (DWM) environment
+introduced in Windows Vista and 7, rendered frames were subjected to
+memory-copy overhead, multi-layered frame buffering, and the
+compositor's independent refresh cadence, consistently delaying the
+moment an application's rendered frame reached the physical monitor.</p>
+<h3 id="the-intermediate-memory-copy">The Intermediate Memory Copy</h3>
+<p>In the traditional BitBlt presentation model, an application does not
+present its back buffer directly to the display hardware. Instead, the
+runtime performs a physical memory copy—a bit-block transfer—of the
+rendered pixels from the application's private swap chain buffer into a
+shared redirection surface allocated by the Desktop Window Manager.</p>
+<p>Because this copy operation consumes memory bandwidth and GPU
+processing time, it creates an immediate baseline execution delay. The
+graphics pipeline must ensure that the rendering of the frame has
+completely finished before initiating the copy, preventing optimal
+overlap between application rendering and display preparation.</p>
+<h3 id="dwm-compositing-and-buffer-staging">DWM Compositing and Buffer
+Staging</h3>
+<p>Once the pixel copy completes, the frame does not immediately
+transition to the screen. In a composited desktop environment:</p>
+<ol type="1">
+<li><strong>Redirection Queue:</strong> The application's window content
+sits in the DWM redirection surface.</li>
+<li><strong>Composition Pass:</strong> The DWM wakes up on its own
+schedule (synchronized with the display's VSync interval) to assemble
+the entire desktop scene, combining the redirection surfaces of all
+visible windows, shadows, and desktop elements into a single global
+desktop frame buffer.</li>
+<li><strong>Scanout:</strong> The final composited frame is then handed
+off to the graphics hardware for scanout during the subsequent refresh
+cycle.</li>
+</ol>
+<p>This architectural separation inherently decouples the application's
+render cycle from the display's refresh cycle. Even if an application
+finishes rendering a frame early within a refresh window, the frame must
+wait for the DWM's next composition pass.</p>
+<h3 id="multi-buffer-latency-accumulation">Multi-Buffer Latency
+Accumulation</h3>
+<p>The combination of the application’s own buffering and the DWM's
+presentation pipeline produces an unintentional multi-frame queue. An
+application using double buffering or triple buffering accumulates
+latency at the engine level to maintain high frame throughput. When
+combined with the DWM’s internal front and back composition buffers, the
+pipeline can end up holding two to three frames of latency between user
+input and display output.</p>
+<p>Because BitBlt lacked a direct communication bridge to alert the
+scanout hardware to bypass the compositor, windowed and borderless
+applications had no mechanism to drop stale frames or present directly
+to the screen.</p>
+<h3 id="evolution-beyond-bitblt">Evolution Beyond BitBlt</h3>
+<p>To eliminate this structural latency, Microsoft introduced modern
+Flip presentation models in DirectX 11.1 and DirectX 12 (Flip Sequential
+and Flip Discard). Instead of copying pixel memory through BitBlt into a
+DWM redirection surface, modern flip modes swap surface pointers
+directly. When running in borderless or windowed full-screen modes,
+modern runtimes can utilize "Independent Flip" or direct scanout to
+bypass the DWM composition pass entirely, achieving the reduced latency
+historically reserved only for dedicated Fullscreen Exclusive modes.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PBR Metallic Roughness Lighting in DirectX Engines - directx</title>
+    <meta name="description" content="Modern DirectX rendering engines evaluate surface appearance by translating metallic and roughness texture inputs into physical parameters within a microfacet Bidirectional Reflectance Distribution Function (BRDF). This article explains how DirectX 11 and">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/pbr-metallic-roughness-lighting-in-direct-x-engines">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="PBR Metallic Roughness Lighting in DirectX Engines - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/pbr-metallic-roughness-lighting-in-direct-x-engines" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Modern DirectX rendering engines evaluate surface appearance by translating metallic and roughness texture inputs into physical parameters within a microfacet Bidirectional Reflectance Distribution Function (BRDF). This article explains how DirectX 11 and" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="pbr-metallic-roughness-lighting-in-directx-engines">PBR Metallic
+Roughness Lighting in DirectX Engines</h1>
+<p>Modern DirectX rendering engines evaluate surface appearance by
+translating metallic and roughness texture inputs into physical
+parameters within a microfacet Bidirectional Reflectance Distribution
+Function (BRDF). This article explains how DirectX 11 and 12 shaders
+process scalar metallic and roughness values to balance diffuse and
+specular reflection, calculate microfacet distributions, resolve
+occlusion, and execute real-time direct and image-based indirect
+lighting calculations via High-Level Shader Language (HLSL).</p>
+<h3 id="parameter-interpretation-in-the-pixel-shader">Parameter
+Interpretation in the Pixel Shader</h3>
+<p>DirectX engines sample base color, metallic, and roughness values
+from texture maps in a pixel shader. Before lighting evaluation begins,
+these inputs are transformed into physical baseline parameters:</p>
+<ol type="1">
+<li><p><strong>Fresnel Reflectance at Normal Incidence (<span
+class="math inline">\(F_0\)</span>):</strong> Dielectrics (non-metals)
+have an achromatic reflectance value typically around 4% (<span
+class="math inline">\(0.04\)</span>). Conductors (metals) possess
+colored reflectance derived entirely from their base color, lacking any
+internal diffuse scattering. In HLSL, the initial reflectance is
+computed as:</p>
+<pre class="hlsl"><code>float3 F0 = lerp(float3(0.04, 0.04, 0.04), BaseColor.rgb, Metallic);</code></pre></li>
+<li><p><strong>Perceptual Roughness to Alpha:</strong> Artists author
+roughness on a linear perceptual scale <span class="math inline">\([0,
+1]\)</span>. To achieve a more uniform perceptual distribution of
+highlight size, engines remap roughness to <span
+class="math inline">\(\alpha\)</span> via squaring:</p>
+<pre class="hlsl"><code>float alpha = Roughness * Roughness;
+float alpha2 = alpha * alpha;</code></pre></li>
+<li><p><strong>Diffuse Color Attenuation:</strong> Pure metals do not
+exhibit diffuse reflection because free electrons absorb and immediately
+re-emit light as specular reflection. The diffuse color (<span
+class="math inline">\(C_{diff}\)</span>) is nullified as metallicity
+increases:</p>
+<pre class="hlsl"><code>float3 DiffuseColor = BaseColor.rgb * (1.0 - Metallic);</code></pre></li>
+</ol>
+<hr />
+<h3 id="direct-lighting-evaluation-via-cook-torrance-brdf">Direct
+Lighting Evaluation via Cook-Torrance BRDF</h3>
+<p>Direct lighting calculations calculate the ratio of light reflected
+toward the camera from an incoming light vector (<span
+class="math inline">\(L\)</span>) using the Cook-Torrance model. The
+surface normal is denoted as <span class="math inline">\(N\)</span>, the
+view vector as <span class="math inline">\(V\)</span>, and the
+half-vector as <span class="math inline">\(H = \text{normalize}(L +
+V)\)</span>.</p>
+<p>The total reflected radiance is divided into diffuse (<span
+class="math inline">\(f_d\)</span>) and specular (<span
+class="math inline">\(f_s\)</span>) components:</p>
+<p><span class="math display">\[f(L, V) = (1 - F) \cdot f_d +
+f_s\]</span></p>
+<h4 id="1-specular-term">1. Specular Term</h4>
+<p>The specular component depends directly on roughness and metallic
+properties through three functions:</p>
+<p><span class="math display">\[f_s = \frac{D(H) \cdot G(L, V) \cdot
+F(V, H)}{4(N \cdot L)(N \cdot V)}\]</span></p>
+<ul>
+<li><strong>Normal Distribution Function <span
+class="math inline">\(D(H)\)</span> (Trowbridge-Reitz GGX):</strong>
+Evaluates microfacet orientation relative to <span
+class="math inline">\(H\)</span>. Roughness (<span
+class="math inline">\(\alpha^2\)</span>) determines highlight spread.
+Lower roughness concentrates microfacets along the macroscopic normal,
+producing high, sharp peaks.</li>
+<li><strong>Geometric Shadowing Function <span
+class="math inline">\(G(L, V)\)</span> (Smith-GGX):</strong> Models
+self-shadowing and masking where microfacets occlude each other. Modern
+engines implement height-correlated Smith formulations, parameterized by
+<span class="math inline">\(\alpha\)</span>, which correctly correlate
+the microfacet heights viewed from directions <span
+class="math inline">\(L\)</span> and <span
+class="math inline">\(V\)</span>.</li>
+<li><strong>Fresnel Equation <span class="math inline">\(F(V,
+H)\)</span> (Schlick's Approximation):</strong> Calculates reflection
+intensity based on viewing angle. Metallic inputs control the base <span
+class="math inline">\(F_0\)</span>, while roughness can optionally be
+used to attenuate grazing-angle Fresnel reflections (<span
+class="math inline">\(F_{90}\)</span>).</li>
+</ul>
+<h4 id="2-diffuse-term">2. Diffuse Term</h4>
+<p>Diffuse lighting is typically calculated using the standard
+Lambertian model:</p>
+<p><span class="math display">\[f_d =
+\frac{DiffuseColor}{\pi}\]</span></p>
+<p>Because <span class="math inline">\(DiffuseColor\)</span> was scaled
+by <span class="math inline">\((1 - Metallic)\)</span>, high-metallic
+surfaces reflect near-zero diffuse light. Energy conservation is
+strictly maintained by multiplying <span
+class="math inline">\(f_d\)</span> by <span class="math inline">\((1 -
+F)\)</span>, ensuring that light reflected specularly is not re-emitted
+diffusely.</p>
+<hr />
+<h3 id="indirect-lighting-evaluation-image-based-lighting">Indirect
+Lighting Evaluation (Image-Based Lighting)</h3>
+<p>To evaluate ambient environment maps without expensive real-time
+hemisphere integration, DirectX engines utilize the Split-Sum
+Approximation:</p>
+<ol type="1">
+<li><p><strong>First Sum (Pre-Filtered Environment Map):</strong> The
+environment cubemap is pre-convolved at multiple mip levels, where each
+mip level corresponds to an increased roughness value. Shaders use
+HLSL's <code>SampleLevel</code> function to fetch the radiance
+corresponding directly to the material’s roughness:</p>
+<pre class="hlsl"><code>float3 PrefilteredColor = EnvironmentMap.SampleLevel(LinearSampler, ReflectionVector, Roughness * MaxMipLevel).rgb;</code></pre></li>
+<li><p><strong>Second Sum (Environment BRDF LUT):</strong> The
+integration of the Cook-Torrance specular BRDF across viewing angles and
+roughness values is precomputed into a 2D Look-Up Table (LUT). The
+shader indexes this LUT using <span class="math inline">\(N \cdot
+V\)</span> and the roughness value to yield a scale and bias for <span
+class="math inline">\(F_0\)</span>:</p>
+<pre class="hlsl"><code>float2 EnvBRDF = BrdfLUT.Sample(ClampSampler, float2(NdotV, Roughness)).rg;
+float3 SpecularIBL = PrefilteredColor * (F0 * EnvBRDF.x + EnvBRDF.y);</code></pre></li>
+<li><p><strong>Diffuse IBL:</strong> Diffuse ambient light is extracted
+from spherical harmonics or an irradiance cubemap, modulated by <span
+class="math inline">\(DiffuseColor\)</span> and ambient occlusion, and
+zeroed out on fully metallic surfaces.</p></li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual Buffer Indexing with SV_VertexID in DirectX - directx</title>
+    <meta name="description" content="In DirectX pipelines (Direct3D 11 and Direct3D 12), developers can decouple geometry processing from the fixed-function Input Assembler by utilizing programmable vertex pulling. Instead of declaring rigid input layouts, vertex attributes can be stored in">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/manual-buffer-indexing-with-sv-vertex-id-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Manual Buffer Indexing with SV_VertexID in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/manual-buffer-indexing-with-sv-vertex-id-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX pipelines (Direct3D 11 and Direct3D 12), developers can decouple geometry processing from the fixed-function Input Assembler by utilizing programmable vertex pulling. Instead of declaring rigid input layouts, vertex attributes can be stored in" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="manual-buffer-indexing-with-sv_vertexid-in-directx">Manual
+Buffer Indexing with SV_VertexID in DirectX</h1>
+<p>In DirectX pipelines (Direct3D 11 and Direct3D 12), developers can
+decouple geometry processing from the fixed-function Input Assembler by
+utilizing programmable vertex pulling. Instead of declaring rigid input
+layouts, vertex attributes can be stored in Shader Resource Views (SRVs)
+and fetched manually within the vertex shader using the system-generated
+value <code>SV_VertexID</code>. This approach provides flexible data
+formats, minimizes driver overhead from layout transitions, and
+streamlines GPU data sharing between compute and graphics stages.</p>
+<h3 id="understanding-sv_vertexid">Understanding SV_VertexID</h3>
+<p>The <code>SV_VertexID</code> semantic is an input-assembler-generated
+32-bit unsigned integer (<code>uint</code>) that assigns an index to
+each vertex invocation. For non-indexed draw calls (such as
+<code>Draw</code> or <code>DrawInstanced</code>), the hardware assigns
+an identifier based on the vertex position in the draw sequence, taking
+the base vertex offset into account. For indexed draw calls (such as
+<code>DrawIndexedInstanced</code>), the Input Assembler reads the
+traditional index buffer and passes the resulting index value into the
+vertex shader through <code>SV_VertexID</code>.</p>
+<h3 id="configuring-the-pipeline-for-manual-pulling">Configuring the
+Pipeline for Manual Pulling</h3>
+<p>To pull vertex data manually, the application bypasses standard Input
+Assembler attribute extraction:</p>
+<ol type="1">
+<li><strong>Omit the Input Layout:</strong> Set the input layout to
+<code>nullptr</code> (or omit input layout elements in Direct3D 12
+pipeline state objects).</li>
+<li><strong>Bind Data as SRVs:</strong> Instead of binding vertex
+buffers via <code>IASetVertexBuffers</code> or traditional vertex buffer
+views, bind the buffers as Shader Resource Views (SRVs) accessible to
+the vertex shader stage.</li>
+<li><strong>Execute Empty Draw Calls:</strong> Issue standard draw calls
+(e.g., <code>DrawInstanced(vertexCount, instanceCount, 0, 0)</code>).
+Because the vertex count is non-zero, the rasterizer and scheduler
+dispatch the requested number of shader threads, routing the sequential
+counter to <code>SV_VertexID</code>.</li>
+</ol>
+<h3 id="hlsl-implementation-using-structuredbuffer">HLSL Implementation
+Using StructuredBuffer</h3>
+<p>The simplest way to manually fetch vertex attributes is with a
+<code>StructuredBuffer&lt;T&gt;</code>. When declared in HLSL, the
+shader compiler exposes array-style indexing, allowing
+<code>SV_VertexID</code> to directly subscript the buffer.</p>
+<pre class="hlsl"><code>struct Vertex
+{
+    float3 position;
+    float2 uv;
+};
+
+StructuredBuffer&lt;Vertex&gt; g_VertexBuffer : register(t0);
+cbuffer SceneConstants : register(b0)
+{
+    float4x4 g_WorldViewProj;
+};
+
+struct VSOutput
+{
+    float4 position : SV_Position;
+    float2 uv : TEXCOORD0;
+};
+
+VSOutput VSMain(uint vertexID : SV_VertexID)
+{
+    VSOutput output;
+    
+    // Manually index into the buffer using SV_VertexID
+    Vertex v = g_VertexBuffer[vertexID];
+    
+    output.position = mul(float4(v.position, 1.0f), g_WorldViewProj);
+    output.uv = v.uv;
+    
+    return output;
+}</code></pre>
+<h3 id="hlsl-implementation-using-byteaddressbuffer">HLSL Implementation
+Using ByteAddressBuffer</h3>
+<p>For custom data packing, non-uniform strides, or zero-copy interop
+with compute pipelines, <code>ByteAddressBuffer</code> (raw buffers)
+provides low-level memory addressing. The vertex shader multiplies
+<code>SV_VertexID</code> by the stride of the vertex structure in bytes
+to locate the exact memory offset.</p>
+<pre class="hlsl"><code>ByteAddressBuffer g_RawVertexBuffer : register(t0);
+
+VSOutput VSMain(uint vertexID : SV_VertexID)
+{
+    VSOutput output;
+
+    // Define byte stride: 12 bytes (float3) + 8 bytes (float2) = 20 bytes
+    uint stride = 20;
+    uint byteOffset = vertexID * stride;
+
+    // Load data at calculated byte offsets
+    float3 pos = asfloat(g_RawVertexBuffer.Load3(byteOffset));
+    float2 uv = asfloat(g_RawVertexBuffer.Load2(byteOffset + 12));
+
+    output.position = mul(float4(pos, 1.0f), g_WorldViewProj);
+    output.uv = uv;
+
+    return output;
+}</code></pre>
+<h3 id="architectural-benefits">Architectural Benefits</h3>
+<p>Using <code>SV_VertexID</code> for manual buffer indexing offers
+distinct performance and architectural advantages:</p>
+<ul>
+<li><strong>State Cache Efficiency:</strong> Eliminates pipeline state
+object (PSO) variations caused by disparate vertex input layouts,
+keeping pipeline switches lightweight.</li>
+<li><strong>Dynamic Attribute Fetching:</strong> Allows shaders to
+conditionally branch and avoid fetching unused vertex attributes (e.g.,
+normal or tangent vectors during shadow map passes).</li>
+<li><strong>Direct Compute Integration:</strong> Meshes generated or
+animated via Compute Shaders can be consumed directly by the vertex
+shader without needing conversions or multiple buffer views.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

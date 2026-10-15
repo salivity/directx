@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Display Changes and HDR with DXGI - directx</title>
+    <meta name="description" content="This article provides an overview of how Windows applications use the DirectX Graphics Infrastructure (DXGI) to detect display connectivity changes and query High Dynamic Range (HDR) capabilities. It covers the detection of display topology shifts through">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/monitor-display-changes-and-hdr-with-dxgi">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Monitor Display Changes and HDR with DXGI - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/monitor-display-changes-and-hdr-with-dxgi" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of how Windows applications use the DirectX Graphics Infrastructure (DXGI) to detect display connectivity changes and query High Dynamic Range (HDR) capabilities. It covers the detection of display topology shifts through" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="monitor-display-changes-and-hdr-with-dxgi">Monitor Display
+Changes and HDR with DXGI</h1>
+<p>This article provides an overview of how Windows applications use the
+DirectX Graphics Infrastructure (DXGI) to detect display connectivity
+changes and query High Dynamic Range (HDR) capabilities. It covers the
+detection of display topology shifts through Windows messaging and DXGI
+factory status checks, the retrieval of color space metadata using
+updated DXGI interfaces, and the necessary adjustments required to
+update swap chains for seamless HDR rendering.</p>
+<h3 id="detecting-display-connectivity-and-topology-changes">Detecting
+Display Connectivity and Topology Changes</h3>
+<p>DXGI does not natively provide a standalone, push-based event system
+specifically for display hot-plugging. Instead, applications monitor
+display connectivity changes by combining the Win32 window messaging
+loop with DXGI factory validation.</p>
+<ol type="1">
+<li><strong>Listen for System Notifications:</strong> The application's
+window procedure should intercept the <code>WM_DISPLAYCHANGE</code> and
+<code>WM_SETTINGCHANGE</code> messages. The operating system broadcasts
+<code>WM_DISPLAYCHANGE</code> whenever the display resolution, color
+depth, or multi-monitor topology changes.</li>
+<li><strong>Verify DXGI Factory State:</strong> An existing
+<code>IDXGIFactory</code> instance can become stale after a display
+event or GPU driver restart. Calling
+<code>IDXGIFactory::IsCurrent()</code> returns <code>FALSE</code> if the
+underlying display topology has changed.</li>
+<li><strong>Re-enumerate Outputs:</strong> If <code>IsCurrent()</code>
+returns <code>FALSE</code> or a <code>WM_DISPLAYCHANGE</code> message is
+received, release the outdated <code>IDXGIFactory</code> instance and
+create a new one using <code>CreateDXGIFactory2</code>. Next, iterate
+through adapters using <code>IDXGIFactory::EnumAdapters</code> and their
+corresponding displays using <code>IDXGIAdapter::EnumOutputs</code> to
+rebuild the list of active display outputs.</li>
+</ol>
+<h3 id="querying-hdr-capabilities">Querying HDR Capabilities</h3>
+<p>HDR metadata and capabilities are associated with specific display
+outputs rather than the GPU adapter as a whole. To inspect HDR
+characteristics, the application queries modern DXGI output
+interfaces.</p>
+<ol type="1">
+<li><strong>Obtain <code>IDXGIOutput6</code>:</strong> Acquire an
+<code>IDXGIOutput</code> interface for the target display (either from
+adapter enumeration or via
+<code>IDXGISwapChain::GetContainingOutput</code>) and call
+<code>QueryInterface</code> to retrieve an <code>IDXGIOutput6</code>
+pointer.</li>
+<li><strong>Retrieve <code>DXGI_OUTPUT_DESC1</code>:</strong> Call
+<code>IDXGIOutput6::GetDesc1</code> to fill the
+<code>DXGI_OUTPUT_DESC1</code> structure. This structure extends legacy
+display information with vital colorimetry and luminance data:
+<ul>
+<li><strong>ColorSpace:</strong> A <code>DXGI_COLOR_SPACE_TYPE</code>
+value indicating the current color space of the display. If the display
+is in HDR mode, this will typically report
+<code>DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020</code> (HDR10).</li>
+<li><strong>Luminance Parameters:</strong> <code>MinLuminance</code>,
+<code>MaxLuminance</code>, and <code>MaxFullFrameLuminance</code> define
+the minimum, peak, and sustained nit values supported by the panel.</li>
+<li><strong>Gamut Coordinates:</strong> <code>RedPrimary</code>,
+<code>GreenPrimary</code>, <code>BluePrimary</code>, and
+<code>WhitePoint</code> define the chromaticity coordinates for tone
+mapping.</li>
+</ul></li>
+<li><strong>Evaluate HDR Active State:</strong> A monitor may physically
+support HDR, but the user may have disabled Windows HD Color in system
+settings. HDR is actively enabled on the target display only when
+<code>DXGI_OUTPUT_DESC1::ColorSpace</code> matches
+<code>DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020</code> and
+<code>MaxLuminance</code> exceeds standard SDR thresholds (typically 80
+to 100 nits).</li>
+</ol>
+<h3 id="updating-the-pipeline-and-swap-chain">Updating the Pipeline and
+Swap Chain</h3>
+<p>When a display change or HDR toggle is detected, the rendering
+pipeline must dynamically adapt to prevent visual clipping or incorrect
+color mapping.</p>
+<ol type="1">
+<li><strong>Select the Back Buffer Format:</strong>
+<ul>
+<li>For <strong>HDR10</strong>, configure the swap chain with
+<code>DXGI_FORMAT_R10G10B10A2_UNORM</code>.</li>
+<li>For <strong>scRGB</strong>, configure the swap chain with
+<code>DXGI_FORMAT_R16G16B16A16_FLOAT</code>, which allows rendering
+values outside the standard [0.0, 1.0] range into linear space.</li>
+</ul></li>
+<li><strong>Apply the Color Space:</strong> Call
+<code>IDXGISwapChain3::SetColorSpace1</code> on the swap chain to match
+the desired color output:
+<ul>
+<li>Use <code>DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020</code> for
+HDR10/PQ.</li>
+<li>Use <code>DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709</code> for scRGB
+linear.</li>
+<li>Revert to <code>DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709</code> if
+the display operates in standard SDR.</li>
+</ul></li>
+<li><strong>Handle Window Repositioning:</strong> When a window
+transitions across monitors in a multi-display setup, listen for
+<code>WM_MOVE</code>. Retrieve the new containing output via
+<code>IDXGISwapChain::GetContainingOutput</code>, re-run the
+<code>IDXGIOutput6::GetDesc1</code> query, and invoke
+<code>SetColorSpace1</code> to match the configuration of the current
+target monitor.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReSTIR Integration in DirectX Raytracing (DXR) - directx</title>
+    <meta name="description" content="Reservoir-based Spatio-Temporal Importance Resampling (ReSTIR) dramatically improves real-time ray tracing performance by enabling the sampling of millions of dynamic lights with minimal noise and overhead. Integrating ReSTIR into DirectX Raytracing (DXR)">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/re-stir-integration-in-direct-x-raytracing-dxr">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="ReSTIR Integration in DirectX Raytracing (DXR) - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/re-stir-integration-in-direct-x-raytracing-dxr" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Reservoir-based Spatio-Temporal Importance Resampling (ReSTIR) dramatically improves real-time ray tracing performance by enabling the sampling of millions of dynamic lights with minimal noise and overhead. Integrating ReSTIR into DirectX Raytracing (DXR)" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="restir-integration-in-directx-raytracing-dxr">ReSTIR Integration
+in DirectX Raytracing (DXR)</h1>
+<p>Reservoir-based Spatio-Temporal Importance Resampling (ReSTIR)
+dramatically improves real-time ray tracing performance by enabling the
+sampling of millions of dynamic lights with minimal noise and overhead.
+Integrating ReSTIR into DirectX Raytracing (DXR) involves coupling
+compute-driven importance resampling passes with hardware-accelerated
+ray tracing to resolve visibility. By maintaining compact data
+structures called reservoirs across space and time, the pipeline limits
+expensive DXR shadow ray evaluations to only the most promising light
+candidates, making path tracing and complex direct illumination
+practical in modern real-time rendering.</p>
+<h3 id="the-reservoir-data-structure-and-buffer-allocation">The
+Reservoir Data Structure and Buffer Allocation</h3>
+<p>At the core of ReSTIR is the reservoir, a lightweight structure that
+tracks candidate samples using streaming importance sampling (RIS). In
+DirectX 12, each reservoir is represented as a structured data element
+containing:</p>
+<ul>
+<li>The selected sample (such as a light index or radiance sample).</li>
+<li>The sum of candidate weights (<span
+class="math inline">\(w_{sum}\)</span>).</li>
+<li>The number of processed candidates (<span
+class="math inline">\(M\)</span>).</li>
+<li>The final normalization weight (<span
+class="math inline">\(W\)</span>).</li>
+</ul>
+<p>These structures are stored in GPU memory using 2D or structured
+<code>RWStructuredBuffer</code> (Unordered Access Views / Shader
+Resource Views). Because temporal reuse requires reading the previous
+frame’s results and writing the current frame’s state, developers
+implement ping-pong double buffering for the reservoir data alongside
+standard G-buffer data (world normals, linear depth, and motion
+vectors).</p>
+<h3 id="the-restir-execution-pipeline-in-dxr">The ReSTIR Execution
+Pipeline in DXR</h3>
+<p>A typical ReSTIR direct illumination (ReSTIR DI) integration divides
+the frame into distinct compute and raytracing stages:</p>
+<ol type="1">
+<li><p><strong>Initial Candidate Generation (Compute or RayGen
+Shader):</strong> The GPU generates an initial set of light candidates
+per pixel. This is typically implemented in a standard compute shader or
+a DXR Ray Generation shader. Light sources are sampled proportionally to
+their unshadowed contribution using light grids or bounding volume
+hierarchies (BVHs). A reservoir is filled for each pixel without
+performing visibility tests.</p></li>
+<li><p><strong>Temporal Resampling:</strong> A compute shader reprojects
+the current pixel to the previous frame using motion vectors. If the
+history sample passes geometric validation tests (depth and normal
+thresholds), the previous frame's reservoir is combined with the current
+reservoir. This combines history weights without tracing rays, rapidly
+boosting sample counts (<span
+class="math inline">\(M\)</span>).</p></li>
+<li><p><strong>Spatial Resampling:</strong> To further reduce variance,
+neighboring screen-space reservoirs are gathered and combined. A compute
+shader iterates over a random set of neighboring pixels, checking depth
+and normal similarity to prevent light leaking across geometry
+boundaries. Reservoirs from valid neighbors are merged
+mathematically.</p></li>
+<li><p><strong>Visibility Determination using DXR:</strong> Evaluating
+visibility is the most expensive operation in ray tracing. The key
+advantage of ReSTIR is that visibility (shadow rays) only needs to be
+evaluated for the final selected light sample after resampling, rather
+than for every initial candidate.</p>
+<p>Under DXR, visibility is resolved in one of two ways:</p>
+<ul>
+<li><strong>DXR 1.0 (<code>DispatchRays</code>):</strong> A Ray
+Generation shader calls <code>TraceRay()</code> with a simple payload
+and ray flags like
+<code>RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER</code>
+against the Top-Level Acceleration Structure (TLAS).</li>
+<li><strong>DXR 1.1 (Inline Raytracing via
+<code>RayQuery</code>):</strong> Modern implementations frequently
+utilize <code>RayQuery</code> directly within compute shaders. This
+avoids the overhead of separate Ray Generation pipelines and shader
+table dispatches, allowing candidate generation, spatial merging, and
+shadow testing to occur within a unified compute pass.</li>
+</ul></li>
+<li><p><strong>Final Shading:</strong> Pixels that pass the visibility
+check calculate the final direct lighting contribution by multiplying
+the light's evaluated radiance, the material's Bidirectional Reflectance
+Distribution Function (BRDF), and the reservoir’s final weight (<span
+class="math inline">\(W\)</span>).</p></li>
+</ol>
+<h3 id="performance-considerations">Performance Considerations</h3>
+<p>Integrating ReSTIR into DXR requires careful management of ray
+tracing divergence and register pressure. Inline raytracing
+(<code>RayQuery</code>) minimizes pipeline state object (PSO) switching
+overhead and simplifies debugging in tools like PIX. Additionally,
+limiting spatial reuse sample counts and applying temporal clamping
+prevents historical bias, fireflies, and ghosting artifacts during rapid
+camera or light movements.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

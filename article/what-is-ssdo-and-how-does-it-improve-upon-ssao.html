@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What Is SSDO and How Does It Improve Upon SSAO? - directx</title>
+    <meta name="description" content="Screen-Space Directional Occlusion (SSDO) is an advanced post-processing technique used in real-time computer graphics to approximate realistic ambient shadows and indirect lighting by accounting for the direction of incoming light. While standard Screen-">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/what-is-ssdo-and-how-does-it-improve-upon-ssao">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="What Is SSDO and How Does It Improve Upon SSAO? - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/what-is-ssdo-and-how-does-it-improve-upon-ssao" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Screen-Space Directional Occlusion (SSDO) is an advanced post-processing technique used in real-time computer graphics to approximate realistic ambient shadows and indirect lighting by accounting for the direction of incoming light. While standard Screen-" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="what-is-ssdo-and-how-does-it-improve-upon-ssao">What Is SSDO and
+How Does It Improve Upon SSAO?</h1>
+<p>Screen-Space Directional Occlusion (SSDO) is an advanced
+post-processing technique used in real-time computer graphics to
+approximate realistic ambient shadows and indirect lighting by
+accounting for the direction of incoming light. While standard
+Screen-Space Ambient Occlusion (SSAO) uniformly darkens crevices and
+contact points based solely on local surface geometry, SSDO evaluates
+the directional visibility of incoming light and can even simulate
+single-bounce indirect color bleeding. This article explains the core
+mechanics of SSDO, contrasts it with traditional SSAO, and examines how
+it enhances visual fidelity within modern DirectX pipelines.</p>
+<h3 id="understanding-the-limitations-of-ssao">Understanding the
+Limitations of SSAO</h3>
+<p>Screen-Space Ambient Occlusion computes occlusion values by sampling
+the depth buffer around a given pixel to estimate how much of the
+surrounding hemisphere is blocked by nearby geometry. If many sample
+points fall behind the local geometry, the shader flags that area as
+occluded and applies a dark shading factor.</p>
+<p>While computationally efficient, SSAO has significant
+limitations:</p>
+<ul>
+<li><strong>Non-Directional Attenuation:</strong> SSAO assumes ambient
+light arrives uniformly from all directions. It darkens crevices
+equally, even when a direct, bright light source shines straight into
+that crevice, resulting in unnatural dark halos under direct
+illumination.</li>
+<li><strong>Absence of Indirect Light:</strong> SSAO only subtracts
+light; it cannot add light or transfer reflected color from one surface
+to another.</li>
+</ul>
+<h3 id="how-ssdo-operates">How SSDO Operates</h3>
+<p>SSDO resolves these limitations by integrating directional lighting
+data into the screen-space sampling process. Instead of treating ambient
+lighting as an omnidirectional constant, SSDO tests whether samples
+along the surface normal block specific light directions.</p>
+<p>When rendering with SSDO, the algorithm separates lighting into two
+main evaluations:</p>
+<ol type="1">
+<li><strong>Directional Occlusion:</strong> The shader traces sample
+rays in a hemisphere oriented along the surface normal. It compares the
+depth of nearby pixels to determine which paths are blocked relative to
+explicit light directions (such as directional, point, or environment
+lights). If geometry blocks a path between a surface point and a light,
+direct illumination along that path is attenuated.</li>
+<li><strong>Indirect Bounces (Color Bleeding):</strong> When a sample
+ray hits a nearby occluder, SSDO does not merely mark that ray as
+occluded. Instead, it reads the color and normal of the occluding pixel
+from the screen-space buffers and calculates how much light reflects
+from that occluder back onto the primary surface. This adds an
+approximation of single-bounce diffuse interreflection.</li>
+</ol>
+<h3 id="core-improvements-of-ssdo-over-ssao">Core Improvements of SSDO
+over SSAO</h3>
+<ul>
+<li><strong>Physically Grounded Contact Shadows:</strong> SSDO
+eliminates the characteristic "muddy" or halo-like appearance of SSAO.
+If a light source directly illuminates a corner, SSDO correctly
+recognizes that the incoming light ray is not occluded, preventing
+incorrect darkening.</li>
+<li><strong>Micro-Shadowing for Direct Lights:</strong> In DirectX
+pipelines, standard shadow maps often lack the resolution to capture
+fine-grained contact shadows near small geometry crevices. SSDO
+supplements shadow maps by producing precise micro-shadows directly in
+screen space based on geometric detail present in the normal and depth
+buffers.</li>
+<li><strong>Color Bleeding:</strong> By leveraging the screen's
+diffuse/albedo buffer, SSDO transfers color between adjacent
+surfaces—such as a brightly colored wall reflecting a subtle tint onto a
+neighboring floor—without requiring expensive offline global
+illumination techniques or complex voxel setups.</li>
+</ul>
+<h3 id="implementing-ssdo-in-directx">Implementing SSDO in DirectX</h3>
+<p>In DirectX (such as Direct3D 11 or 12), SSDO is implemented as a
+screen-space post-process pass using Compute Shaders or Pixel Shaders.
+It requires access to several standard G-Buffer textures:</p>
+<ul>
+<li><strong>Depth/Linear Depth Buffer:</strong> To reconstruct world- or
+view-space positions.</li>
+<li><strong>Normal Buffer:</strong> To align sample hemispheres to
+surface orientation.</li>
+<li><strong>Radiance/Color Buffer:</strong> To extract the color of
+occluders for indirect light bounces.</li>
+</ul>
+<p>A typical DirectX implementation samples points within a hemisphere
+around each pixel using a precomputed sampling kernel, rotated with a
+noise texture to break up banding artifacts. In HLSL, the shader checks
+whether sample points fall inside or outside visible geometry and
+accumulates incoming light and occlusion vectors. Because screen-space
+techniques introduce high-frequency noise from low sample counts, SSDO
+is followed by a cross-bilateral or edge-aware spatial blur pass in
+DirectX to smooth the results while preserving depth and normal
+edges.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Global Barriers vs Resource Transitions - directx</title>
+    <meta name="description" content="DirectX 12 Enhanced Barriers modernize synchronization by replacing legacy resource transitions with explicit, fine-grained controls, including global barriers. While traditional resource transitions tightly couple execution synchronization, cache managem">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-global-barriers-vs-resource-transitions">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Global Barriers vs Resource Transitions - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-global-barriers-vs-resource-transitions" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 Enhanced Barriers modernize synchronization by replacing legacy resource transitions with explicit, fine-grained controls, including global barriers. While traditional resource transitions tightly couple execution synchronization, cache managem" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-global-barriers-vs-resource-transitions">DirectX 12
+Global Barriers vs Resource Transitions</h1>
+<p>DirectX 12 Enhanced Barriers modernize synchronization by replacing
+legacy resource transitions with explicit, fine-grained controls,
+including global barriers. While traditional resource transitions
+tightly couple execution synchronization, cache management, and memory
+layout modifications on a per-resource basis, global barrier
+synchronization decouples these operations, allowing developers to
+synchronize execution stages and memory access across all GPU resources
+simultaneously without altering physical layouts.</p>
+<h2 id="the-legacy-model-individual-resource-transitions">The Legacy
+Model: Individual Resource Transitions</h2>
+<p>In the legacy DirectX 12 synchronization model, developers control
+synchronization primarily through
+<code>D3D12_RESOURCE_BARRIER_TYPE_TRANSITION</code>. This approach
+requires assigning specific resources or subresources from a defined
+<code>D3D12_RESOURCE_STATES</code> state before an operation to a state
+after.</p>
+<ul>
+<li><strong>Coupled Responsibilities:</strong> An individual transition
+bundles three operations into a single command: waiting for previous GPU
+pipeline stages to complete (execution barrier), flushing and
+invalidating caches (memory barrier), and altering the underlying data
+layout if necessary (layout transition).</li>
+<li><strong>Per-Resource Overhead:</strong> If multiple textures or
+buffers require cache flushing or pipeline synchronization, each must be
+individually declared. The GPU driver must iterate through these arrays
+of barriers, leading to increased CPU-side validation overhead and
+potential GPU stalls caused by conservative, redundant cache
+flushes.</li>
+</ul>
+<h2 id="the-updated-model-global-barrier-synchronization">The Updated
+Model: Global Barrier Synchronization</h2>
+<p>The Enhanced Barriers framework introduces
+<code>D3D12_GLOBAL_BARRIER</code>, offering a broader, unified mechanism
+to coordinate work between pipeline stages and memory caches without
+specifying individual resources.</p>
+<ul>
+<li><strong>Scope and Granularity:</strong> A global barrier applies to
+all memory access within the command stream. Instead of issuing dozens
+of individual barriers for multiple resources, a single global barrier
+synchronizes the pipeline and flushes appropriate caches across the
+entire device.</li>
+<li><strong>Separation of Concerns:</strong> Global barriers separate
+execution and memory synchronization from layout transitions:
+<ul>
+<li><strong>Synchronization Stages (<code>SyncBefore</code> /
+<code>SyncAfter</code>):</strong> Explicitly states which pipeline
+stages must complete before subsequent stages begin (e.g., waiting for
+all compute shader writes to finish before starting a pixel
+shader).</li>
+<li><strong>Access Types (<code>AccessBefore</code> /
+<code>AccessAfter</code>):</strong> Explicitly dictates what cache
+operations must occur, such as making unordered access writes visible to
+shader read operations.</li>
+</ul></li>
+<li><strong>No Layout Modification:</strong> Unlike resource
+transitions, global barriers cannot change the layout of a texture (for
+example, transitioning from a render target to a shader-readable
+format). Layout transitions remain exclusively within dedicated texture
+barriers (<code>D3D12_TEXTURE_BARRIER</code>).</li>
+</ul>
+<h2 id="key-differences">Key Differences</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Feature</th>
+<th style="text-align: left;">Legacy Resource Transitions</th>
+<th style="text-align: left;">Global Barriers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Target Scope</strong></td>
+<td style="text-align: left;">Individual resource or subresource</td>
+<td style="text-align: left;">Entire GPU memory and pipeline</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Layout Changes</strong></td>
+<td style="text-align: left;">Combined with execution and memory
+sync</td>
+<td style="text-align: left;">Not supported; execution and memory sync
+only</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>State Tracking</strong></td>
+<td style="text-align: left;">Implicit; manages transitions between
+rigid states</td>
+<td style="text-align: left;">Explicit; controls specific sync stages
+and cache visibilities</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Batch Efficiency</strong></td>
+<td style="text-align: left;">Declaring multiple resources scales CPU
+and driver work</td>
+<td style="text-align: left;">Synchronizes all resources in a single,
+high-efficiency call</td>
+</tr>
+</tbody>
+</table>
+<h2 id="when-to-use-each-approach">When to Use Each Approach</h2>
+<p>Global barrier synchronization is ideal for compute-to-compute or
+general resource dependencies where data layouts do not change, such as
+when numerous unordered access views (UAVs) written by one dispatch are
+immediately read by another. Instead of declaring a UAV barrier or
+transition for every buffer and texture, a single global barrier handles
+execution synchronization and cache visibility simultaneously.</p>
+<p>Individual resource transitions—now handled via explicit texture
+barriers—are reserved strictly for cases where a resource must
+physically reconfigure its memory format or tiling arrangement to be
+consumed by different hardware units, such as transitioning a
+depth-stencil buffer to a readable texture.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

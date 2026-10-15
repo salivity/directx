@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Enhanced Barriers for Texture Tracking - directx</title>
+    <meta name="description" content="DirectX 12 Enhanced Barriers provide a modern, fine-grained model for managing GPU synchronization, memory visibility, and resource layout transitions. By splitting monolithic resource states into distinct synchronization scopes, access flags, and layout">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-enhanced-barriers-for-texture-tracking">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Enhanced Barriers for Texture Tracking - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-enhanced-barriers-for-texture-tracking" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 Enhanced Barriers provide a modern, fine-grained model for managing GPU synchronization, memory visibility, and resource layout transitions. By splitting monolithic resource states into distinct synchronization scopes, access flags, and layout" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-enhanced-barriers-for-texture-tracking">DirectX 12
+Enhanced Barriers for Texture Tracking</h1>
+<p>DirectX 12 Enhanced Barriers provide a modern, fine-grained model for
+managing GPU synchronization, memory visibility, and resource layout
+transitions. By splitting monolithic resource states into distinct
+synchronization scopes, access flags, and layout declarations, enhanced
+barriers drastically reduce the complexity of tracking texture
+subresources across complex rendering pipelines. This article explains
+how enhanced barriers resolve the shortcomings of legacy barriers and
+streamline subresource state management.</p>
+<h2 id="the-limitations-of-legacy-resource-barriers">The Limitations of
+Legacy Resource Barriers</h2>
+<p>Under the original DirectX 12 barrier model, developers relied on
+<code>D3D12_RESOURCE_BARRIER</code> using coarse resource states (such
+as <code>D3D12_RESOURCE_STATE_RENDER_TARGET</code> or
+<code>D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE</code>). These legacy
+states conflated three separate concepts:</p>
+<ul>
+<li><strong>Execution Synchronization:</strong> When the GPU must finish
+earlier work before starting subsequent work.</li>
+<li><strong>Memory Visibility:</strong> Ensuring written caches are
+flushed and invalidated for the next reader.</li>
+<li><strong>Physical Layout:</strong> The tiling, compression, or format
+arrangement of the texture in memory.</li>
+</ul>
+<p>Managing textures with multiple mip levels, array slices, or plane
+slices exacerbated this issue. Developers had to track states on a
+per-subresource basis. If a single mip level transitioned while others
+remained untouched, the resource entered a fragmented state. Tracking
+whether subresources were homogeneous or divergent required significant
+CPU overhead, complex bitmasks, and custom tracking layers to avoid
+driver validation errors and runtime performance penalties.</p>
+<h2 id="explicit-separation-sync-access-and-layout">Explicit Separation:
+Sync, Access, and Layout</h2>
+<p>Enhanced barriers eliminate state ambiguity by replacing
+<code>D3D12_RESOURCE_BARRIER</code> with dedicated barrier types,
+primarily <code>D3D12_TEXTURE_BARRIER</code>. This structure explicitly
+divides synchronization into three distinct phases:</p>
+<ol type="1">
+<li><strong>Synchronization (<code>SyncBefore</code> /
+<code>SyncAfter</code>):</strong> Specifies the exact pipeline stages
+(e.g., compute, pixel shader, render target) that must complete before
+subsequent stages begin.</li>
+<li><strong>Access (<code>AccessBefore</code> /
+<code>AccessAfter</code>):</strong> Declares memory access intent (e.g.,
+read, write, unordered access), dictating cache flushes and
+invalidations only when memory is touched.</li>
+<li><strong>Layout (<code>LayoutBefore</code> /
+<code>LayoutAfter</code>):</strong> Manages the physical layout and
+decompression of the texture (e.g.,
+<code>D3D12_BARRIER_LAYOUT_SHADER_RESOURCE</code>,
+<code>D3D12_BARRIER_LAYOUT_RENDER_TARGET</code>).</li>
+</ol>
+<p>By separating layout from access and sync, developers do not need to
+issue layout transitions for read-to-read operations across different
+pipeline stages. Layout transitions occur strictly when the physical
+arrangement of the texture data must change.</p>
+<h2 id="native-subresource-ranges">Native Subresource Ranges</h2>
+<p>One of the largest improvements in <code>D3D12_TEXTURE_BARRIER</code>
+is the introduction of <code>D3D12_BARRIER_SUBRESOURCE_RANGE</code>.</p>
+<p>In the legacy API, transitioning a subset of subresources required
+emitting an individual barrier struct for each specific subresource
+index unless the transition applied to the entire texture
+(<code>D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES</code>).</p>
+<p>Enhanced barriers allow developers to define contiguous ranges of
+subresources using:</p>
+<ul>
+<li><code>IndexOrFirstMipLevel</code> and <code>NumMipLevels</code></li>
+<li><code>FirstArraySlice</code> and <code>NumArraySlices</code></li>
+<li><code>FirstPlane</code> and <code>NumPlanes</code></li>
+</ul>
+<p>This range-based definition means a single barrier can transition a
+specific mip range or a cubemap face array slice directly. It eliminates
+loop-based barrier emission and substantially reduces the command buffer
+footprint.</p>
+<h2 id="simplified-subresource-tracking">Simplified Subresource
+Tracking</h2>
+<p>Enhanced barriers simplify engine-side tracking architectures in
+several concrete ways:</p>
+<ul>
+<li><strong>Elimination of Phantom Transitions:</strong> In the legacy
+model, transitioning a texture from read access in the compute pipeline
+to read access in the pixel pipeline often required emitting transitions
+to satisfy debug layers, even if the underlying layout remained
+unchanged. Enhanced barriers allow developers to adjust synchronization
+and access flags without altering the layout.</li>
+<li><strong>Safe Resource Initialization:</strong> Uninitialized or
+newly allocated textures can be transitioned from
+<code>D3D12_BARRIER_LAYOUT_UNDEFINED</code>. This explicit state signals
+to the driver that previous contents can be discarded, enabling fast
+compression clears without tracking initial layout history.</li>
+<li><strong>Reduced State Fragmentation:</strong> Because layout
+transitions are strictly tied to memory formatting, engines only track
+the actual physical layout of subresources rather than a mix of pipeline
+stages and layouts. This significantly simplifies state machine
+implementations in modern render graphs.</li>
+</ul>
+<p>By addressing synchronization, memory visibility, and layouts as
+independent concerns and providing native support for subresource
+ranges, enhanced barriers offer a more predictable, performant, and
+maintainable synchronization model in DirectX 12.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

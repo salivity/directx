@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectX 12 Split Barriers Hide GPU Latency - directx</title>
+    <meta name="description" content="DirectX 12 split barriers optimize GPU pipeline performance by decoupling the initiation and completion of resource state transitions. Unlike traditional instant barriers that force the GPU to stall until a transition completes, split barriers divide the">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-x-12-split-barriers-hide-gpu-latency">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectX 12 Split Barriers Hide GPU Latency - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-x-12-split-barriers-hide-gpu-latency" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 split barriers optimize GPU pipeline performance by decoupling the initiation and completion of resource state transitions. Unlike traditional instant barriers that force the GPU to stall until a transition completes, split barriers divide the" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directx-12-split-barriers-hide-gpu-latency">How DirectX 12
+Split Barriers Hide GPU Latency</h1>
+<p>DirectX 12 split barriers optimize GPU pipeline performance by
+decoupling the initiation and completion of resource state transitions.
+Unlike traditional instant barriers that force the GPU to stall until a
+transition completes, split barriers divide the operation into two
+distinct phases using dedicated flags. This article explains the
+mechanics of split barriers, how they decouple resource availability,
+and how developers can interleave independent workloads between barrier
+phases to completely absorb transition latency and prevent pipeline
+bubbles.</p>
+<h3 id="the-problem-with-traditional-resource-barriers">The Problem with
+Traditional Resource Barriers</h3>
+<p>In modern graphics APIs like DirectX 12, resources regularly change
+states—for example, transitioning a texture from a render target
+(<code>D3D12_RESOURCE_STATE_RENDER_TARGET</code>) to a shader resource
+view (<code>D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE</code>). When
+using a standard barrier, the transition is instantaneous from the
+command stream's perspective.</p>
+<p>Under the hood, however, this transition requires physical hardware
+actions:</p>
+<ul>
+<li>Flushing and invalidating L1 and L2 caches.</li>
+<li>Decompressing compressed color, depth, or stencil data.</li>
+<li>Waiting for prior pipeline stages to drain completely.</li>
+</ul>
+<p>When these operations execute within a single barrier command, the
+GPU frequently experiences a pipeline bubble. Execution units (ALUs) sit
+idle while memory controllers and fixed-function hardware perform
+synchronization and cache flushing, resulting in measurable performance
+overhead.</p>
+<h3 id="how-split-barriers-function">How Split Barriers Function</h3>
+<p>Split barriers address this latency by splitting a transition into
+two separate calls:</p>
+<ol type="1">
+<li><strong>The Begin Phase
+(<code>D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY</code>):</strong> This
+signals to the driver and GPU that the application is finished using the
+resource in its "before" state. The GPU can immediately start
+asynchronous background tasks, such as draining read/write queues,
+resolving metadata, or invalidating relevant caches.</li>
+<li><strong>The End Phase
+(<code>D3D12_RESOURCE_BARRIER_FLAG_END_ONLY</code>):</strong> This
+informs the GPU that the resource is now required in its "after" state.
+The pipeline will only halt at this point if the background operations
+initiated by the begin barrier have not yet concluded.</li>
+</ol>
+<p>During the execution window between the begin and end calls, the
+resource is in an indeterminate transitional state. It cannot be read or
+written by the GPU during this interval, but the pipeline remains
+entirely free to execute unrelated work.</p>
+<h3 id="hiding-latency-with-independent-workloads">Hiding Latency with
+Independent Workloads</h3>
+<p>The primary advantage of split barriers is that they turn idle
+waiting time into productive compute cycles. To effectively hide
+transition latency:</p>
+<ol type="1">
+<li><strong>Issue the Begin Barrier Early:</strong> As soon as a pass
+finishes writing to a resource (e.g., generating a shadow map or
+downsampling a bloom buffer), emit the <code>BEGIN_ONLY</code>
+barrier.</li>
+<li><strong>Schedule Independent Work:</strong> Submit draw calls,
+compute dispatches, or state setup commands that do not depend on the
+transitioning resource. For instance, while a shadow map resolves its
+depth metadata, the GPU can run compute dispatches for particle updates
+or execute unrelated post-processing passes.</li>
+<li><strong>Issue the End Barrier Late:</strong> Immediately before the
+command that actually binds the resource in its new state (e.g., reading
+the shadow map in the main forward-lighting pass), submit the
+<code>END_ONLY</code> barrier.</li>
+</ol>
+<p>If the independent work takes longer to execute than the hardware
+transition operations, the latency of the state change is effectively
+zero from the perspective of the application frame time. The GPU reaches
+the <code>END_ONLY</code> barrier, detects that all decompression, cache
+syncs, and memory updates are complete, and executes the dependent pass
+without stalling.</p>
+<h3 id="implementation-considerations">Implementation
+Considerations</h3>
+<ul>
+<li><strong>Workload Balance:</strong> The effectiveness of split
+barriers depends directly on having sufficient independent work to fill
+the gap. If the end barrier is placed too close to the begin barrier,
+the GPU will still stall waiting for completion.</li>
+<li><strong>Enhanced Barriers:</strong> In newer iterations of the
+DirectX 12 Agility SDK, Enhanced Barriers formalize this concept even
+further via sync and access scopes, allowing fine-grained control over
+specific cache lines and pipeline stages rather than coarse legacy
+states. Regardless of the API variation used, the fundamental
+architectural principle remains the same: starting synchronization work
+as early as possible to completely overlap memory latency with
+independent ALU computation.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

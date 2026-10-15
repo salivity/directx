@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectX VRS Reduces Shading in Low-Contrast Areas - directx</title>
+    <meta name="description" content="Variable Rate Shading (VRS) under DirectX 12 allows game engines to decouple rendering resolution from shading frequency, allocating computational power dynamically across a frame. In low-contrast scenes or image regions where the human visual system is l">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-x-vrs-reduces-shading-in-low-contrast-areas">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectX VRS Reduces Shading in Low-Contrast Areas - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-x-vrs-reduces-shading-in-low-contrast-areas" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Variable Rate Shading (VRS) under DirectX 12 allows game engines to decouple rendering resolution from shading frequency, allocating computational power dynamically across a frame. In low-contrast scenes or image regions where the human visual system is l" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directx-vrs-reduces-shading-in-low-contrast-areas">How
+DirectX VRS Reduces Shading in Low-Contrast Areas</h1>
+<p>Variable Rate Shading (VRS) under DirectX 12 allows game engines to
+decouple rendering resolution from shading frequency, allocating
+computational power dynamically across a frame. In low-contrast scenes
+or image regions where the human visual system is less sensitive to fine
+detail, DirectX VRS Tier 2 utilizes screen-space shading rate images to
+aggressively downscale pixel shader execution rates. By analyzing local
+luminance variance in a lightweight pre-pass, the rendering pipeline
+dynamically assigns coarser pixel grids—such as 2x2 or 4x4
+blocks—drastically reducing GPU pixel-processing overhead while
+preserving perceived image fidelity.</p>
+<h3 id="the-contrast-detection-pass">The Contrast Detection Pass</h3>
+<p>DirectX does not automatically detect contrast on its own; instead,
+the application implements a compute shader pass prior to the primary
+geometry or lighting passes to evaluate visual contrast. This process
+relies on visual perception principles (such as Weber’s Law), which
+dictate that luminance variations in low-contrast or uniformly colored
+regions are difficult for the human eye to perceive.</p>
+<ol type="1">
+<li><strong>Luminance Extraction:</strong> The compute shader samples
+the prior frame's render target, a motion-compensated history buffer, or
+a downscaled luminance buffer.</li>
+<li><strong>Variance Calculation:</strong> The screen is divided into
+uniform tiles matching the hardware's VRS tile size (typically 8x8 or
+16x16 pixels). The compute shader computes the contrast metric—often the
+standard deviation of luminance or edge gradients via Sobel or Scharr
+operators—for each tile.</li>
+<li><strong>Threshold Mapping:</strong> The calculated variance is
+compared against predetermined sensitivity thresholds. If the variance
+within a tile falls below the low-contrast threshold, the tile is
+flagged for reduced shading resolution.</li>
+</ol>
+<h3 id="generating-the-shading-rate-image">Generating the Shading Rate
+Image</h3>
+<p>Once contrast thresholds are evaluated, the compute shader encodes
+the results into a specialized screen-space texture known as the Shading
+Rate Image.</p>
+<p>In DirectX 12, this texture uses the single-channel
+<code>DXGI_FORMAT_R8_UINT</code> format, where each texel maps to a
+hardware tile. The shader writes standard DirectX shading rate constants
+into this surface:</p>
+<ul>
+<li><code>D3D12_SHADING_RATE_1X1</code> (Full shading rate for
+high-contrast areas)</li>
+<li><code>D3D12_SHADING_RATE_1X2</code> or <code>2X1</code> (Coarse
+shading along one axis)</li>
+<li><code>D3D12_SHADING_RATE_2X2</code> (Quarter shading rate for
+moderate contrast)</li>
+<li><code>D3D12_SHADING_RATE_4X4</code> (Lowest shading rate, executing
+once per 16 pixels for flat, low-contrast zones)</li>
+</ul>
+<h3 id="binding-and-pipeline-execution">Binding and Pipeline
+Execution</h3>
+<p>To apply the generated texture dynamically, the graphics pipeline
+requires DirectX 12 Tier 2 VRS support.</p>
+<p>The application sets the Shading Rate Image via the command list:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>pCommandList<span class="op">-&gt;</span>RSSetShadingRateImage<span class="op">(</span>pShadingRateTexture<span class="op">);</span></span></code></pre></div>
+<p>DirectX also provides combiners configured through
+<code>RSSetShadingRate</code>. Combiners define how the screen-space
+rate interacts with primitive or draw-call shading rates. For instance,
+developers frequently use <code>D3D12_SHADING_RATE_COMBINER_MAX</code>
+or <code>D3D12_SHADING_RATE_COMBINER_MIN</code> to ensure that geometry
+with high geometric complexity or alpha-tested edges retains fine detail
+regardless of the underlying contrast analysis.</p>
+<h3 id="hardware-shading-evaluation">Hardware Shading Evaluation</h3>
+<p>During the rasterization of subsequent draw calls, the GPU consults
+the bound shading rate image for every tile. When processing
+low-contrast tiles assigned a <code>2X2</code> or <code>4X4</code>
+rate:</p>
+<ul>
+<li>The rasterizer determines pixel coverage at native resolution to
+preserve geometric edge fidelity and depth accuracy.</li>
+<li>The pixel shader executes only once for the specified multi-pixel
+footprint (e.g., once for a 4x4 block of pixels).</li>
+<li>The single calculated color output is broadcast across all covered
+pixels within that footprint.</li>
+</ul>
+<p>Because low-contrast regions lack sharp color transitions, this
+coarse evaluation produces virtually zero perceptual artifacting while
+freeing substantial GPU execution units and memory bandwidth.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

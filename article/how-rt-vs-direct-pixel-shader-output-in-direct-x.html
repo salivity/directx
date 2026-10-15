@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How RTVs Direct Pixel Shader Output in DirectX - directx</title>
+    <meta name="description" content="In DirectX rendering pipelines, pixel shaders compute per-pixel color and numerical data that must be committed to GPU memory. Render Target Views (RTVs) act as the binding mechanism that bridges pixel shader outputs to specific memory resources, such as">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-rt-vs-direct-pixel-shader-output-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How RTVs Direct Pixel Shader Output in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-rt-vs-direct-pixel-shader-output-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX rendering pipelines, pixel shaders compute per-pixel color and numerical data that must be committed to GPU memory. Render Target Views (RTVs) act as the binding mechanism that bridges pixel shader outputs to specific memory resources, such as" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-rtvs-direct-pixel-shader-output-in-directx">How RTVs Direct
+Pixel Shader Output in DirectX</h1>
+<p>In DirectX rendering pipelines, pixel shaders compute per-pixel color
+and numerical data that must be committed to GPU memory. Render Target
+Views (RTVs) act as the binding mechanism that bridges pixel shader
+outputs to specific memory resources, such as textures or swap chain
+buffers. By defining resource formats, subresource ranges, and array
+slots at the Output Merger stage, RTVs inform the hardware precisely
+where and how each pixel shader output value is written.</p>
+<h3 id="the-purpose-of-a-render-target-view">The Purpose of a Render
+Target View</h3>
+<p>Raw GPU resources, such as textures, are allocated as blocks of
+memory. A raw resource alone does not specify how the pipeline should
+interpret its memory during a write operation. An RTV provides the
+necessary metadata, including:</p>
+<ul>
+<li><strong>Data Format:</strong> Interpreting typeless resources into
+concrete formats (e.g., converting a typeless resource into
+<code>DXGI_FORMAT_R8G8B8A8_UNORM</code>).</li>
+<li><strong>Resource Dimension:</strong> Identifying whether the target
+is a 1D, 2D, 3D texture, or a texture array.</li>
+<li><strong>Subresource Allocation:</strong> Specifying the exact mip
+level or array slice that receives the output, preventing accidental
+writes to other mip levels.</li>
+</ul>
+<h3 id="binding-to-the-output-merger">Binding to the Output Merger</h3>
+<p>The pixel shader does not write to memory directly. Instead, it
+outputs data to the Output Merger (OM) stage of the DirectX
+pipeline.</p>
+<p>Developers bind RTVs to the Output Merger using API-specific
+commands:</p>
+<ul>
+<li>In <strong>DirectX 11</strong>, using
+<code>ID3D11DeviceContext::OMSetRenderTargets</code>.</li>
+<li>In <strong>DirectX 12</strong>, using
+<code>ID3D12GraphicsCommandList::OMSetRenderTargets</code> alongside CPU
+descriptor handles.</li>
+</ul>
+<p>When calling these functions, the application passes an array of RTV
+descriptors. The position of an RTV in this array defines its render
+target slot index (from 0 to 7 in standard configurations).</p>
+<h3 id="mapping-shader-outputs-to-render-targets">Mapping Shader Outputs
+to Render Targets</h3>
+<p>In High-Level Shader Language (HLSL), pixel shaders designate their
+outputs using system-value semantics. The primary semantic used is
+<code>SV_Target[n]</code>, where <code>[n]</code> represents the
+zero-based target index.</p>
+<pre class="hlsl"><code>struct PixelOutput
+{
+    float4 Color : SV_Target0;
+    float4 Normal : SV_Target1;
+};
+
+PixelOutput PSMain(PixelInput input)
+{
+    PixelOutput output;
+    output.Color = float4(1.0, 0.0, 0.0, 1.0); // Routes to RTV at slot 0
+    output.Normal = float4(0.0, 1.0, 0.0, 0.0); // Routes to RTV at slot 1
+    return output;
+}</code></pre>
+<p>The hardware maps these semantics directly to the active RTV
+array:</p>
+<ul>
+<li><code>SV_Target0</code> routes output data to the RTV bound at slot
+0.</li>
+<li><code>SV_Target1</code> routes output data to the RTV bound at slot
+1.</li>
+<li>Additional semantics (<code>SV_Target2</code> through
+<code>SV_Target7</code>) correspond sequentially to their respective
+slots for Multiple Render Target (MRT) setups.</li>
+</ul>
+<h3 id="final-output-execution">Final Output Execution</h3>
+<p>Once the pixel shader generates its values:</p>
+<ol type="1">
+<li>The values leave the shader execution units tagged with their
+<code>SV_Target</code> designations.</li>
+<li>The Output Merger checks the RTV bound to the corresponding slot
+index.</li>
+<li>The Output Merger applies any configured blend states, format
+conversions, or masking defined by the pipeline state.</li>
+<li>The processed pixel data is written to the specific subresource and
+memory addresses defined by the active RTV.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

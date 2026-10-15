@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimizing DirectX Compute Shader Thread Groups - directx</title>
+    <meta name="description" content="Compute shaders in DirectX leverage massively parallel GPU architectures by dispatching workloads partitioned into structured collections known as thread groups. Sizing these thread groups correctly is essential for maximizing hardware occupancy, reducing">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/optimizing-direct-x-compute-shader-thread-groups">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Optimizing DirectX Compute Shader Thread Groups - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/optimizing-direct-x-compute-shader-thread-groups" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Compute shaders in DirectX leverage massively parallel GPU architectures by dispatching workloads partitioned into structured collections known as thread groups. Sizing these thread groups correctly is essential for maximizing hardware occupancy, reducing" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="optimizing-directx-compute-shader-thread-groups">Optimizing
+DirectX Compute Shader Thread Groups</h1>
+<p>Compute shaders in DirectX leverage massively parallel GPU
+architectures by dispatching workloads partitioned into structured
+collections known as thread groups. Sizing these thread groups correctly
+is essential for maximizing hardware occupancy, reducing memory latency,
+and avoiding resource starvation across modern graphics pipelines. This
+article explains the fundamentals of compute shader thread groups, how
+they map directly to underlying GPU execution hardware, and the primary
+guidelines for sizing them to achieve optimal execution performance in
+DirectX.</p>
+<h2 id="understanding-compute-shader-thread-groups">Understanding
+Compute Shader Thread Groups</h2>
+<p>In DirectX (HLSL), a compute workload is initiated by calling
+<code>Dispatch(X, Y, Z)</code>, which defines a three-dimensional grid
+of thread groups. Each thread group contains an identical, user-defined
+collection of individual threads declared inside the shader using the
+<code>[numthreads(X, Y, Z)]</code> attribute.</p>
+<p>Thread groups define distinct hardware and execution boundaries:</p>
+<ul>
+<li><strong>Execution Independence:</strong> Each thread group runs
+independently of all other groups. The GPU scheduler can execute groups
+in any order across available compute units.</li>
+<li><strong>Shared Memory Scope:</strong> Threads within the same group
+can communicate using Thread Group Shared Memory (TGSM), declared using
+the <code>groupshared</code> keyword. TGSM acts as an on-chip L1-speed
+cache shared solely among threads of that specific group.</li>
+<li><strong>Synchronization:</strong> Group-level barriers, such as
+<code>GroupMemoryBarrierWithGroupSync()</code>, synchronize execution
+and memory access exclusively within the boundaries of a single thread
+group.</li>
+</ul>
+<h2 id="hardware-execution-warps-and-wavefronts">Hardware Execution:
+Warps and Wavefronts</h2>
+<p>GPUs do not execute threads individually; they execute them in
+lockstep batches called SIMD vectors. NVIDIA refers to these 32-thread
+units as <strong>warps</strong>, while AMD and Intel refer to them as
+<strong>wavefronts</strong> or <strong>waves</strong> (typically 32 or
+64 threads).</p>
+<p>When a thread group is scheduled onto a Streaming Multiprocessor (SM)
+or Compute Unit (CU), the runtime slices the total threads in that group
+into these native wave sizes. If the total number of threads in a group
+is not a multiple of the native wave size, the hardware must still
+allocate an entire wave, masking off the unused lanes. This results in
+wasted execution cycles and reduced throughput.</p>
+<h2 id="optimal-sizing-guidelines-for-directx">Optimal Sizing Guidelines
+for DirectX</h2>
+<h3 id="1-maintain-multiples-of-64">1. Maintain Multiples of 64</h3>
+<p>To ensure hardware compatibility across vendors, the total number of
+threads per group (<span class="math inline">\(X \times Y \times
+Z\)</span>) should almost always be a multiple of 64.</p>
+<ul>
+<li>NVIDIA warps are 32 threads; a multiple of 64 guarantees an even
+number of warps.</li>
+<li>AMD RDNA natively supports Wave32 and Wave64, while GCN
+architectures use Wave64. Sizing to multiples of 64 prevents partial
+wave execution across all desktop vendors.</li>
+</ul>
+<h3 id="2-aim-for-64-to-256-threads-per-group">2. Aim for 64 to 256
+Threads per Group</h3>
+<p>The optimal total thread count per group typically sits between 64
+and 256 threads:</p>
+<ul>
+<li><strong>64 Threads (<code>[numthreads(64, 1, 1)]</code> or
+<code>[numthreads(8, 8, 1)]</code>):</strong> Often ideal for modern
+architectures with low register pressure. It provides fine scheduling
+granularity, allowing the hardware scheduler to easily balance multiple
+groups across compute engines.</li>
+<li><strong>128 to 256 Threads:</strong> Ideal when threads require
+extensive data sharing via TGSM or when amortizing the overhead of
+synchronization primitives.</li>
+<li><strong>Avoid Exceeding 256 Threads:</strong> While DirectX supports
+up to 1024 threads per group, setting groups to 512 or 1024 threads
+frequently reduces occupancy. A large group consumes a significant
+portion of an SM/CU’s register file and shared memory, preventing other
+groups from running concurrently.</li>
+</ul>
+<h3 id="3-match-group-dimensions-to-data-locality">3. Match Group
+Dimensions to Data Locality</h3>
+<p>Thread group dimensions should reflect the dimensionality of the
+underlying data to maximize cache reuse:</p>
+<ul>
+<li><strong>1D Buffers (Linear Memory):</strong> Use flat dimensions
+such as <code>[numthreads(64, 1, 1)]</code> or
+<code>[numthreads(128, 1, 1)]</code> for structured buffers, byte
+address buffers, or particle simulations.</li>
+<li><strong>2D Textures (Image Processing):</strong> Use square or
+near-square layouts, such as <code>[numthreads(8, 8, 1)]</code> (64
+threads) or <code>[numthreads(16, 16, 1)]</code> (256 threads).
+Symmetrical tiles maximize 2D spatial locality in the L1/L2 texture
+cache.</li>
+<li><strong>3D Textures / Volumes:</strong> Use compact cubes, such as
+<code>[numthreads(4, 4, 4)]</code> (64 threads) or
+<code>[numthreads(8, 8, 4)]</code> (256 threads), to maintain spatial
+coherence across volumetric axes.</li>
+</ul>
+<h3 id="4-balance-tgsm-and-register-allocation">4. Balance TGSM and
+Register Allocation</h3>
+<p>GPU occupancy—the ratio of active waves to the maximum theoretical
+waves per compute unit—is constrained by registers and shared
+memory:</p>
+<ul>
+<li>If a shader requires high amounts of <code>groupshared</code>
+memory, larger group sizes may exhaust the shared memory capacity per
+compute unit, lowering the number of concurrent groups that can
+fit.</li>
+<li>If a shader uses a high number of temporary registers (high register
+pressure), smaller thread groups (e.g., 64 threads) make it easier for
+the scheduler to fit at least one or two groups into the remaining
+register budget.</li>
+</ul>
+<p>By keeping thread group totals to multiples of 64, maintaining total
+counts between 64 and 256, and profiling with tools like PIX, NVIDIA
+Nsight, or AMD Radeon GPU Profiler, developers can ensure maximum
+hardware utilization across all DirectX compute pipelines.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

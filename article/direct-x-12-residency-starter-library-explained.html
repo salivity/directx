@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Residency Starter Library Explained - directx</title>
+    <meta name="description" content="The DirectX 12 Residency Starter Library is an open-source helper library developed by Microsoft to simplify video memory (VRAM) management in DirectX 12 applications. In this article, you will learn about the primary purpose of the library, the core memo">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-residency-starter-library-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Residency Starter Library Explained - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-residency-starter-library-explained" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The DirectX 12 Residency Starter Library is an open-source helper library developed by Microsoft to simplify video memory (VRAM) management in DirectX 12 applications. In this article, you will learn about the primary purpose of the library, the core memo" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-residency-starter-library-explained">DirectX 12
+Residency Starter Library Explained</h1>
+<p>The DirectX 12 Residency Starter Library is an open-source helper
+library developed by Microsoft to simplify video memory (VRAM)
+management in DirectX 12 applications. In this article, you will learn
+about the primary purpose of the library, the core memory management
+challenges it solves, and how it automates resource residency tracking
+to prevent performance degradation and out-of-memory crashes.</p>
+<h3 id="the-shift-to-explicit-memory-management">The Shift to Explicit
+Memory Management</h3>
+<p>In DirectX 11, the graphics driver automatically handled memory
+residency behind the scenes, dynamically deciding when resources should
+reside in physical VRAM or be paged out to system RAM. DirectX 12
+removed this automatic abstraction to provide developers with direct,
+low-level control over the GPU. Consequently, developers inherited the
+responsibility of explicitly calling APIs like <code>MakeResident</code>
+and <code>Evict</code> to manage memory allocation. Failing to properly
+balance these calls can lead to GPU stalls, severe frame stuttering, or
+immediate application crashes when VRAM is exhausted.</p>
+<h3 id="the-core-purpose-of-the-library">The Core Purpose of the
+Library</h3>
+<p>The primary purpose of the DirectX 12 Residency Starter Library is to
+provide a turnkey, production-ready abstraction layer that handles
+resource residency without requiring developers to build a custom memory
+paging system from scratch. It bridges the gap between the convenience
+of DirectX 11’s driver-managed memory and the granular control offered
+by DirectX 12.</p>
+<p>Key objectives of the library include:</p>
+<ul>
+<li><strong>Budget Enforcement:</strong> It queries DXGI memory budget
+interfaces to monitor real-time local and non-local memory allowances
+assigned by the operating system, ensuring the application stays within
+safe thresholds.</li>
+<li><strong>Automated Eviction:</strong> When memory allocations exceed
+the designated operating system budget, the library automatically evicts
+the least recently used (LRU) resources from high-speed VRAM to prevent
+oversubscription.</li>
+<li><strong>Command List Synchronization:</strong> The library
+coordinates with active command lists to guarantee that resources
+currently in use by the GPU are never evicted prematurely, avoiding
+access violations and rendering artifacts.</li>
+<li><strong>Oversubscription Handling:</strong> When a scene requires
+more VRAM than is physically available, the library gracefully degrades
+performance by streaming or falling back to system memory rather than
+terminating the process with an out-of-memory error.</li>
+</ul>
+<h3 id="why-developers-use-it">Why Developers Use It</h3>
+<p>Building a robust memory residency manager requires deep expertise in
+OS-level paging, fence synchronization, and asynchronous resource
+tracking. The DirectX 12 Residency Starter Library serves as either an
+immediate integration for indie and enterprise engines or as a reference
+architecture for teams designing proprietary memory managers. By
+handling the complexities of residency behind a lightweight interface,
+it allows developers to focus on rendering techniques and gameplay
+mechanics while maintaining memory stability across various hardware
+configurations.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

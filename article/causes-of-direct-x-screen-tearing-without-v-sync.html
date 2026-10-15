@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Causes of DirectX Screen Tearing Without V-Sync - directx</title>
+    <meta name="description" content="Screen tearing in DirectX applications occurs when the graphics processing unit (GPU) pushes new video frames to the monitor out of sync with the display&#39;s physical refresh rate. When Vertical Synchronization (V-Sync) is disabled, the GPU updates the acti">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/causes-of-direct-x-screen-tearing-without-v-sync">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Causes of DirectX Screen Tearing Without V-Sync - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/causes-of-direct-x-screen-tearing-without-v-sync" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Screen tearing in DirectX applications occurs when the graphics processing unit (GPU) pushes new video frames to the monitor out of sync with the display&#39;s physical refresh rate. When Vertical Synchronization (V-Sync) is disabled, the GPU updates the acti" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="causes-of-directx-screen-tearing-without-v-sync">Causes of
+DirectX Screen Tearing Without V-Sync</h1>
+<p>Screen tearing in DirectX applications occurs when the graphics
+processing unit (GPU) pushes new video frames to the monitor out of sync
+with the display's physical refresh rate. When Vertical Synchronization
+(V-Sync) is disabled, the GPU updates the active display buffer
+mid-scan, causing the monitor to draw portions of two or more different
+frames within a single refresh cycle. This results in a visible
+horizontal misalignment across the image, commonly known as a screen
+tear.</p>
+<h3 id="the-mechanics-of-directx-swap-chains">The Mechanics of DirectX
+Swap Chains</h3>
+<p>DirectX handles rendering through a mechanism called a swap chain,
+which typically consists of at least two frame buffers: a front buffer
+and a back buffer. The front buffer holds the completed frame currently
+being scanned and projected onto the physical display. Meanwhile, the
+GPU renders the next upcoming frame into the back buffer.</p>
+<p>Once the GPU finishes rendering the back buffer, a presentation call
+(such as <code>IDXGISwapChain::Present</code>) is issued. This call
+dictates how and when the back buffer becomes the new front buffer.</p>
+<h3 id="display-refresh-cycles-and-scanouts">Display Refresh Cycles and
+Scanouts</h3>
+<p>A standard monitor refreshes its screen by updating pixels
+sequentially from top to bottom, row by row, at a fixed frequency (such
+as 60Hz, 144Hz, or 240Hz). Between the completion of drawing the
+bottom-right pixel of the screen and the start of drawing the top-left
+pixel of the next cycle, there is a tiny pause known as the Vertical
+Blanking Interval (VBLANK).</p>
+<h3 id="why-disabling-v-sync-causes-tearing">Why Disabling V-Sync Causes
+Tearing</h3>
+<p>When V-Sync is enabled, the DirectX runtime forces the swap chain to
+wait for the VBLANK interval before swapping the back and front buffers.
+This ensures that a buffer swap only happens while the monitor is
+temporarily not drawing pixels, guaranteeing that every refresh cycle
+displays a single, cohesive frame.</p>
+<p>When V-Sync is turned off (typically configured by setting the sync
+interval parameter to <code>0</code> in DirectX), this safety mechanism
+is removed. The swap chain operates in an immediate presentation mode.
+The moment the GPU finishes rendering a back buffer, it instantly swaps
+it with the front buffer—or overwrites memory—regardless of what the
+monitor is currently doing.</p>
+<p>If the monitor is midway through reading the front buffer to scan out
+pixels onto the screen when this swap occurs, the remaining portion of
+that scanout cycle will draw pixel data from the newly presented frame.
+Consequently, the upper part of the display shows the older frame, while
+the lower part shows the newer frame. Because movement or camera
+rotation likely occurred between those two frames, the geometry fails to
+line up along the scanline where the swap happened, producing a visible
+horizontal tear.</p>
+<h3 id="the-effect-of-frame-rate-variations">The Effect of Frame Rate
+Variations</h3>
+<p>Tearing is not limited to scenarios where the GPU produces more
+frames than the monitor can display (such as 120 FPS on a 60Hz monitor).
+It also occurs when the frame rate is lower than the refresh rate.
+Unless the presentation of a new frame is explicitly aligned to the
+display’s VBLANK interval via synchronization mechanisms like V-Sync,
+G-Sync, or FreeSync, buffer flips will inevitably collide with active
+display scanouts, causing tearing regardless of performance levels.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

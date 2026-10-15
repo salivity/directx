@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX Swap Chains: Double vs Triple Buffering - directx</title>
+    <meta name="description" content="This article explains how to configure and implement double-buffering versus triple-buffering using modern DirectX Graphics Infrastructure (DXGI) swap chains. It covers the core conceptual differences between the two buffering models, the configuration of">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-swap-chains-double-vs-triple-buffering">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX Swap Chains: Double vs Triple Buffering - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-swap-chains-double-vs-triple-buffering" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains how to configure and implement double-buffering versus triple-buffering using modern DirectX Graphics Infrastructure (DXGI) swap chains. It covers the core conceptual differences between the two buffering models, the configuration of" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-swap-chains-double-vs-triple-buffering">DirectX Swap
+Chains: Double vs Triple Buffering</h1>
+<p>This article explains how to configure and implement double-buffering
+versus triple-buffering using modern DirectX Graphics Infrastructure
+(DXGI) swap chains. It covers the core conceptual differences between
+the two buffering models, the configuration of swap chain descriptor
+structures, how swap effects impact buffer swapping, and how to manage
+frame latency and synchronization primitives in DirectX 11 and DirectX
+12.</p>
+<h3 id="conceptual-differences">Conceptual Differences</h3>
+<p>In a swap chain, the front buffer represents the image currently
+being scanned out to the display, while back buffers are used by the GPU
+to render upcoming frames.</p>
+<ul>
+<li><strong>Double-buffering</strong> utilizes two buffers in total (one
+front buffer, one back buffer). While the monitor reads from the front
+buffer, the GPU renders to the single back buffer. If the GPU finishes
+rendering before the display refreshes (under VSync), it must wait,
+idling until the swap occurs. If it fails to finish in time, a frame
+drop occurs.</li>
+<li><strong>Triple-buffering</strong> utilizes three buffers (one front
+buffer, two back buffers). This decouples the rendering pipeline from
+display refresh cycles. The GPU can immediately start rendering a second
+frame into the alternate back buffer while one frame waits for scan-out
+and the display reads the active front buffer. This minimizes GPU idle
+time and helps avoid frame-rate halving during VSync.</li>
+</ul>
+<h3 id="configuring-the-dxgi-swap-chain">Configuring the DXGI Swap
+Chain</h3>
+<p>In modern DirectX (Direct3D 11.1+ and Direct3D 12), swap chains are
+configured using the <code>DXGI_SWAP_CHAIN_DESC1</code> structure and
+created via <code>IDXGIFactory2::CreateSwapChainForHwnd</code> (or
+similar factory creation methods).</p>
+<p>The primary mechanism to toggle between double and triple buffering
+is the <code>BufferCount</code> member.</p>
+<h4 id="implementing-double-buffering">Implementing
+Double-Buffering</h4>
+<p>To create a double-buffered swap chain, set <code>BufferCount</code>
+to <code>2</code>:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>DXGI_SWAP_CHAIN_DESC1 swapChainDesc <span class="op">=</span> <span class="op">{};</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>Width <span class="op">=</span> width<span class="op">;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>Height <span class="op">=</span> height<span class="op">;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>Format <span class="op">=</span> DXGI_FORMAT_R8G8B8A8_UNORM<span class="op">;</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>Stereo <span class="op">=</span> FALSE<span class="op">;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>SampleDesc<span class="op">.</span>Count <span class="op">=</span> <span class="dv">1</span><span class="op">;</span> <span class="co">// Flip model requires 1</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>SampleDesc<span class="op">.</span>Quality <span class="op">=</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>BufferUsage <span class="op">=</span> DXGI_USAGE_RENDER_TARGET_OUTPUT<span class="op">;</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>BufferCount <span class="op">=</span> <span class="dv">2</span><span class="op">;</span> <span class="co">// Double-buffering</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>Scaling <span class="op">=</span> DXGI_SCALING_NONE<span class="op">;</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>SwapEffect <span class="op">=</span> DXGI_SWAP_EFFECT_FLIP_DISCARD<span class="op">;</span> <span class="co">// Modern flip model</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>AlphaMode <span class="op">=</span> DXGI_ALPHA_MODE_UNSPECIFIED<span class="op">;</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>Flags <span class="op">=</span> <span class="dv">0</span><span class="op">;</span></span></code></pre></div>
+<h4 id="implementing-triple-buffering">Implementing
+Triple-Buffering</h4>
+<p>To create a triple-buffered swap chain, set <code>BufferCount</code>
+to <code>3</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>DXGI_SWAP_CHAIN_DESC1 swapChainDesc <span class="op">=</span> <span class="op">{};</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>Width <span class="op">=</span> width<span class="op">;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>Height <span class="op">=</span> height<span class="op">;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>Format <span class="op">=</span> DXGI_FORMAT_R8G8B8A8_UNORM<span class="op">;</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>Stereo <span class="op">=</span> FALSE<span class="op">;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>SampleDesc<span class="op">.</span>Count <span class="op">=</span> <span class="dv">1</span><span class="op">;</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>SampleDesc<span class="op">.</span>Quality <span class="op">=</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>BufferUsage <span class="op">=</span> DXGI_USAGE_RENDER_TARGET_OUTPUT<span class="op">;</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>BufferCount <span class="op">=</span> <span class="dv">3</span><span class="op">;</span> <span class="co">// Triple-buffering</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>Scaling <span class="op">=</span> DXGI_SCALING_NONE<span class="op">;</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>SwapEffect <span class="op">=</span> DXGI_SWAP_EFFECT_FLIP_DISCARD<span class="op">;</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>AlphaMode <span class="op">=</span> DXGI_ALPHA_MODE_UNSPECIFIED<span class="op">;</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>swapChainDesc<span class="op">.</span>Flags <span class="op">=</span> <span class="dv">0</span><span class="op">;</span></span></code></pre></div>
+<h3 id="modern-swap-effects">Modern Swap Effects</h3>
+<p>Legacy swap effects such as <code>DXGI_SWAP_EFFECT_DISCARD</code> and
+<code>DXGI_SWAP_EFFECT_SEQUENTIAL</code> rely on blitting, which
+introduces performance overhead. Modern DirectX applications should use
+the flip model:</p>
+<ul>
+<li><strong><code>DXGI_SWAP_EFFECT_FLIP_DISCARD</code></strong>: The
+recommended default for Direct3D 12 and Direct3D 11. After calling
+<code>Present</code>, the contents of the back buffer are discarded.
+With a <code>BufferCount</code> of 3, DirectX manages the three-buffer
+rotation under the hood.</li>
+<li><strong><code>DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL</code></strong>:
+Preserves back buffer contents across presents. Commonly used when
+partial-frame updates or multi-pass buffer persistence is
+necessary.</li>
+</ul>
+<h3 id="controlling-frame-latency-and-synchronization">Controlling Frame
+Latency and Synchronization</h3>
+<p>While triple-buffering eliminates stalls, it can increase input
+latency if the CPU queues multiple frames ahead of the display. Managing
+frame latency is critical when increasing the buffer count.</p>
+<h4 id="direct3d-11-frame-latency-management">Direct3D 11 Frame Latency
+Management</h4>
+<p>In Direct3D 11, use <code>IDXGIDevice1::SetMaximumFrameLatency</code>
+to limit the number of frames the runtime queues:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>ComPtr<span class="op">&lt;</span>IDXGIDevice1<span class="op">&gt;</span> dxgiDevice<span class="op">;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>d3d11Device<span class="op">.</span>As<span class="op">(&amp;</span>dxgiDevice<span class="op">);</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>dxgiDevice<span class="op">-&gt;</span>SetMaximumFrameLatency<span class="op">(</span><span class="dv">1</span><span class="op">);</span> <span class="co">// Restricts queue to reduce input lag</span></span></code></pre></div>
+<h4 id="direct3d-12-waitable-objects">Direct3D 12 Waitable Objects</h4>
+<p>Direct3D 12 applications manage buffer synchronization explicitly.
+When using triple-buffering, developers track render targets using
+fences and manage latency via swap chain flags.</p>
+<ol type="1">
+<li>Add <code>DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT</code>
+to <code>swapChainDesc.Flags</code>.</li>
+<li>Retrieve the waitable object using
+<code>IDXGISwapChain2::GetFrameLatencyWaitableObject()</code>.</li>
+<li>Set the maximum latency via
+<code>IDXGISwapChain2::SetMaximumFrameLatency(2)</code>.</li>
+<li>Wait on the latency handle before recording command lists to prevent
+the CPU from getting more than two frames ahead of the GPU:</li>
+</ol>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>WaitForSingleObjectEx<span class="op">(</span>frameLatencyWaitableObject<span class="op">,</span> INFINITE<span class="op">,</span> TRUE<span class="op">);</span></span></code></pre></div>
+<p>In Direct3D 12 rendering loops, maintain an array of fence values and
+allocator resources matching the <code>BufferCount</code>:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Advance to next buffer index</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>frameIndex <span class="op">=</span> swapChain<span class="op">-&gt;</span>GetCurrentBackBufferIndex<span class="op">();</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Wait for the specific buffer&#39;s prior fence before writing to it</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">(</span>fence<span class="op">-&gt;</span>GetCompletedValue<span class="op">()</span> <span class="op">&lt;</span> fenceValues<span class="op">[</span>frameIndex<span class="op">])</span> <span class="op">{</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    fence<span class="op">-&gt;</span>SetEventOnCompletion<span class="op">(</span>fenceValues<span class="op">[</span>frameIndex<span class="op">],</span> fenceEvent<span class="op">);</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    WaitForSingleObjectEx<span class="op">(</span>fenceEvent<span class="op">,</span> INFINITE<span class="op">,</span> FALSE<span class="op">);</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="presentation-calls">Presentation Calls</h3>
+<p>Both buffering strategies call
+<code>IDXGISwapChain::Present(SyncInterval, Flags)</code>.</p>
+<ul>
+<li><strong><code>SyncInterval = 1</code> (VSync Enabled):</strong>
+Double-buffering will block the rendering pipeline if rendering
+completes before the next vertical blank. Triple-buffering allows the
+application to continue rendering the next frame into the third buffer,
+maintaining smoother frame delivery without tearing.</li>
+<li><strong><code>SyncInterval = 0</code> (VSync Disabled):</strong>
+Frames are presented immediately. Double-buffering toggles between two
+surfaces, while triple-buffering alternates through three surfaces, both
+potentially resulting in screen tearing unless paired with variable
+refresh rate displays (G-Sync/FreeSync).</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

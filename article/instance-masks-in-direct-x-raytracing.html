@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instance Masks in DirectX Raytracing - directx</title>
+    <meta name="description" content="This article provides an overview of instance masks in DirectX Raytracing (DXR), explaining their architecture and role in ray traversal. It covers how instance masks are defined within acceleration structures, the mathematical bitwise logic used to evalu">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/instance-masks-in-direct-x-raytracing">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Instance Masks in DirectX Raytracing - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/instance-masks-in-direct-x-raytracing" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of instance masks in DirectX Raytracing (DXR), explaining their architecture and role in ray traversal. It covers how instance masks are defined within acceleration structures, the mathematical bitwise logic used to evalu" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="instance-masks-in-directx-raytracing">Instance Masks in DirectX
+Raytracing</h1>
+<p>This article provides an overview of instance masks in DirectX
+Raytracing (DXR), explaining their architecture and role in ray
+traversal. It covers how instance masks are defined within acceleration
+structures, the mathematical bitwise logic used to evaluate them during
+ray dispatch, and how developers leverage them to cull unnecessary
+ray-primitive intersection tests directly in hardware to maximize
+rendering performance.</p>
+<h2 id="what-are-instance-masks">What Are Instance Masks?</h2>
+<p>In DirectX Raytracing, scene geometry is organized into a two-level
+hierarchy of acceleration structures: Bottom-Level Acceleration
+Structures (BLAS), which hold actual mesh geometry (triangles or
+procedural primitives), and Top-Level Acceleration Structures (TLAS),
+which contain instances of these BLAS along with transform matrices and
+rendering metadata.</p>
+<p>An instance mask is an 8-bit integer (ranging from <code>0x00</code>
+to <code>0xFF</code>) assigned to each instance inside the TLAS via the
+<code>D3D12_RAYTRACING_INSTANCE_DESC</code> structure:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">typedef</span> <span class="kw">struct</span> D3D12_RAYTRACING_INSTANCE_DESC <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    UINT InstanceMask <span class="op">:</span> <span class="dv">8</span><span class="op">;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> D3D12_RAYTRACING_INSTANCE_DESC<span class="op">;</span></span></code></pre></div>
+<p>This 8-bit value acts as an identifier or category tag for each
+instance in the scene, categorizing objects into user-defined groups
+such as opaque geometry, transparent surfaces, shadow casters, or
+view-dependent assets.</p>
+<h2 id="filtering-ray-primitive-intersections">Filtering Ray-Primitive
+Intersections</h2>
+<p>Instance masks filter ray-primitive intersections by determining
+whether a ray can enter a particular BLAS during the TLAS traversal
+phase. This filtering is resolved early in hardware, well before any
+triangle intersection tests or Any-Hit shader evaluations occur.</p>
+<h3 id="the-bitwise-mask-test">The Bitwise Mask Test</h3>
+<p>When launching a ray in HLSL via the <code>TraceRay()</code>
+intrinsic function, the developer specifies an 8-bit inclusion mask
+(<code>InstanceInclusionMask</code>) alongside ray flags, origins, and
+directions:</p>
+<pre class="hlsl"><code>TraceRay(
+    AccelerationStructure,
+    RayFlags,
+    InstanceInclusionMask, // 8-bit mask passed to the ray
+    RayContributionToHitGroupIndex,
+    MultiplierForGeometryContributionToHitGroupIndex,
+    MissShaderIndex,
+    Ray,
+    Payload
+);</code></pre>
+<p>During TLAS traversal, the GPU performs a bitwise AND operation
+between the ray's <code>InstanceInclusionMask</code> and the target
+instance’s <code>InstanceMask</code>:</p>
+<p><span class="math display">\[\text{Test} = (\text{RayInclusionMask} \
+\&amp; \ \text{InstanceMask}) \neq 0\]</span></p>
+<ul>
+<li><strong>Non-Zero Result:</strong> If the result of the bitwise AND
+operation is greater than zero, the test passes. The ray continues its
+traversal into the child BLAS associated with that instance to test for
+bounding volume and primitive intersections.</li>
+<li><strong>Zero Result:</strong> If the result is zero, the test fails.
+The GPU completely ignores the instance. The entire BLAS attached to
+that instance is culled from the ray's traversal path.</li>
+</ul>
+<h2 id="why-instance-masks-are-essential">Why Instance Masks Are
+Essential</h2>
+<h3 id="hardware-level-early-out">Hardware-Level Early Out</h3>
+<p>Because instance mask evaluation takes place at the TLAS level,
+instances that fail the mask test incur zero primitive intersection
+costs. The hardware bypasses all BVH node traversals, triangle tests,
+Any-Hit shaders, and Closest-Hit shaders that would have otherwise
+executed for that instance.</p>
+<h3 id="specialized-ray-pipelines">Specialized Ray Pipelines</h3>
+<p>By allocating different bits of the 8-bit mask to different
+categories, developers can finely tune ray behavior for specific
+rendering passes:</p>
+<ul>
+<li><strong>Shadow Rays:</strong> A shadow ray can use a mask that only
+tests against shadow-casting geometry, skipping non-shadow-casting
+particles or decals entirely.</li>
+<li><strong>Reflection Rays:</strong> Rough reflections can omit
+fine-detail geometry like foliage or wireframes to save traversal
+time.</li>
+<li><strong>First-Person Assets:</strong> Player character models can be
+masked out from camera rays to avoid self-clipping while remaining
+visible to shadow rays cast by external lights.</li>
+<li><strong>Layered Visibility:</strong> Transparent geometry can be
+isolated from opaque visibility sweeps, preventing costly Any-Hit shader
+invocations during primary visibility checks.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

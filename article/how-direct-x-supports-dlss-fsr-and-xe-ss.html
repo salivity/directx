@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectX Supports DLSS, FSR, and XeSS - directx</title>
+    <meta name="description" content="DirectX enables modern upscaling technologies—specifically NVIDIA DLSS, AMD FSR, and Intel XeSS—by providing low-level hardware control, standardizing the temporal rendering data these tools require, and offering a unified implementation path through Micr">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-x-supports-dlss-fsr-and-xe-ss">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectX Supports DLSS, FSR, and XeSS - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-x-supports-dlss-fsr-and-xe-ss" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX enables modern upscaling technologies—specifically NVIDIA DLSS, AMD FSR, and Intel XeSS—by providing low-level hardware control, standardizing the temporal rendering data these tools require, and offering a unified implementation path through Micr" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directx-supports-dlss-fsr-and-xess">How DirectX Supports
+DLSS, FSR, and XeSS</h1>
+<p>DirectX enables modern upscaling technologies—specifically NVIDIA
+DLSS, AMD FSR, and Intel XeSS—by providing low-level hardware control,
+standardizing the temporal rendering data these tools require, and
+offering a unified implementation path through Microsoft DirectSR
+(DirectX Super Resolution). This article breaks down the mechanisms
+DirectX uses to interface with vendor-specific upscaling algorithms to
+enhance frame rates without compromising visual quality.</p>
+<h2 id="directsr-the-unified-upscaling-api">DirectSR: The Unified
+Upscaling API</h2>
+<p>Historically, developers had to integrate separate software
+development kits (SDKs) for NVIDIA Deep Learning Super Sampling (DLSS),
+AMD FidelityFX Super Resolution (FSR), and Intel Xe Super Sampling
+(XeSS). Microsoft addressed this fragmentation by introducing
+<strong>DirectSR</strong>, a native DirectX 12 API extension.</p>
+<p>DirectSR acts as a standardized abstraction layer. Developers
+implement a single common interface within the DirectX pipeline, and
+DirectSR routes the workload to the appropriate vendor-specific upscaler
+based on the user's graphics hardware. It natively supports multi-vendor
+solutions, allowing DLSS, FSR, and XeSS to run through an identical set
+of API calls.</p>
+<h2 id="standardized-temporal-data-buffers">Standardized Temporal Data
+Buffers</h2>
+<p>Modern upscalers rely on temporal reconstruction, which combines data
+from past frames with the current frame rendered at a lower native
+resolution. DirectX 12 provides the infrastructure necessary to extract,
+format, and pass this critical data to upscaling engines:</p>
+<ul>
+<li><strong>Motion Vectors:</strong> DirectX computes and passes
+screen-space vectors that track where pixels moved between frames.</li>
+<li><strong>Depth Buffers:</strong> High-precision depth targets are
+exposed directly to the upscaler to determine object occlusion and edge
+separation.</li>
+<li><strong>Sub-Pixel Jittering:</strong> DirectX allows developers to
+apply precise phase offsets to the camera projection matrix, providing
+the temporal variety required to reconstruct fine details.</li>
+<li><strong>Exposure and Color Buffers:</strong> High dynamic range
+(HDR) color inputs are fed directly into the upscaling pass before final
+post-processing.</li>
+</ul>
+<p>Because DirectX 12 offers explicit resource management, engines can
+pipe these buffers between render passes with minimal memory overhead
+and zero unnecessary CPU-GPU synchronization.</p>
+<h2 id="hardware-execution-and-compute-shaders">Hardware Execution and
+Compute Shaders</h2>
+<p>Each upscaler relies on different underlying execution methods, all
+of which DirectX accommodates:</p>
+<ul>
+<li><strong>HLSL Compute Shaders (AMD FSR):</strong> FSR relies
+primarily on non-machine-learning spatial and temporal algorithms
+written in standard High-Level Shader Language (HLSL). DirectX 12
+executes these instructions via standard compute pipelines, ensuring
+compatibility across virtually all modern GPUs.</li>
+<li><strong>Specialized AI Hardware (NVIDIA DLSS):</strong> DLSS
+executes machine learning models trained on supercomputers using NVIDIA
+Tensor Cores. DirectX allows the graphics driver to hook directly into
+these dedicated hardware units via low-level driver-level abstractions
+without disrupting the primary render queue.</li>
+<li><strong>Hybrid DP4a and Matrix Instructions (Intel XeSS):</strong>
+XeSS can run either on Intel Arc's dedicated XMX AI engines or fall back
+to DP4a (dot product) instructions supported across modern GPUs. DirectX
+exposes these extended math intrinsics, enabling XeSS to scale
+dynamically based on available hardware capabilities.</li>
+</ul>
+<h2 id="asynchronous-compute-and-latency-management">Asynchronous
+Compute and Latency Management</h2>
+<p>DirectX 12 supports asynchronous compute queues, allowing upscaling
+passes to run concurrently with other graphics tasks, such as
+post-processing or lighting calculations. By decoupling upscaling passes
+from the main graphics pipeline where possible, DirectX minimizes frame
+time overhead. Furthermore, integration with low-latency graphics queues
+ensures that the frame generation and upscaling steps do not introduce
+disruptive input lag.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

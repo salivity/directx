@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Bilateral Blur Preserves Edges in DirectX - directx</title>
+    <meta name="description" content="A bilateral blur filter is an edge-preserving smoothing technique used in DirectX post-processing to eliminate noise while maintaining high-contrast structural boundaries. Unlike a standard Gaussian blur that weights neighbor pixels based purely on their">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-bilateral-blur-preserves-edges-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Bilateral Blur Preserves Edges in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-bilateral-blur-preserves-edges-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="A bilateral blur filter is an edge-preserving smoothing technique used in DirectX post-processing to eliminate noise while maintaining high-contrast structural boundaries. Unlike a standard Gaussian blur that weights neighbor pixels based purely on their" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-bilateral-blur-preserves-edges-in-directx">How Bilateral
+Blur Preserves Edges in DirectX</h1>
+<p>A bilateral blur filter is an edge-preserving smoothing technique
+used in DirectX post-processing to eliminate noise while maintaining
+high-contrast structural boundaries. Unlike a standard Gaussian blur
+that weights neighbor pixels based purely on their spatial distance, a
+bilateral filter computes a dual-weight kernel combining spatial
+proximity with photometric or depth similarity. In real-time DirectX
+rendering pipelines, this dual-weight formulation prevents sample values
+from bleeding across steep luminance gradients, depth discontinuities,
+or surface normal variations, keeping silhouettes and fine geometry
+sharp during post-processing passes such as screen-space ambient
+occlusion (SSAO) and depth-of-field denoising.</p>
+<h3 id="the-mathematical-dual-weight-mechanism">The Mathematical
+Dual-Weight Mechanism</h3>
+<p>In standard image filtering, a Gaussian blur applies a spatial
+weight:</p>
+<p><span class="math display">\[\text{Weight}_{\text{spatial}} =
+\exp\left(-\frac{\|\mathbf{p} -
+\mathbf{q}\|^2}{2\sigma_s^2}\right)\]</span></p>
+<p>where <span class="math inline">\(\mathbf{p}\)</span> is the target
+pixel coordinate and <span class="math inline">\(\mathbf{q}\)</span> is
+the neighboring pixel coordinate within the kernel footprint. This
+causes every pixel within radius <span
+class="math inline">\(\sigma_s\)</span> to blend uniformly, inevitably
+softening sharp object borders.</p>
+<p>The bilateral filter counteracts this by introducing a range
+(photometric) weight:</p>
+<p><span class="math display">\[\text{Weight}_{\text{range}} =
+\exp\left(-\frac{\|I(\mathbf{p}) -
+I(\mathbf{q})\|^2}{2\sigma_r^2}\right)\]</span></p>
+<p>where <span class="math inline">\(I(\mathbf{p})\)</span> and <span
+class="math inline">\(I(\mathbf{q})\)</span> represent pixel values,
+such as color luminance, linear scene depth, or normal vectors.</p>
+<p>The composite weight used to sample each neighbor is the product of
+both terms:</p>
+<p><span class="math display">\[\text{Weight}_{\text{total}} =
+\text{Weight}_{\text{spatial}} \times
+\text{Weight}_{\text{range}}\]</span></p>
+<p>When the filter samples across an edge, the range difference <span
+class="math inline">\(\|I(\mathbf{p}) - I(\mathbf{q})\|\)</span> becomes
+large. The exponential function rapidly drives the range weight toward
+zero. Even if a neighbor pixel is spatially adjacent to the center
+pixel, its contribution to the final accumulator is suppressed. As a
+result, only pixels that are both physically near and structurally
+similar are averaged together.</p>
+<h3 id="implementation-in-directx-shaders">Implementation in DirectX
+Shaders</h3>
+<p>In a DirectX High-Level Shading Language (HLSL) post-process pass,
+the bilateral filter runs inside a Pixel Shader (<code>SV_Target</code>)
+or a Compute Shader (<code>CSMain</code>).</p>
+<ol type="1">
+<li><strong>Kernel Sampling</strong>: The shader loops through a 1D or
+2D grid around the target pixel, fetching texture samples using
+<code>Texture2D.SampleLevel</code> or direct integer indexing via
+<code>Texture2D.Load</code>.</li>
+<li><strong>Range Metric Computation</strong>: In real-time graphics,
+relying solely on color values for the range term can be problematic due
+to lighting noise. DirectX pipelines frequently use a <strong>Joint
+Bilateral Filter</strong> (or Cross-Bilateral Filter), where the range
+weight is evaluated using G-buffer auxiliary textures—specifically
+linear depth from <code>SV_Depth</code> and camera-space normals:
+<ul>
+<li><strong>Depth delta</strong>: If <span
+class="math inline">\(|\text{Depth}_p - \text{Depth}_q| &gt;
+\text{Threshold}\)</span>, the weight drops to zero, preventing
+background bleeding into foreground geometry silhouettes.</li>
+<li><strong>Normal delta</strong>: Evaluating the dot product <span
+class="math inline">\((N_p \cdot N_q)\)</span> ensures that sharp
+creases, planar corners, and distinct surface faces do not blur into one
+another.</li>
+</ul></li>
+<li><strong>Normalization</strong>: The accumulated color or effect data
+is divided by the sum of all evaluated composite weights to ensure
+energy preservation across uneven weight distributions.</li>
+</ol>
+<h3 id="real-time-performance-optimizations">Real-Time Performance
+Optimizations</h3>
+<p>The standard bilateral filter is non-separable, requiring <span
+class="math inline">\(\mathcal{O}(R^2)\)</span> texture fetches per
+pixel for a kernel of radius <span class="math inline">\(R\)</span>. In
+DirectX 11 and 12, developers optimize this overhead using two primary
+approaches:</p>
+<ul>
+<li><strong>Separable Approximations</strong>: The filter is split into
+horizontal and vertical 1D passes (<span
+class="math inline">\(\mathcal{O}(2R)\)</span>). While mathematically
+imperfect for range weights, the visual difference is negligible for
+small radii.</li>
+<li><strong>Compute Shader Group Shared Memory</strong>: Compute shaders
+load pixel values and their associated depth/normals into tile-based
+shared memory (<code>groupshared</code>). This avoids redundant texture
+fetches from high-bandwidth device memory, allowing threads within a
+thread group to compute bilateral weights directly from low-latency
+on-chip registers.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

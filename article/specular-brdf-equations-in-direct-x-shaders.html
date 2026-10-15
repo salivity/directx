@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Specular BRDF Equations in DirectX Shaders - directx</title>
+    <meta name="description" content="This article provides an overview of the core mathematical formulations used to evaluate specular Bidirectional Reflectance Distribution Functions (BRDF) in modern DirectX HLSL shaders. Modern real-time rendering pipelines primarily implement the microfac">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/specular-brdf-equations-in-direct-x-shaders">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Specular BRDF Equations in DirectX Shaders - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/specular-brdf-equations-in-direct-x-shaders" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of the core mathematical formulations used to evaluate specular Bidirectional Reflectance Distribution Functions (BRDF) in modern DirectX HLSL shaders. Modern real-time rendering pipelines primarily implement the microfac" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="specular-brdf-equations-in-directx-shaders">Specular BRDF
+Equations in DirectX Shaders</h1>
+<p>This article provides an overview of the core mathematical
+formulations used to evaluate specular Bidirectional Reflectance
+Distribution Functions (BRDF) in modern DirectX HLSL shaders. Modern
+real-time rendering pipelines primarily implement the microfacet-based
+Cook-Torrance specular BRDF. Below is an examination of this
+foundational model, along with the specific equations governing its
+three key components: the Normal Distribution Function, the Geometric
+Masking-Shadowing function, and the Fresnel reflectance term.</p>
+<h3 id="the-cook-torrance-specular-model">The Cook-Torrance Specular
+Model</h3>
+<p>Physically based rendering (PBR) pipelines in DirectX (Direct3D 11
+and 12) evaluate specular highlights using the Cook-Torrance microfacet
+specular BRDF. The general equation is defined as:</p>
+<p><span class="math display">\[f_{\text{spec}}(\mathbf{l}, \mathbf{v})
+= \frac{D(\mathbf{h}) \cdot G(\mathbf{l}, \mathbf{v}) \cdot
+F(\mathbf{v}, \mathbf{h})}{4 (\mathbf{n} \cdot \mathbf{l}) (\mathbf{n}
+\cdot \mathbf{v})}\]</span></p>
+<p>The vectors involved are normalized:</p>
+<ul>
+<li><span class="math inline">\(\mathbf{n}\)</span>: Macro-surface
+normal vector.</li>
+<li><span class="math inline">\(\mathbf{v}\)</span>: View direction
+vector pointing toward the camera.</li>
+<li><span class="math inline">\(\mathbf{l}\)</span>: Light direction
+vector pointing toward the light source.</li>
+<li><span class="math inline">\(\mathbf{h}\)</span>: Half-vector between
+the view and light directions, computed as <span
+class="math inline">\(\mathbf{h} = \frac{\mathbf{l} +
+\mathbf{v}}{\|\mathbf{l} + \mathbf{v}\|}\)</span>.</li>
+</ul>
+<h3 id="1-normal-distribution-function-ndf-ggx--trowbridge-reitz">1.
+Normal Distribution Function (NDF): GGX / Trowbridge-Reitz</h3>
+<p>The Normal Distribution Function <span
+class="math inline">\(D(\mathbf{h})\)</span> determines the statistical
+distribution and concentration of microfacets oriented toward the
+half-vector <span class="math inline">\(\mathbf{h}\)</span>. The
+standard across DirectX engines is the GGX (Trowbridge-Reitz)
+distribution due to its realistic specular tails:</p>
+<p><span class="math display">\[D_{\text{GGX}}(\mathbf{h}) =
+\frac{\alpha^2}{\pi \left( (\mathbf{n} \cdot \mathbf{h})^2 (\alpha^2 -
+1) + 1 \right)^2}\]</span></p>
+<p>In HLSL implementations, <span class="math inline">\(\alpha\)</span>
+is typically mapped as <span class="math inline">\(\alpha =
+\text{roughness}^2\)</span> to provide artists with a more linear
+perceptual control over the surface appearance.</p>
+<h3 id="2-geometric-masking-shadowing-term-g">2. Geometric
+Masking-Shadowing Term (<span class="math inline">\(G\)</span>)</h3>
+<p>The geometric term accounts for the probability that microfacets
+self-shadow incoming light or occlude outgoing reflected light.
+Real-time shaders typically use the Smith formulation paired with the
+GGX distribution. The Smith model splits the attenuation into two
+independent terms:</p>
+<p><span class="math display">\[G(\mathbf{l}, \mathbf{v}) =
+G_1(\mathbf{l}) \cdot G_1(\mathbf{v})\]</span></p>
+<p>A common optimization implemented in DirectX is the Schlick-GGX
+approximation for each direction:</p>
+<p><span class="math display">\[G_1(\mathbf{x}) = \frac{\mathbf{n} \cdot
+\mathbf{x}}{(\mathbf{n} \cdot \mathbf{x})(1 - k) + k}\]</span></p>
+<p>where <span class="math inline">\(\mathbf{x}\)</span> represents
+either <span class="math inline">\(\mathbf{l}\)</span> or <span
+class="math inline">\(\mathbf{v}\)</span>, and <span
+class="math inline">\(k\)</span> is a remapping of roughness adapted for
+direct analytical light:</p>
+<p><span class="math display">\[k_{\text{direct}} = \frac{(\alpha +
+1)^2}{8}\]</span></p>
+<p>To reduce instruction count in HLSL, engine developers frequently
+evaluate a combined Visibility function <span
+class="math inline">\(V(\mathbf{l}, \mathbf{v})\)</span>, which merges
+the geometry term and the denominator of the Cook-Torrance model:</p>
+<p><span class="math display">\[V(\mathbf{l}, \mathbf{v}) =
+\frac{G(\mathbf{l}, \mathbf{v})}{4(\mathbf{n} \cdot
+\mathbf{l})(\mathbf{n} \cdot \mathbf{v})} = \frac{0.5}{(\mathbf{n} \cdot
+\mathbf{l})\sqrt{(\mathbf{n} \cdot \mathbf{v})^2(1 - \alpha^2) +
+\alpha^2} + (\mathbf{n} \cdot \mathbf{v})\sqrt{(\mathbf{n} \cdot
+\mathbf{l})^2(1 - \alpha^2) + \alpha^2}}\]</span></p>
+<h3 id="3-fresnel-reflectance-f-schlicks-approximation">3. Fresnel
+Reflectance (<span class="math inline">\(F\)</span>): Schlick's
+Approximation</h3>
+<p>The Fresnel term computes the fraction of light reflected versus
+refracted at microfacet interfaces based on the viewing angle. Shaders
+approximate the full Fresnel equations using Schlick's
+approximation:</p>
+<p><span class="math display">\[F(\mathbf{v}, \mathbf{h}) = F_0 + (1 -
+F_0) \left( 1 - (\mathbf{v} \cdot \mathbf{h}) \right)^5\]</span></p>
+<ul>
+<li><span class="math inline">\(F_0\)</span> represents the specular
+reflectance at normal incidence (<span class="math inline">\(\theta =
+0^\circ\)</span>).</li>
+<li>For dielectrics (non-metals), <span
+class="math inline">\(F_0\)</span> is generally around a constant 0.04
+(4% reflectance).</li>
+<li>For conductors (metals), <span class="math inline">\(F_0\)</span> is
+set directly from the surface's albedo color using the material's
+metallic parameter: <span class="math inline">\(F_0 = \text{lerp}(0.04,
+\text{albedo}, \text{metallic})\)</span>.</li>
+</ul>
+<h3 id="legacy-formulations-blinn-phong">Legacy Formulations:
+Blinn-Phong</h3>
+<p>Older DirectX shaders and performance-constrained forward passes
+often replace microfacet equations with the empirical Blinn-Phong
+formulation:</p>
+<p><span class="math display">\[f_{\text{spec}}(\mathbf{l}, \mathbf{v})
+= k_s (\mathbf{n} \cdot \mathbf{h})^s\]</span></p>
+<p>where <span class="math inline">\(k_s\)</span> is the specular color
+and <span class="math inline">\(s\)</span> is the specular power
+(shininess). While computationally inexpensive, it lacks the physical
+energy conservation and realistic grazing-angle behavior provided by the
+Cook-Torrance microfacet model.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

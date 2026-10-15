@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX Spatial Rendering in Windows Mixed Reality - directx</title>
+    <meta name="description" content="Windows Mixed Reality (WMR) relies on deep architectural integration with Microsoft’s DirectX API to achieve low-latency spatial rendering, minimizing the critical motion-to-photon gap that causes motion sickness. By pairing Direct3D with specialized holo">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-spatial-rendering-in-windows-mixed-reality">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX Spatial Rendering in Windows Mixed Reality - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-spatial-rendering-in-windows-mixed-reality" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Windows Mixed Reality (WMR) relies on deep architectural integration with Microsoft’s DirectX API to achieve low-latency spatial rendering, minimizing the critical motion-to-photon gap that causes motion sickness. By pairing Direct3D with specialized holo" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-spatial-rendering-in-windows-mixed-reality">DirectX
+Spatial Rendering in Windows Mixed Reality</h1>
+<p>Windows Mixed Reality (WMR) relies on deep architectural integration
+with Microsoft’s DirectX API to achieve low-latency spatial rendering,
+minimizing the critical motion-to-photon gap that causes motion
+sickness. By pairing Direct3D with specialized holographic APIs, WMR
+bypasses traditional desktop composition layers, leverages GPU hardware
+acceleration for real-time tracking adjustments, and implements
+late-stage reprojection techniques. This ensures virtual content remains
+stable, anchored, and responsive within a user's physical
+environment.</p>
+<h2 id="direct-mode-and-bypass-of-desktop-window-manager">Direct Mode
+and Bypass of Desktop Window Manager</h2>
+<p>Traditional Windows applications render through the Desktop Window
+Manager (DWM), which introduces composition buffering and display
+latency. Windows Mixed Reality avoids this by utilizing a "Direct Mode"
+display configuration via the <code>Windows.Graphics.Holographic</code>
+API and Direct3D 11 or 12.</p>
+<p>Direct Mode grants the mixed reality runtime exclusive, low-level
+control over the head-mounted display (HMD). Rendering commands are
+issued straight to the HMD's display pipeline, bypassing the desktop
+swap chain entirely. This direct path eliminates multiple frames of
+buffering, establishing the baseline for low-latency delivery.</p>
+<h2 id="pose-prediction-and-precise-swap-chains">Pose Prediction and
+Precise Swap Chains</h2>
+<p>Spatial rendering requires matching rendered images to the user's
+exact head position at the precise moment the display illuminates.
+DirectX facilitates this through holographic swap chains configured for
+tight timing synchronization:</p>
+<ol type="1">
+<li><strong>Prediction Polling:</strong> Just before rendering begins,
+the application queries the platform's spatial perception APIs for a
+predicted head pose corresponding to the target display scan-out
+time.</li>
+<li><strong>Dynamic Camera Updates:</strong> DirectX view and projection
+matrices are dynamically computed from this predicted pose for both the
+left and right eyes.</li>
+<li><strong>Immediate Submission:</strong> Frames are submitted to the
+holographic frame queue with metadata detailing the specific pose used
+during rendering.</li>
+</ol>
+<h2 id="single-pass-stereo-and-variable-rate-shading">Single-Pass Stereo
+and Variable Rate Shading</h2>
+<p>Rendering dual viewpoints for stereoscopic vision effectively doubles
+the geometric processing load. WMR leverages advanced DirectX features
+to mitigate this bottleneck:</p>
+<ul>
+<li><strong>DirectX 12 Multi-View / SV_RenderTargetArrayIndex:</strong>
+Allows geometry to be processed once in the vertex pipeline and
+duplicated to both eye viewports using hardware instancing. This cuts
+draw call overhead in half.</li>
+<li><strong>Variable Rate Shading (VRS):</strong> DirectX 12 VRS enables
+the GPU to allocate fewer shading resources to peripheral regions while
+maintaining high fidelity in the center of the user's field of view,
+significantly speeding up frame generation times.</li>
+</ul>
+<h2 id="late-stage-reprojection-lsr">Late Stage Reprojection (LSR)</h2>
+<p>The primary defense against latency and dropped frames in WMR is Late
+Stage Reprojection. Even with high frame rates, small changes in head
+position occur between the start of a frame render and the physical
+display scanout.</p>
+<p>DirectX enables LSR through asynchronous compute queues:</p>
+<ul>
+<li><strong>Hardware-Scheduled Warping:</strong> A high-priority DirectX
+compute shader runs independently of the main rendering loop immediately
+before VSync. It takes the most recently completed frame, retrieves an
+updated head pose, and applies a perspective warp to adjust the final
+image.</li>
+<li><strong>Depth-Based LSR:</strong> Developers submit a DirectX depth
+buffer alongside the color buffer. The reprojection algorithm uses this
+pixel-level depth information to account for both rotational head
+movements and positional translation (parallax), preventing visual
+tearing and floating artifacts in 3D space.</li>
+</ul>
+<h2 id="asynchronous-compute-and-gpu-preemption">Asynchronous Compute
+and GPU Preemption</h2>
+<p>DirectX 12's explicit multi-queue architecture is central to WMR’s
+frame stability. Reprojection tasks are executed on high-priority
+compute queues that preempt standard 3D rendering tasks. If an
+application frame takes too long to render, DirectX preempts the
+workload, reprojects the previous valid frame using the latest tracking
+data, and sends it to the display. This guarantees a steady refresh rate
+(typically 90Hz) and prevents visual stutter, keeping spatial rendering
+smooth and locked in physical space.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

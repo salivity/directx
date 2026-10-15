@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectXMesh Processing and Optimization Tools - directx</title>
+    <meta name="description" content="The DirectXMesh library is an open-source, lightweight C++ utility library created by Microsoft to facilitate geometry processing, cleaning, and runtime optimization for DirectX 11 and DirectX 12 applications. This article breaks down the primary mesh pro">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-mesh-processing-and-optimization-tools">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectXMesh Processing and Optimization Tools - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-mesh-processing-and-optimization-tools" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The DirectXMesh library is an open-source, lightweight C++ utility library created by Microsoft to facilitate geometry processing, cleaning, and runtime optimization for DirectX 11 and DirectX 12 applications. This article breaks down the primary mesh pro" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directxmesh-processing-and-optimization-tools">DirectXMesh
+Processing and Optimization Tools</h1>
+<p>The DirectXMesh library is an open-source, lightweight C++ utility
+library created by Microsoft to facilitate geometry processing,
+cleaning, and runtime optimization for DirectX 11 and DirectX 12
+applications. This article breaks down the primary mesh processing and
+optimization tools included in the library, highlighting how they handle
+vertex cache tuning, geometry cleaning, tangent frame generation, and
+command-line asset conversion.</p>
+<h3 id="vertex-cache-and-pipeline-optimization">Vertex Cache and
+Pipeline Optimization</h3>
+<p>DirectXMesh includes industry-standard algorithms to reorder indices
+and vertices for maximum GPU hardware performance:</p>
+<ul>
+<li><strong>Post-Transform Cache Optimization
+(<code>OptimizeFaces</code>):</strong> Reorders face indices to maximize
+GPU vertex cache reuse (transform hit rates) using algorithms like
+Forsyth’s or Tipsify. This drastically minimizes the number of redundant
+vertex shader executions.</li>
+<li><strong>Pre-Transform Cache Optimization
+(<code>OptimizeVertices</code>):</strong> Reorders the vertex buffer
+based on when vertices are referenced in the optimized index buffer.
+This organizes vertex data sequentially in memory to improve the GPU's
+memory fetch cache locality.</li>
+<li><strong>Attribute Sorting (<code>OptimizeFaces</code> with
+attributes):</strong> Sorts triangle faces by attribute IDs (such as
+material indices or subsets) to reduce draw call overhead and improve
+state-switching efficiency.</li>
+</ul>
+<h3 id="adjacency-and-topology-computation">Adjacency and Topology
+Computation</h3>
+<p>Accurate mesh topology is required for advanced rendering techniques
+and processing steps. DirectXMesh provides functions to compute
+structural geometric relationships:</p>
+<ul>
+<li><strong>Adjacency Computation
+(<code>GenerateAdjacencyAndPointReps</code>):</strong> Computes
+per-triangle adjacency information (identifying neighboring faces
+sharing an edge) and creates point representative arrays to resolve
+topologically shared vertices across discontinuous UV or normal
+boundaries.</li>
+<li><strong>Index Buffer Generation:</strong> Extracts triangle and edge
+indices from point arrays or unindexed primitive data.</li>
+</ul>
+<h3 id="mesh-cleaning-and-validation">Mesh Cleaning and Validation</h3>
+<p>To avoid rendering anomalies and pipeline crashes, DirectXMesh
+includes tools to diagnose and repair malformed geometry:</p>
+<ul>
+<li><strong>Mesh Validation (<code>Validate</code>):</strong> Checks
+geometry for invalid floating-point values, out-of-range indices,
+degenerate triangles (zero-area faces), and non-manifold geometric
+configurations.</li>
+<li><strong>Mesh Cleaning (<code>Clean</code>):</strong> Automatically
+removes degenerate triangles, splits non-manifold vertices, and resolves
+shared edges that violate standard manifold constraints to ensure the
+mesh can be safely optimized and shaded.</li>
+</ul>
+<h3 id="normal-tangent-and-bitangent-generation">Normal, Tangent, and
+Bitangent Generation</h3>
+<p>DirectXMesh handles surface orientation and lighting coordinate
+system computation:</p>
+<ul>
+<li><strong>Normal Computation (<code>ComputeNormals</code>):</strong>
+Generates per-vertex surface normals from triangle face data, supporting
+angle-weighted calculations for smoother visual transitions.</li>
+<li><strong>Tangent Frame Computation
+(<code>ComputeTangentFrame</code>):</strong> Calculates tangent and
+bitangent (binormal) vectors based on texture coordinates (UVs) and
+normals. It handles mirror mapping, texture seams, and orthogonalization
+required for standard normal-mapping shaders.</li>
+</ul>
+<h3 id="the-meshconvert-command-line-tool">The <code>meshconvert</code>
+Command-Line Tool</h3>
+<p>In addition to its runtime C++ API, the DirectXMesh repository
+packages <code>meshconvert</code>, an out-of-the-box command-line tool.
+It enables developers to integrate DirectXMesh optimizations directly
+into automated build pipelines. The tool can read geometry files (such
+as Wavefront <code>.obj</code>, <code>.sdkmesh</code>, and
+<code>.cmo</code>), apply vertex cache optimizations, recalculate
+normals and tangent frames, and output production-ready geometry
+buffers.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

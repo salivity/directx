@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amplification Shader Mesh Dispatch in DirectX - directx</title>
+    <meta name="description" content="In DirectX 12, the Amplification Shader acts as an optional, programmable pre-pass to the Mesh Shader that determines how many downstream mesh threadgroups to execute. By evaluating scene data directly on the GPU—such as frustum visibility, occlusion test">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/amplification-shader-mesh-dispatch-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Amplification Shader Mesh Dispatch in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/amplification-shader-mesh-dispatch-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, the Amplification Shader acts as an optional, programmable pre-pass to the Mesh Shader that determines how many downstream mesh threadgroups to execute. By evaluating scene data directly on the GPU—such as frustum visibility, occlusion test" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="amplification-shader-mesh-dispatch-in-directx">Amplification
+Shader Mesh Dispatch in DirectX</h1>
+<p>In DirectX 12, the Amplification Shader acts as an optional,
+programmable pre-pass to the Mesh Shader that determines how many
+downstream mesh threadgroups to execute. By evaluating scene data
+directly on the GPU—such as frustum visibility, occlusion tests, or
+distance-based Level of Detail (LOD)—the amplification shader
+dynamically dictates the execution grid of the mesh shader. This article
+explains the intrinsic mechanisms, execution logic, and data flow used
+to launch mesh shader threadgroups.</p>
+<h3 id="the-dispatchmesh-intrinsic">The <code>DispatchMesh</code>
+Intrinsic</h3>
+<p>The amplification shader controls mesh shader execution through a
+built-in HLSL function called <code>DispatchMesh</code>. This function
+is the sole mechanism by which an amplification shader creates mesh
+shader work.</p>
+<p>The signature of the function is:</p>
+<pre class="hlsl"><code>void DispatchMesh(
+    uint ThreadGroupCountX,
+    uint ThreadGroupCountY,
+    uint ThreadGroupCountZ,
+    in payload_t Payload
+);</code></pre>
+<p>The arguments <code>ThreadGroupCountX</code>,
+<code>ThreadGroupCountY</code>, and <code>ThreadGroupCountZ</code>
+define the three-dimensional dimensions of the mesh shader threadgroup
+grid. The total number of mesh shader threadgroups launched is the
+product of these three dimensions (<span class="math inline">\(X \times
+Y \times Z\)</span>).</p>
+<h3 id="determining-grid-dimensions">Determining Grid Dimensions</h3>
+<p>Because the amplification shader runs per-threadgroup computation, it
+can calculate the dispatch dimensions dynamically at runtime rather than
+relying on static values from the CPU.</p>
+<p>Common methods for calculating these counts include:</p>
+<ol type="1">
+<li><strong>Frustum and Occlusion Culling:</strong> The amplification
+shader tests coarse bounding volumes (such as bounding spheres or
+oriented bounding boxes) against the camera frustum or a hierarchical
+Z-buffer. If a meshlet or object is invisible, the shader sets the
+dispatch counts to <code>(0, 0, 0)</code>. This completely culls the
+geometry and prevents any mesh shader threadgroups from being
+allocated.</li>
+<li><strong>Dynamic LOD Selection:</strong> By computing the distance
+between a bounding sphere center and the camera, the shader selects an
+appropriate level of detail. Coarser LODs require fewer meshlets,
+resulting in lower dispatch dimensions (e.g.,
+<code>DispatchMesh(2, 1, 1, payload)</code>), whereas finer LODs request
+more threadgroups (e.g.,
+<code>DispatchMesh(16, 1, 1, payload)</code>).</li>
+<li><strong>Subdivision and Dynamic Expansion:</strong> When
+tessellating or procedurally generating geometry, the amplification
+shader computes how many meshlets are required to represent the expanded
+surface and outputs the corresponding threadgroup count.</li>
+</ol>
+<h3 id="the-payload-structure">The Payload Structure</h3>
+<p>Along with the dispatch dimensions, <code>DispatchMesh</code> accepts
+a user-defined <code>Payload</code> parameter. This payload is stored in
+shared memory and passed directly to all mesh shader threadgroups
+instantiated by that specific call.</p>
+<p>The payload typically contains:</p>
+<ul>
+<li>An array of meshlet indices that survived culling.</li>
+<li>Calculated LOD offsets or transformation matrices.</li>
+<li>Dynamic material or instance IDs.</li>
+</ul>
+<p>Downstream mesh shaders access this data using the
+<code>[[vk::payload]]</code> or HLSL <code>in payload</code> attribute,
+enabling each generated mesh threadgroup to identify which specific
+piece of geometry it is responsible for processing.</p>
+<h3 id="execution-constraints">Execution Constraints</h3>
+<ul>
+<li><strong>Single Invocation per Threadgroup:</strong> While multiple
+threads within an amplification shader threadgroup can participate in
+culling tests and calculating the final counts using group shared memory
+or wave intrinsics, <code>DispatchMesh</code> must be called uniformly
+or by a single designated thread (often the first thread, using an
+<code>if (GroupThreadID == 0)</code> check) after all calculations and
+data synchronization are complete.</li>
+<li><strong>Dispatch Limits:</strong> The maximum number of total mesh
+shader threadgroups that can be dispatched by a single amplification
+shader group is subject to hardware and API limits, typically up to
+<span class="math inline">\(2^{16} - 1\)</span> threadgroups across all
+dimensions.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

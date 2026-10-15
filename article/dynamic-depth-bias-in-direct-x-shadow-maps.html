@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Depth Bias in DirectX Shadow Maps - directx</title>
+    <meta name="description" content="Shadow mapping in DirectX often suffers from self-shadowing artifacts, commonly referred to as shadow acne or z-fighting, which occur due to finite depth buffer precision and resolution limits. This article explores how DirectX resolves these artifacts us">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dynamic-depth-bias-in-direct-x-shadow-maps">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Dynamic Depth Bias in DirectX Shadow Maps - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dynamic-depth-bias-in-direct-x-shadow-maps" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Shadow mapping in DirectX often suffers from self-shadowing artifacts, commonly referred to as shadow acne or z-fighting, which occur due to finite depth buffer precision and resolution limits. This article explores how DirectX resolves these artifacts us" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="dynamic-depth-bias-in-directx-shadow-maps">Dynamic Depth Bias in
+DirectX Shadow Maps</h1>
+<p>Shadow mapping in DirectX often suffers from self-shadowing
+artifacts, commonly referred to as shadow acne or z-fighting, which
+occur due to finite depth buffer precision and resolution limits. This
+article explores how DirectX resolves these artifacts using dynamic
+depth bias parameters—specifically constant depth bias, slope-scaled
+depth bias, and depth bias clamp—within the rasterizer state. By
+adjusting depth calculations based on surface orientation relative to
+light sources, these parameters push shadow map comparisons beyond
+precision thresholds, eliminating false self-occlusion without causing
+detached shadows.</p>
+<h3 id="the-cause-of-shadow-map-z-fighting">The Cause of Shadow Map
+Z-Fighting</h3>
+<p>When rendering a shadow map, the scene’s depth is captured from the
+perspective of the light source and stored in a discrete texture. During
+the main rendering pass, a surface fragment's distance to the light is
+compared against the sampled depth from the shadow map.</p>
+<p>Because the shadow map has a finite pixel grid and numerical
+floating-point limits, multiple screen-space fragments map to the same
+shadow map texel. If a surface is not completely perpendicular to the
+light direction, some fragments on a smooth polygon will evaluate as
+slightly deeper than the stored texel value, while others evaluate as
+closer. This creates an alternating pattern of light and dark bands
+across the surface known as shadow acne or self-shadowing
+z-fighting.</p>
+<h3 id="core-dynamic-depth-bias-parameters">Core Dynamic Depth Bias
+Parameters</h3>
+<p>DirectX addresses this issue at the hardware rasterization stage
+using the rasterizer state (<code>D3D11_RASTERIZER_DESC</code> or
+<code>D3D12_RASTERIZER_DESC</code>). Rather than applying manual offsets
+in custom pixel shaders, developers configure three primary rasterizer
+parameters:</p>
+<ul>
+<li><strong>DepthBias (Constant Bias):</strong> An integer value
+converted by hardware into a fixed depth offset. It applies a uniform
+shift to the z-value of every rasterized primitive.</li>
+<li><strong>SlopeScaledDepthBias:</strong> A dynamic multiplier that
+scales the offset proportionally to the primitive's slope (the rate of
+depth change across the polygon). Surfaces tilted sharply away from the
+light have a higher slope and receive a larger depth shift.</li>
+<li><strong>DepthBiasClamp:</strong> A floating-point upper bound that
+limits the total calculated bias. This prevents geometry viewed at
+extreme, grazing angles from receiving excessively large offsets.</li>
+</ul>
+<h3 id="how-dynamic-bias-eliminates-z-fighting">How Dynamic Bias
+Eliminates Z-Fighting</h3>
+<p>A static, constant bias is rarely sufficient across an entire scene.
+If the constant bias is set high enough to fix z-fighting on steep
+surfaces, flat surfaces experience "Peter Panning"—an artifact where
+shadows detach from the base of objects because the depth has been
+pushed too far back. Conversely, if the constant bias is too low, steep
+surfaces will continue to show severe shadow acne.</p>
+<p>The DirectX rasterizer dynamically evaluates total bias for each
+polygon using the following hardware formula:</p>
+<p><span class="math display">\[\text{Total Bias} = (\text{Slope} \times
+\text{SlopeScaledDepthBias}) + \text{DepthBias}\]</span></p>
+<p>The hardware calculates the slope as the maximum rate of change of
+depth with respect to screen-space coordinates:</p>
+<p><span class="math display">\[\text{Slope} =
+\max\left(\left|\frac{\partial z}{\partial x}\right|,
+\left|\frac{\partial z}{\partial y}\right|\right)\]</span></p>
+<p>When a polygon faces the light directly, <span
+class="math inline">\(\text{Slope}\)</span> approaches zero, meaning the
+applied bias is almost purely determined by <code>DepthBias</code>. As
+the surface angles away from the light, the derivative of depth
+increases, automatically raising the total bias to match the larger
+depth discrepancies between adjacent texels.</p>
+<p>Finally, if the computed total bias exceeds the
+<code>DepthBiasClamp</code>, the hardware caps the value. This ensures
+that near-parallel surfaces to the light vector do not generate an
+infinite or excessive depth offset that degrades shadow quality
+elsewhere.</p>
+<p>By combining slope-aware scaling with hardware-level clamping,
+DirectX dynamically delivers the minimum depth offset required to push
+surfaces behind the shadow comparison threshold, cleanly eliminating
+z-fighting while preserving contact shadows.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

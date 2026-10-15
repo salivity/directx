@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DXR Geometry Compaction: Reducing Memory Footprint - directx</title>
+    <meta name="description" content="In DirectX Raytracing (DXR), geometry compaction is a post-build optimization process designed to reclaim unused video memory allocated to Bottom-Level Acceleration Structures (BLAS). During the initial construction of an acceleration structure, the graph">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dxr-geometry-compaction-reducing-memory-footprint">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DXR Geometry Compaction: Reducing Memory Footprint - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dxr-geometry-compaction-reducing-memory-footprint" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX Raytracing (DXR), geometry compaction is a post-build optimization process designed to reclaim unused video memory allocated to Bottom-Level Acceleration Structures (BLAS). During the initial construction of an acceleration structure, the graph" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="dxr-geometry-compaction-reducing-memory-footprint">DXR Geometry
+Compaction: Reducing Memory Footprint</h1>
+<p>In DirectX Raytracing (DXR), geometry compaction is a post-build
+optimization process designed to reclaim unused video memory allocated
+to Bottom-Level Acceleration Structures (BLAS). During the initial
+construction of an acceleration structure, the graphics driver must
+allocate a conservative worst-case memory buffer to guarantee the build
+succeeds. Geometry compaction measures the true, finalized size of the
+acceleration structure on the GPU and copies it into a precisely sized
+destination buffer, typically cutting BLAS memory footprints by 30 to 50
+percent and improving hardware cache locality during ray traversal.</p>
+<h3 id="the-problem-of-over-allocation">The Problem of
+Over-Allocation</h3>
+<p>When building a BLAS, the DXR API queries the driver for memory
+requirements via
+<code>GetRaytracingAccelerationStructurePrebuildInfo</code>. Because the
+underlying bounding volume hierarchy (BVH) generation relies on complex
+spatial partitioning algorithms, triangle sorting, and potential
+primitive splitting, the driver cannot know the exact topology or size
+of the tree ahead of time. Consequently, the returned
+<code>ResultDataMaxSizeInBytes</code> is an overestimation to
+accommodate the worst-case scenario. If left uncompacted, this unused
+space remains resident in VRAM across hundreds or thousands of scene
+meshes.</p>
+<h3 id="the-compaction-workflow">The Compaction Workflow</h3>
+<p>To reclaim this excess space, developers implement a multi-step GPU
+workflow:</p>
+<ol type="1">
+<li><strong>Enable Compaction:</strong> The initial BLAS is built with
+the
+<code>D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION</code>
+flag. This instructs the driver to generate internal metadata necessary
+for sizing and copying.</li>
+<li><strong>Query Compacted Size:</strong> The application executes
+<code>EmitRaytracingAccelerationStructurePostbuildInfo</code>,
+requesting the
+<code>D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE</code>
+metric. The GPU writes the exact byte requirement of the completed
+structure into a designated buffer.</li>
+<li><strong>Allocate Tight Buffers:</strong> The application allocates a
+new <code>ID3D12Resource</code> buffer matching the exact reported
+compacted size, either per mesh or out of a shared sub-allocated
+pool.</li>
+<li><strong>Execute Compaction Copy:</strong> The application calls
+<code>CopyRaytracingAccelerationStructure</code> using the
+<code>D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT</code>
+mode, directing the GPU to copy the data from the oversized source
+buffer to the newly allocated, tightly fitted target buffer.</li>
+<li><strong>Reclaim Memory:</strong> Once the copy completes and the
+Top-Level Acceleration Structure (TLAS) updates its instance pointers to
+the new BLAS addresses, the original, oversized build buffers are
+deallocated.</li>
+</ol>
+<h3 id="performance-and-architectural-benefits">Performance and
+Architectural Benefits</h3>
+<p>Geometry compaction delivers two distinct hardware benefits:</p>
+<ul>
+<li><strong>Drastic VRAM Reduction:</strong> Compaction removes spatial
+padding and unused node slots. For modern games with dense geometric
+detail, this frees hundreds of megabytes or even gigabytes of VRAM.</li>
+<li><strong>Improved Cache Efficiency:</strong> Ray traversal is memory
+bandwidth-intensive. A compacted acceleration structure has higher data
+density, meaning fewer cache lines must be fetched from VRAM when
+streaming BVH nodes and primitive data into the GPU’s L1 and L2 caches.
+This leads to higher cache hit rates and lower latency during
+intersection tests.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

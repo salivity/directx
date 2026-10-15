@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sampler Feedback Min-Maps in DirectX Explained - directx</title>
+    <meta name="description" content="Sampler feedback min-maps are a specialized Direct3D 12 Ultimate feature designed to record exactly which texture regions and mipmap levels the GPU accesses during rendering. By writing the minimum (most detailed) sampled mip level into a low-resolution f">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/sampler-feedback-min-maps-in-direct-x-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Sampler Feedback Min-Maps in DirectX Explained - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/sampler-feedback-min-maps-in-direct-x-explained" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Sampler feedback min-maps are a specialized Direct3D 12 Ultimate feature designed to record exactly which texture regions and mipmap levels the GPU accesses during rendering. By writing the minimum (most detailed) sampled mip level into a low-resolution f" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="sampler-feedback-min-maps-in-directx-explained">Sampler Feedback
+Min-Maps in DirectX Explained</h1>
+<p>Sampler feedback min-maps are a specialized Direct3D 12 Ultimate
+feature designed to record exactly which texture regions and mipmap
+levels the GPU accesses during rendering. By writing the minimum (most
+detailed) sampled mip level into a low-resolution feedback texture,
+developers obtain precise, hardware-driven telemetry about texture
+usage. This article explains how sampler feedback min-maps work and how
+they eliminate texture over-fetching, optimize memory consumption, and
+streamline GPU streaming pipelines.</p>
+<h3 id="understanding-sampler-feedback-and-min-maps">Understanding
+Sampler Feedback and Min-Maps</h3>
+<p>In traditional rendering pipelines, the CPU makes educated guesses
+about which mipmap levels an object needs based on heuristics like
+camera distance, bounding boxes, or screen coverage. These estimates are
+often imprecise because they cannot account for real-time GPU-side
+conditions such as dynamic occlusions, complex shader arithmetic, or
+oblique surface angles.</p>
+<p>Sampler feedback introduces hardware support for capturing texture
+access patterns directly from the graphics pipeline. A
+<strong>min-map</strong> (or Minification / Min-LOD feedback map) is a
+low-resolution resource paired with a source texture. When a pixel or
+compute shader samples the source texture, the GPU automatically records
+the lowest (most detailed) mip level requested in the corresponding
+region of the min-map. Because it records the minimum numerical value
+(where mip 0 is the highest resolution), the min-map always reflects the
+highest level of detail required by any visible pixel in that
+region.</p>
+<h3 id="the-problem-of-texture-over-fetching">The Problem of Texture
+Over-Fetching</h3>
+<p>Texture over-fetching occurs when a rendering engine loads more
+texture data into video memory (VRAM) than the GPU actually samples.
+This inefficiency typically manifests in two ways:</p>
+<ol type="1">
+<li><strong>Spatial Over-Fetching:</strong> An entire texture or
+high-resolution mip level is streamed into memory, even if only a small
+fraction of the surface is currently visible on screen.</li>
+<li><strong>Resolution Over-Fetching:</strong> A higher-detail mip level
+is loaded based on bounding-box proximity, but screen-space factors,
+anisotropic filtering angles, or surface orientations mean the GPU only
+ever requests lower-detail mips.</li>
+</ol>
+<p>Over-fetching degrades performance by saturating PCIe and storage
+bandwidth, inflating VRAM footprints, and causing frame stutters or
+visible texture pop-in when resource transfers queue up.</p>
+<h3 id="how-min-maps-prevent-over-fetching">How Min-Maps Prevent
+Over-Fetching</h3>
+<p>Sampler feedback min-maps act as a ground-truth feedback loop between
+the GPU and the streaming system, resolving over-fetching through
+several mechanisms:</p>
+<h4 id="1-hardware-accurate-demand-tracking">1. Hardware-Accurate Demand
+Tracking</h4>
+<p>Rather than relying on CPU estimations, the engine queries the
+min-map generated by the GPU during actual rasterization. If an object
+is partially occluded by another model, the occluded portions will not
+execute pixel shaders, leaving those regions unrecorded in the min-map.
+As a result, the engine streams only the surface regions that actively
+impact the final image.</p>
+<h4 id="2-granular-tiled-resource-loading">2. Granular Tiled Resource
+Loading</h4>
+<p>Sampler feedback is commonly paired with DirectX 12 Reserved
+Resources (tiled textures). Min-maps expose usage at a configurable
+sub-resource granularity (such as 16x16, 32x32, or 64x64 texel blocks).
+By reading the min-map, the streaming system identifies the exact
+physical tiles required at each mip level and binds memory only to those
+active tiles, leaving non-visible tiles unmapped.</p>
+<h4 id="3-elimination-of-redundant-mip-streaming">3. Elimination of
+Redundant Mip Streaming</h4>
+<p>Because the min-map stores the minimum mip index, the asset loader
+knows precisely when a higher-resolution mip is unnecessary. For
+example, if a texture's min-map indicates that mip level 2 is the most
+detailed level sampled across an entire surface, the engine avoids
+requesting mip levels 1 and 0 from disk. This drastically limits read
+requests to the exact resolution required for the current camera
+viewpoint.</p>
+<h4 id="4-asynchronous-stall-free-readback">4. Asynchronous, Stall-Free
+Readback</h4>
+<p>Generating feedback data incurs minimal GPU overhead because it
+writes directly to the feedback resource during standard sampler calls
+without stalling the pipeline. The CPU reads this feedback
+asynchronously across frames, creating a stable, continuous streaming
+budget that prevents bandwidth spikes.</p>
+<p>By replacing conservative heuristics with exact GPU sampling data,
+sampler feedback min-maps ensure that memory and I/O pipelines transfer
+only the texture data that actively contributes to rendered frames.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

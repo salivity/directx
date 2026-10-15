@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 VRS: Per-Draw, Per-Primitive, and Image-Based - directx</title>
+    <meta name="description" content="Variable Rate Shading (VRS) in DirectX 12 allows developers to optimize rendering performance by dynamically altering the pixel shading rate across a render target without sacrificing geometry resolution or edge quality. This article examines the core dif">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-vrs-per-draw-per-primitive-and-image-based">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 VRS: Per-Draw, Per-Primitive, and Image-Based - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-vrs-per-draw-per-primitive-and-image-based" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Variable Rate Shading (VRS) in DirectX 12 allows developers to optimize rendering performance by dynamically altering the pixel shading rate across a render target without sacrificing geometry resolution or edge quality. This article examines the core dif" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-vrs-per-draw-per-primitive-and-image-based">DirectX
+12 VRS: Per-Draw, Per-Primitive, and Image-Based</h1>
+<p>Variable Rate Shading (VRS) in DirectX 12 allows developers to
+optimize rendering performance by dynamically altering the pixel shading
+rate across a render target without sacrificing geometry resolution or
+edge quality. This article examines the core differences between the
+three shading rate delivery mechanisms defined in the DirectX 12
+specification: per-draw, per-primitive, and screen-space image-based
+shading. Understanding these mechanisms—along with their tier
+requirements, granularity, and typical implementations—enables
+developers to maximize frame rates while preserving visual fidelity.</p>
+<h3 id="overview-of-variable-rate-shading-in-dx12">Overview of Variable
+Rate Shading in DX12</h3>
+<p>VRS decouples the pixel shader execution frequency from the
+rasterization rate. Instead of evaluating the pixel shader for every
+single pixel, the GPU can run the pixel shader once across a block of
+pixels (such as 1x2, 2x1, 2x2, 2x4, 4x2, or 4x4) and broadcast the
+output color across the entire footprint.</p>
+<p>DirectX 12 organizes VRS capabilities into two hardware tiers:</p>
+<ul>
+<li><strong>Tier 1:</strong> Supports per-draw shading rates only.</li>
+<li><strong>Tier 2:</strong> Supports per-draw, per-primitive, and
+screen-space image-based shading rates, as well as shading rate
+combiners.</li>
+</ul>
+<hr />
+<h3 id="1-per-draw-vrs-tier-1">1. Per-Draw VRS (Tier 1)</h3>
+<p>Per-draw VRS applies a single, uniform shading rate across all
+primitives submitted within an individual draw call.</p>
+<ul>
+<li><strong>Mechanism:</strong> The shading rate is set on the command
+list via the <code>ID3D12GraphicsCommandList5::RSSetShadingRate</code>
+API call prior to issuing a draw.</li>
+<li><strong>Granularity:</strong> Coarse. Every pixel produced by the
+draw call is shaded at the specified rate unless clipped or culled.</li>
+<li><strong>Overhead:</strong> Extremely low. Setting the rate carries
+negligible CPU and GPU execution overhead because it does not require
+additional memory reads or shader attribute processing.</li>
+<li><strong>Ideal Use Cases:</strong>
+<ul>
+<li>Background scenery or non-essential geometry known to lack
+high-frequency detail.</li>
+<li>User interfaces or large, flat-shaded decals.</li>
+<li>Objects heavily blurred by depth of field or volumetric fog, where
+high-frequency pixel shading is wasted.</li>
+</ul></li>
+</ul>
+<hr />
+<h3 id="2-per-primitive-vrs-tier-2">2. Per-Primitive VRS (Tier 2)</h3>
+<p>Per-primitive VRS enables the application to assign different shading
+rates to individual triangles within the same draw call.</p>
+<ul>
+<li><strong>Mechanism:</strong> The shading rate is written by a
+programmable shader stage prior to rasterization—typically a Geometry
+Shader or Mesh Shader—using the <code>SV_ShadingRate</code>
+system-generated value.</li>
+<li><strong>Granularity:</strong> Fine. A single mesh can shade fine
+details at 1x1 while shading flat, low-contrast, or back-facing regions
+at 2x2 or 4x4 within the exact same draw submission.</li>
+<li><strong>Overhead:</strong> Moderate. Requires shader logic to
+calculate or fetch the target rate per primitive, along with vertex/mesh
+shader pipeline support.</li>
+<li><strong>Ideal Use Cases:</strong>
+<ul>
+<li>Complex continuous meshes where edge silhouettes require full
+fidelity (1x1), but internal, low-variance surfaces can be shaded
+coarsely.</li>
+<li>Dynamic level of detail (LOD) systems based on primitive size,
+viewing angle, or distance from the camera.</li>
+</ul></li>
+</ul>
+<hr />
+<h3 id="3-screen-space-image-based-vrs-tier-2">3. Screen-Space
+Image-Based VRS (Tier 2)</h3>
+<p>Screen-space image-based VRS dictates shading rates using a
+low-resolution texture—the Shading Rate Image (SRI)—projected across the
+screen.</p>
+<ul>
+<li><strong>Mechanism:</strong> The developer binds a 2D surface to the
+pipeline via <code>RSSetShadingRateImage</code>. The hardware divides
+the render target into uniform tiles (typically 8x8, 16x16, or 32x32
+pixels, determined by <code>D3D12_FEATURE_DATA_D3D12_OPTIONS6</code>),
+and each texel in the SRI defines the shading rate for its corresponding
+screen-space tile.</li>
+<li><strong>Granularity:</strong> Spatially adaptive. Shading rates
+adapt to screen-space conditions regardless of the number of draw calls
+or primitives overlapping the area.</li>
+<li><strong>Overhead:</strong> Requires a separate compute pass to
+generate the SRI texture each frame (or per pass), as well as texture
+memory and cache bandwidth during rasterization.</li>
+<li><strong>Ideal Use Cases:</strong>
+<ul>
+<li><strong>Foveated Rendering:</strong> In Virtual Reality (VR)
+applications, eye-tracking data can direct 1x1 shading to the user's
+focal point and aggressive 2x2/4x4 shading to peripheral areas.</li>
+<li><strong>Motion Blur &amp; Temporal Effects:</strong> High-velocity
+regions identified via velocity buffers can use lower shading rates
+since temporal blur naturally masks high-frequency detail.</li>
+<li><strong>Luminance and Contrast Adaptation:</strong> Areas of extreme
+darkness, bright highlights, or low color variance can be shaded at
+reduced rates based on luminance analysis.</li>
+</ul></li>
+</ul>
+<hr />
+<h3 id="summary-of-differences">Summary of Differences</h3>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Feature</th>
+<th style="text-align: left;">Per-Draw</th>
+<th style="text-align: left;">Per-Primitive</th>
+<th style="text-align: left;">Screen-Space Image-Based</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>DX12 Hardware Tier</strong></td>
+<td style="text-align: left;">Tier 1 &amp; Tier 2</td>
+<td style="text-align: left;">Tier 2 Only</td>
+<td style="text-align: left;">Tier 2 Only</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Scope</strong></td>
+<td style="text-align: left;">Entire draw call</td>
+<td style="text-align: left;">Individual triangle / primitive</td>
+<td style="text-align: left;">Screen-space tile (e.g., 16x16)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Control Point</strong></td>
+<td style="text-align: left;">API Command
+(<code>RSSetShadingRate</code>)</td>
+<td style="text-align: left;">Shader Semantic
+(<code>SV_ShadingRate</code>)</td>
+<td style="text-align: left;">Texture Resource
+(<code>RSSetShadingRateImage</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Pipeline Stage</strong></td>
+<td style="text-align: left;">Command Processor / Rasterizer</td>
+<td style="text-align: left;">Geometry or Mesh Shader</td>
+<td style="text-align: left;">Rasterizer (via Texture Lookup)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Dynamic Adaptation</strong></td>
+<td style="text-align: left;">Low (State changes per draw)</td>
+<td style="text-align: left;">Medium (Object-space/geometric)</td>
+<td style="text-align: left;">High (Post-process/screen-space)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="shading-rate-combiners">Shading Rate Combiners</h3>
+<p>When using Tier 2 hardware, DirectX 12 does not force an exclusive
+choice among these three sources. Developers can combine up to two rates
+simultaneously using <code>D3D12_SHADING_RATE_COMBINER</code>.</p>
+<p>For instance, the global draw call rate and the screen-space image
+rate can be combined using operators such as <code>MIN</code>,
+<code>MAX</code>, <code>SUM</code>, or <code>OVERRIDE</code>. This
+flexibility ensures that critical geometric features marked via
+per-primitive rates are not degraded by an aggressive screen-space image
+mask, allowing precise control over rendering performance and visual
+fidelity.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

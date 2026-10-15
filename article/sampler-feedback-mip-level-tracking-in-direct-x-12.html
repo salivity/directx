@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sampler Feedback Mip-Level Tracking in DirectX 12 - directx</title>
+    <meta name="description" content="Sampler Feedback Streaming in DirectX 12 Ultimate allows graphics engines to record exactly which regions and mip levels of a texture are accessed by the GPU during rendering. By capturing this fine-grained access pattern into a specialized feedback map,">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/sampler-feedback-mip-level-tracking-in-direct-x-12">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Sampler Feedback Mip-Level Tracking in DirectX 12 - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/sampler-feedback-mip-level-tracking-in-direct-x-12" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Sampler Feedback Streaming in DirectX 12 Ultimate allows graphics engines to record exactly which regions and mip levels of a texture are accessed by the GPU during rendering. By capturing this fine-grained access pattern into a specialized feedback map," />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="sampler-feedback-mip-level-tracking-in-directx-12">Sampler
+Feedback Mip-Level Tracking in DirectX 12</h1>
+<p>Sampler Feedback Streaming in DirectX 12 Ultimate allows graphics
+engines to record exactly which regions and mip levels of a texture are
+accessed by the GPU during rendering. By capturing this fine-grained
+access pattern into a specialized feedback map, the engine eliminates
+the guesswork from texture streaming, enabling asynchronous loading of
+only the required mip tiles into video memory rather than entire, heavy
+texture chains.</p>
+<h3 id="the-feedback-map">The Feedback Map</h3>
+<p>At the core of the tracking mechanism is a paired resource called a
+feedback map (typically created via the
+<code>DXGI_FORMAT_SAMPLER_FEEDBACK_MIN_MIP_OPAQUE</code> format). This
+map acts as a low-resolution representation of the target source
+texture.</p>
+<p>Instead of maintaining a 1:1 pixel mapping, the feedback map
+represents regions of the source texture grouped into blocks or tiles
+(such as 8x8, 16x16, or larger texel regions). Each entry in the
+feedback map stores numerical values that track the minimum (most
+detailed) mip level requested within that specific region during the
+draw calls.</p>
+<h3 id="hardware-level-recording-in-shaders">Hardware-Level Recording in
+Shaders</h3>
+<p>Tracking occurs during shader execution without requiring CPU-side
+bounding volume projections or manual screen-space distance
+approximations. The process follows these operational steps:</p>
+<ol type="1">
+<li><strong>LOD Calculation:</strong> When a pixel or compute shader
+evaluates texture coordinates, the GPU calculates the level of detail
+(LOD) using screen-space gradients (<span
+class="math inline">\(ddx\)</span> and <span
+class="math inline">\(ddy\)</span>), exactly as it does for standard
+anisotropic or trilinear sampling.</li>
+<li><strong>Writing to the Feedback Map:</strong> Instead of or
+alongside a standard <code>Texture2D.Sample</code> instruction, the HLSL
+shader calls specialized feedback intrinsics, such as
+<code>WriteSamplerFeedback</code> or
+<code>WriteSamplerFeedbackBias</code>.</li>
+<li><strong>Atomic Min-Mip Resolution:</strong> As pixels execute
+concurrently, the hardware evaluates the requested mip level for each
+fragment. If a shader invocation requests a higher-resolution mip level
+than what is currently recorded in the feedback map entry for that tile,
+the hardware updates that entry using a fast, hardware-accelerated
+minimum operation. Unaccessed regions remain cleared or set to an
+invalid mip index (often encoded as a clamp value).</li>
+</ol>
+<h3 id="integration-with-reserved-resources">Integration with Reserved
+Resources</h3>
+<p>DirectX 12 Ultimate couples sampler feedback directly with Reserved
+Resources (Tiled Textures). High-resolution textures are broken into
+standard 64 KB memory tiles across their various mip dimensions.</p>
+<p>When the GPU finishes rendering a frame, the feedback map contains an
+exact footprint of which 64 KB tiles were visible on screen and which
+specific mip levels were required to avoid visual degradation.</p>
+<h3 id="cpu-readback-and-streaming-execution">CPU Readback and Streaming
+Execution</h3>
+<p>After the render pass completes, the tracking workflow shifts to the
+asset streaming pipeline:</p>
+<ol type="1">
+<li><strong>Resolve and Decode:</strong> The feedback map is resolved
+(if necessary) and read by the CPU or a dedicated GPU streaming compute
+pass.</li>
+<li><strong>Delta Evaluation:</strong> The streaming system compares the
+recorded mip requirements against the current residency map of the tiled
+texture.</li>
+<li><strong>Request Generation:</strong> If a shader requested Mip 1 for
+a specific tile, but only Mip 3 is resident in VRAM, the engine
+generates an I/O request to load the missing Mip 1 and Mip 2 tiles from
+storage (often utilizing DirectStorage for high-bandwidth
+transfer).</li>
+<li><strong>Tile Eviction:</strong> Feedback maps from multiple
+consecutive frames are tracked. Tiles that show zero read activity over
+a set duration are flagged as non-utilized and their physical memory
+pages are safely unmapped and freed.</li>
+</ol>
+<p>By tracking utilization directly at the hardware sampling phase,
+DirectX 12 Ultimate ensures that memory allocation precisely matches
+what is visible, virtually eliminating texture over-allocation and mip
+pop-in.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

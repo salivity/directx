@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulating Chromatic Aberration in DirectX Shaders - directx</title>
+    <meta name="description" content="This article explores the fundamentals of chromatic aberration as an optical phenomenon and explains how to reproduce it in real-time computer graphics. Readers will learn the physical principles behind color fringing, the mathematical logic required to s">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/simulating-chromatic-aberration-in-direct-x-shaders">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Simulating Chromatic Aberration in DirectX Shaders - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/simulating-chromatic-aberration-in-direct-x-shaders" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores the fundamentals of chromatic aberration as an optical phenomenon and explains how to reproduce it in real-time computer graphics. Readers will learn the physical principles behind color fringing, the mathematical logic required to s" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="simulating-chromatic-aberration-in-directx-shaders">Simulating
+Chromatic Aberration in DirectX Shaders</h1>
+<p>This article explores the fundamentals of chromatic aberration as an
+optical phenomenon and explains how to reproduce it in real-time
+computer graphics. Readers will learn the physical principles behind
+color fringing, the mathematical logic required to simulate it as a
+screen-space post-processing effect, and the specific implementation
+steps for writing a pixel offset shader using High-Level Shader Language
+(HLSL) in DirectX.</p>
+<h3 id="understanding-chromatic-aberration">Understanding Chromatic
+Aberration</h3>
+<p>Chromatic aberration is an optical distortion that occurs in
+real-world camera lenses when a lens fails to focus all wavelengths of
+light onto the same focal point. This happens because optical media
+(such as glass) have a wavelength-dependent refractive index—a property
+known as dispersion. Shorter wavelengths of light (such as blue) bend
+more sharply than longer wavelengths (such as red).</p>
+<p>In photography, this manifests as colored borders or "fringing" along
+high-contrast edges, particularly near the periphery of the image where
+the curvature of the lens is most pronounced. In real-time rendering,
+simulating chromatic aberration adds a cinematic or photographic layer
+of realism, conveys camera damage, or enhances visual impact in stylized
+scenes.</p>
+<h3 id="simulation-via-pixel-offset-post-processing">Simulation via
+Pixel Offset Post-Processing</h3>
+<p>In digital rendering, chromatic aberration is implemented as a
+screen-space post-processing pass executed after the main scene has been
+rendered to a render target texture.</p>
+<p>Rather than simulating complex physical light refractions, real-time
+renderers approximate the effect by decoupling the primary color
+channels (Red, Green, and Blue) of the rendered frame. By sampling the
+color channels at slightly different texture coordinates (<span
+class="math inline">\(UVs\)</span>) across the screen, the shader
+artificially separates the color spectrum.</p>
+<p>Because physical lens distortion increases radially outward from the
+optical center, the magnitude of the coordinate offset is calculated
+relative to the screen's center point <span class="math inline">\((0.5,
+0.5)\)</span>. Pixels near the center remain largely aligned and sharp,
+while pixels near the boundaries experience the strongest
+separation.</p>
+<h3 id="hlsl-implementation-in-directx">HLSL Implementation in
+DirectX</h3>
+<p>In DirectX, the effect is written within an HLSL pixel shader running
+over a full-screen quad. The implementation requires the screen texture
+and a sampler state, along with parameters controlling the distortion
+strength.</p>
+<h4 id="1-calculating-the-radial-vector">1. Calculating the Radial
+Vector</h4>
+<p>The shader first calculates the directional vector from the center of
+the screen to the current pixel's texture coordinate:</p>
+<pre class="hlsl"><code>float2 center = float2(0.5f, 0.5f);
+float2 dir = input.UV - center;
+float dist = length(dir);</code></pre>
+<h4 id="2-determining-the-offset-magnitude">2. Determining the Offset
+Magnitude</h4>
+<p>To mirror physical lenses, the distortion should increase
+non-linearly toward the edges. Normalizing the direction vector and
+scaling it by the distance squared creates a smooth radial curve:</p>
+<pre class="hlsl"><code>float2 offset = normalize(dir) * (dist * dist) * DistortionStrength;</code></pre>
+<h4 id="3-independent-channel-sampling">3. Independent Channel
+Sampling</h4>
+<p>The final color is constructed by sampling the scene texture three
+separate times. The green channel typically remains unaltered at the
+base UV coordinate to maintain luminance stability, while the red and
+blue channels are displaced in opposite directions along the radial
+vector:</p>
+<pre class="hlsl"><code>Texture2D SceneTexture : register(t0);
+SamplerState LinearSampler : register(s0);
+
+cbuffer AberrationBuffer : register(b0)
+{
+    float DistortionStrength;
+    float3 Padding;
+};
+
+struct PS_INPUT
+{
+    float4 Position : SV_POSITION;
+    float2 UV : TEXCOORD0;
+};
+
+float4 PS_ChromaticAberration(PS_INPUT input) : SV_Target
+{
+    float2 center = float2(0.5f, 0.5f);
+    float2 dir = input.UV - center;
+    float dist = length(dir);
+
+    // Prevent division by zero at the exact center
+    if (dist &lt; 0.0001f)
+    {
+        return SceneTexture.Sample(LinearSampler, input.UV);
+    }
+
+    float2 offset = (dir / dist) * (dist * dist) * DistortionStrength;
+
+    // Sample channels independently
+    float r = SceneTexture.Sample(LinearSampler, input.UV - offset).r;
+    float g = SceneTexture.Sample(LinearSampler, input.UV).g;
+    float b = SceneTexture.Sample(LinearSampler, input.UV + offset).b;
+    float a = SceneTexture.Sample(LinearSampler, input.UV).a;
+
+    return float4(r, g, b, a);
+}</code></pre>
+<h3 id="performance-and-optimization-considerations">Performance and
+Optimization Considerations</h3>
+<p>Executing three distinct texture lookups per pixel increases texture
+bandwidth requirements compared to a standard pass-through shader. When
+targeting bandwidth-constrained hardware, developers can combine
+chromatic aberration with other screen-space passes—such as vignette,
+barrel distortion, or color grading—into a single combined pixel shader
+pass to maximize cache efficiency and eliminate redundant render
+passes.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

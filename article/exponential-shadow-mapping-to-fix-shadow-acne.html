@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exponential Shadow Mapping to Fix Shadow Acne - directx</title>
+    <meta name="description" content="Exponential Shadow Mapping (ESM) is an advanced real-time shadowing technique that replaces the binary depth test of traditional shadow mapping with an exponential function to approximate visibility. This article explains how ESM works mathematically, how">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/exponential-shadow-mapping-to-fix-shadow-acne">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Exponential Shadow Mapping to Fix Shadow Acne - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/exponential-shadow-mapping-to-fix-shadow-acne" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Exponential Shadow Mapping (ESM) is an advanced real-time shadowing technique that replaces the binary depth test of traditional shadow mapping with an exponential function to approximate visibility. This article explains how ESM works mathematically, how" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="exponential-shadow-mapping-to-fix-shadow-acne">Exponential
+Shadow Mapping to Fix Shadow Acne</h1>
+<p>Exponential Shadow Mapping (ESM) is an advanced real-time shadowing
+technique that replaces the binary depth test of traditional shadow
+mapping with an exponential function to approximate visibility. This
+article explains how ESM works mathematically, how it integrates into
+DirectX rendering pipelines, and the specific mechanisms through which
+it eliminates the surface self-shadowing artifacts commonly known as
+shadow acne while enabling smooth, pre-filtered soft shadows.</p>
+<h3 id="understanding-exponential-shadow-mapping-esm">Understanding
+Exponential Shadow Mapping (ESM)</h3>
+<p>Standard Shadow Mapping (SSM) renders scene depth from the
+perspective of a light source and compares the stored receiver depth to
+the scene depth using a step function. This binary test causes heavy
+aliasing and cannot be linearly filtered using standard graphics
+hardware.</p>
+<p>Exponential Shadow Mapping approximates this step function using an
+exponential decay curve:</p>
+<p><span class="math display">\[f(d, z) \approx e^{-c(d -
+z)}\]</span></p>
+<p>Where:</p>
+<ul>
+<li><span class="math inline">\(d\)</span> is the depth of the shadow
+receiver from the light's view.</li>
+<li><span class="math inline">\(z\)</span> is the depth stored in the
+shadow map (the caster).</li>
+<li><span class="math inline">\(c\)</span> is a user-defined scaling
+constant controlling sharpness.</li>
+</ul>
+<p>Because <span class="math inline">\(e^{-c(d - z)}\)</span> can be
+factored into <span class="math inline">\(e^{-cd} \cdot e^{cz}\)</span>,
+the term <span class="math inline">\(e^{cz}\)</span> depends solely on
+the shadow caster. In a DirectX pipeline, this allows developers to
+store the exponentiated depth directly into an offscreen render target
+(typically <code>DXGI_FORMAT_R32_FLOAT</code> or
+<code>DXGI_FORMAT_R16_FLOAT</code>) during the light-depth pass.</p>
+<h3 id="why-shadow-acne-occurs-in-directx-rendering">Why Shadow Acne
+Occurs in DirectX Rendering</h3>
+<p>Shadow acne manifests as alternating bands of light and dark pixels
+across surfaces facing light sources. It occurs due to:</p>
+<ol type="1">
+<li><strong>Quantization Errors:</strong> Depth buffers have finite
+precision, causing round-off errors.</li>
+<li><strong>Surface Slope Misalignment:</strong> A single shadow map
+texel covers a finite area in world space. When projected onto an angled
+surface, the discrete depth sample does not precisely match the
+continuous surface geometry, causing parts of a flat polygon to
+erroneously fail the depth test against itself.</li>
+</ol>
+<p>In standard DirectX pipelines, developers combat acne using depth
+biases (<code>DepthBias</code> and <code>SlopeScaledDepthBias</code> in
+<code>D3D11_RASTERIZER_DESC</code> or
+<code>D3D12_RASTERIZER_DESC</code>). However, excessive bias causes
+"Peter Panning," where shadows detach from the caster's base.</p>
+<h3 id="how-esm-reduces-shadow-acne">How ESM Reduces Shadow Acne</h3>
+<p>ESM inherently suppresses shadow acne through mathematical
+approximation and hardware-level filtering:</p>
+<h4 id="1-continuous-visibility-instead-of-a-hard-step-function">1.
+Continuous Visibility Instead of a Hard Step Function</h4>
+<p>Standard depth testing fails abruptly when receiver depth exceeds
+caster depth by a fraction of a unit. ESM's exponential function creates
+a smooth curve rather than a step edge. When a surface samples its own
+depth with slight numerical or geometric discrepancies (<span
+class="math inline">\(d \approx z\)</span>), the evaluation of <span
+class="math inline">\(e^{-c(d - z)}\)</span> remains close to <span
+class="math inline">\(1.0\)</span> instead of dropping instantly to
+<span class="math inline">\(0.0\)</span>. This prevents tiny numerical
+oscillations from manifesting as dark acne stripes.</p>
+<h4 id="2-hardware-texture-filtering-and-blurring">2. Hardware Texture
+Filtering and Blurring</h4>
+<p>Because the exponential values can be linearly combined, DirectX can
+apply standard texture filtering directly to the shadow map:</p>
+<ul>
+<li><strong>Separable Gaussian Blurs:</strong> The shadow map can be
+blurred using standard compute or pixel shader passes prior to the
+lighting pass.</li>
+<li><strong>Bilinear/Trilinear Filtering:</strong> The GPU's texture
+sampling units (<code>Texture2D.Sample</code>) can interpolate values
+natively across texel boundaries.</li>
+</ul>
+<p>Blurring averages out the geometric steps caused by shadow-map grid
+resolution, removing the high-frequency depth discrepancies that
+generate acne on planar and curved surfaces.</p>
+<h3 id="implementing-esm-in-hlsl">Implementing ESM in HLSL</h3>
+<p>To achieve stable results and avoid numeric overflow, the exponential
+depth test is typically clamped in the pixel shader.</p>
+<p><strong>Shadow Map Generation Pass (HLSL):</strong></p>
+<pre class="hlsl"><code>float4 PS_ShadowMap(VS_Output input) : SV_Target
+{
+    float depth = input.PositionWS.z / input.PositionWS.w; // Linear depth [0, 1]
+    return exp(c * depth);
+}</code></pre>
+<p><strong>Lighting Evaluation Pass (HLSL):</strong></p>
+<pre class="hlsl"><code>Texture2D&lt;float&gt; ESMTexture : register(t0);
+SamplerState LinearSampler : register(s0);
+
+float CalculateESMShadow(float2 shadowUV, float receiverDepth, float c)
+{
+    // Sample the pre-filtered exponential shadow map
+    float expCasterDepth = ESMTexture.Sample(LinearSampler, shadowUV);
+    
+    // Evaluate ESM shadow factor
+    float shadowFactor = expCasterDepth * exp(-c * receiverDepth);
+    
+    // Clamp to valid visibility range
+    return saturate(shadowFactor);
+}</code></pre>
+<h3 id="balancing-the-sharpness-constant-c">Balancing the Sharpness
+Constant (<span class="math inline">\(c\)</span>)</h3>
+<p>The factor <span class="math inline">\(c\)</span> dictates the
+falloff steepness:</p>
+<ul>
+<li><strong>High values of <span
+class="math inline">\(c\)</span>:</strong> Produce sharper shadow edges
+matching standard shadow maps, but increase the risk of arithmetic
+overflow and allow subtle acne to resurface.</li>
+<li><strong>Low values of <span
+class="math inline">\(c\)</span>:</strong> Completely eradicate shadow
+acne and yield smooth penumbras, but increase "light bleeding" (where
+shadows wash out in overlapping geometry).</li>
+</ul>
+<p>Setting <span class="math inline">\(c\)</span> between 40 and 80
+using a 32-bit floating-point format provides an optimal balance,
+keeping surfaces clean of acne while retaining distinct shadow
+boundaries.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

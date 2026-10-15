@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Profiling and Debugging with PIX - directx</title>
+    <meta name="description" content="PIX on Windows is Microsoft’s dedicated performance tuning and debugging environment built specifically for DirectX 12 games and applications. This article explores how PIX serves as an essential tool for graphics developers, detailing its core capture mo">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-profiling-and-debugging-with-pix">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Profiling and Debugging with PIX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-profiling-and-debugging-with-pix" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="PIX on Windows is Microsoft’s dedicated performance tuning and debugging environment built specifically for DirectX 12 games and applications. This article explores how PIX serves as an essential tool for graphics developers, detailing its core capture mo" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-profiling-and-debugging-with-pix">DirectX 12
+Profiling and Debugging with PIX</h1>
+<p>PIX on Windows is Microsoft’s dedicated performance tuning and
+debugging environment built specifically for DirectX 12 games and
+applications. This article explores how PIX serves as an essential tool
+for graphics developers, detailing its core capture modes—including GPU
+captures, timing captures, and memory tracking—while demonstrating how
+its deep integration with the DirectX 12 API allows developers to
+isolate rendering anomalies, eliminate CPU-GPU pipeline bottlenecks, and
+optimize hardware resource utilization.</p>
+<h3
+id="comprehensive-gpu-captures-for-direct-pipeline-inspection">Comprehensive
+GPU Captures for Direct Pipeline Inspection</h3>
+<p>PIX enables developers to take single-frame or multi-frame GPU
+captures, recording all DirectX 12 API calls, pipeline states, and
+resource bindings executed during that frame. Once captured, developers
+can step through individual draw calls, dispatches, and raytracing
+workloads sequentially.</p>
+<p>The tool reconstructs the graphics pipeline state at any chosen
+event, allowing full inspection of:</p>
+<ul>
+<li><strong>Render Targets and Buffers:</strong> View textures, depth
+buffers, and UAVs (Unordered Access Views) at specific points in the
+pipeline to verify intermediate rendering passes.</li>
+<li><strong>Pipeline State Objects (PSOs):</strong> Inspect root
+signatures, input layouts, blend states, and rasterizer states to ensure
+configurations match developer intent.</li>
+<li><strong>Shader Debugging:</strong> Step through compiled HLSL code
+line by line, inspect register and variable values in real time, and
+edit shader code directly within the capture to instantly preview visual
+changes without recompiling the entire project.</li>
+</ul>
+<h3 id="system-wide-timing-captures">System-Wide Timing Captures</h3>
+<p>DirectX 12 shifts control over hardware scheduling, command queue
+management, and synchronization to the application layer. PIX timing
+captures provide the visibility required to manage this complexity by
+recording high-resolution CPU and GPU execution timelines
+simultaneously.</p>
+<p>Key performance insights delivered by timing captures include:</p>
+<ul>
+<li><strong>Command Queue Execution:</strong> Detailed tracking of
+Direct, Compute, and Copy queues to verify that workloads run
+asynchronously without stalling the hardware.</li>
+<li><strong>CPU-GPU Synchronization:</strong> Visualization of fence
+signals and waits to detect CPU stalls caused by waiting on the GPU, or
+GPU starvation caused by late CPU submissions.</li>
+<li><strong>Context Switches and Thread Affinity:</strong> In-depth CPU
+core utilization and thread scheduling data to identify multithreading
+inefficiencies within the rendering engine.</li>
+<li><strong>Hardware Execution Counters:</strong> Integration with
+vendor-specific GPU counters (AMD, Intel, and NVIDIA) to monitor
+execution unit utilization, cache hit rates, memory bandwidth, and
+compute wave occupancy.</li>
+</ul>
+<h3 id="advanced-memory-allocation-tracking">Advanced Memory Allocation
+Tracking</h3>
+<p>DirectX 12 applications manage their own video memory allocations via
+committed and placed resources. PIX offers dedicated memory tracking
+modes that map out memory usage over time, helping developers prevent
+out-of-memory crashes and paging overhead.</p>
+<p>The memory profiler helps developers:</p>
+<ul>
+<li>Visualize physical and virtual memory usage across local video
+memory (VRAM) and non-local system memory.</li>
+<li>Identify memory fragmentation within custom heaps
+(<code>ID3D12Heap</code>).</li>
+<li>Track resource allocation lifetimes to identify memory leaks and
+verify proper cleanup.</li>
+<li>Debug resource aliasing issues where multiple resources share the
+same physical memory space.</li>
+</ul>
+<h3 id="native-integration-and-api-synergy">Native Integration and API
+Synergy</h3>
+<p>Because PIX is maintained by Microsoft alongside the DirectX 12
+runtime, it inherently supports modern DirectX 12 features faster and
+more reliably than general-purpose tools. Features such as DirectX
+Raytracing (DXR), Variable Rate Shading (VRS), Mesh Shaders, and Work
+Graphs are natively integrated into the diagnostic suite. Furthermore,
+developers can instrument their source code using the WinPixEventRuntime
+library to inject user-defined markers, events, and color-coded
+hierarchies directly into the PIX timeline, creating a custom, readable
+diagnostic workspace tailored to their specific rendering
+architecture.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Windows 11 Auto HDR Intercepts DirectX Pipelines - directx</title>
+    <meta name="description" content="Windows 11 includes Auto HDR, an operating system-level feature that automatically upgrades legacy Standard Dynamic Range (SDR) games to High Dynamic Range (HDR). Rather than altering the core rendering engine of a title, Auto HDR hooks directly into the">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-windows-11-auto-hdr-intercepts-direct-x-pipelines">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Windows 11 Auto HDR Intercepts DirectX Pipelines - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-windows-11-auto-hdr-intercepts-direct-x-pipelines" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Windows 11 includes Auto HDR, an operating system-level feature that automatically upgrades legacy Standard Dynamic Range (SDR) games to High Dynamic Range (HDR). Rather than altering the core rendering engine of a title, Auto HDR hooks directly into the" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-windows-11-auto-hdr-intercepts-directx-pipelines">How
+Windows 11 Auto HDR Intercepts DirectX Pipelines</h1>
+<p>Windows 11 includes Auto HDR, an operating system-level feature that
+automatically upgrades legacy Standard Dynamic Range (SDR) games to High
+Dynamic Range (HDR). Rather than altering the core rendering engine of a
+title, Auto HDR hooks directly into the DirectX graphics presentation
+pipeline. By intercepting the game's render output just before it
+reaches the display compositor, Windows converts 8-bit color data into a
+wide-gamut, high-precision HDR format using an optimized,
+hardware-accelerated compute shader.</p>
+<h3 id="the-swap-chain-interception">The Swap Chain Interception</h3>
+<p>In DirectX 11 and DirectX 12, games render scenes to internal
+back-buffers and output the final frame via the DirectX Graphics
+Infrastructure (DXGI) swap chain. In traditional SDR titles, the swap
+chain is typically configured to use an 8-bit integer color format, such
+as <code>DXGI_FORMAT_B8G8R8A8_UNORM</code> or
+<code>DXGI_FORMAT_R8G8B8A8_UNORM</code>, constrained to the standard
+sRGB color space.</p>
+<p>When Auto HDR is enabled, the Windows D3D runtime and Desktop Window
+Manager (DWM) intercept the game’s swap chain creation and presentation
+calls (<code>IDXGISwapChain::Present</code>). For this interception to
+succeed natively, the game must use modern flip-model swap effects
+(<code>DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL</code> or
+<code>DXGI_SWAP_EFFECT_FLIP_DISCARD</code>). If an older DirectX 11
+title relies on legacy blit presentation, the D3D11 runtime attempts to
+redirect it through a modern presentation path.</p>
+<h3 id="buffer-upgrades-and-neural-tone-mapping">Buffer Upgrades and
+Neural Tone Mapping</h3>
+<p>Once the pipeline is hooked, the presentation workflow shifts:</p>
+<ol type="1">
+<li><strong>Format Promotion:</strong> The operating system allocates an
+intermediate, high-precision surface—typically a 16-bit floating-point
+buffer (<code>DXGI_FORMAT_R16G16B16A16_FLOAT</code> or FP16)—capable of
+holding color values outside the standard 0.0 to 1.0 SDR luminance
+range.</li>
+<li><strong>Compute Shader Execution:</strong> Instead of applying a
+simple linear stretch that would blow out highlights and wash out
+colors, Auto HDR executes an optimized GPU compute shader on the
+rendered SDR frame. This algorithm is derived from a machine learning
+model trained on paired SDR and native HDR frames. The model predicts
+what the scene’s luminance distribution would look like had it been
+authored natively in HDR.</li>
+<li><strong>Luminance and Color Reconstruction:</strong> The compute
+shader identifies distinct elements such as specular highlights, sun
+glare, fire, and UI elements. Highlights are boosted up to the peak nit
+capability of the attached display, while midtones and dark shadows are
+preserved to retain the artist's original visual intent.</li>
+</ol>
+<h3 id="final-output-and-composition">Final Output and Composition</h3>
+<p>After the compute shader processes the SDR frame into the FP16
+buffer, the data is tagged with HDR metadata, matching the BT.2020 color
+container and using the SMPTE ST 2084 (PQ) or scRGB transfer
+characteristics.</p>
+<p>The resulting surface is handed over to the Desktop Window Manager,
+which composites the frame alongside any native HDR content or OS
+overlays. Because the inference model was distilled into a lightweight
+shader executed directly on the GPU presentation queue, this pipeline
+interception incurs near-zero latency, delivering real-time HDR
+enhancement to legacy graphics software.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

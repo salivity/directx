@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectX 12 Work Graphs Pass Node Records - directx</title>
+    <meta name="description" content="DirectX 12 Work Graphs introduce an autonomous, GPU-driven execution model where compute nodes dynamically schedule and dispatch downstream child compute nodes without CPU intervention. Communication between these nodes relies on node records—strongly typ">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-x-12-work-graphs-pass-node-records">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectX 12 Work Graphs Pass Node Records - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-x-12-work-graphs-pass-node-records" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 Work Graphs introduce an autonomous, GPU-driven execution model where compute nodes dynamically schedule and dispatch downstream child compute nodes without CPU intervention. Communication between these nodes relies on node records—strongly typ" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directx-12-work-graphs-pass-node-records">How DirectX 12
+Work Graphs Pass Node Records</h1>
+<p>DirectX 12 Work Graphs introduce an autonomous, GPU-driven execution
+model where compute nodes dynamically schedule and dispatch downstream
+child compute nodes without CPU intervention. Communication between
+these nodes relies on node records—strongly typed payload buffers that a
+producer node allocates and populates for a consumer node. This article
+details the allocation mechanisms, HLSL interfaces, and memory
+management strategies used to transfer payload records from parent to
+child compute nodes in DirectX 12.</p>
+<h3 id="record-struct-definition">Record Struct Definition</h3>
+<p>Data exchange begins with a user-defined HLSL structure representing
+the payload. Both the producing (parent) and consuming (child) nodes
+must reference this payload definition. The receiving child node
+explicitly declares this structure as its input parameter, which informs
+the driver of the memory layout expected upon invocation.</p>
+<pre class="hlsl"><code>struct ChildPayload
+{
+    uint2 TileID;
+    float Threshold;
+};</code></pre>
+<h3 id="declaring-output-interfaces-in-the-parent-node">Declaring Output
+Interfaces in the Parent Node</h3>
+<p>Parent nodes define outputs using specialized HLSL objects that
+specify the target child node and the payload type:</p>
+<ul>
+<li><strong><code>NodeOutput&lt;T&gt;</code></strong>: Used to output
+records targeting a specific child node identified by a node
+identifier.</li>
+<li><strong><code>NodeOutputArray&lt;T&gt;</code></strong>: Used when
+directing records to an array of nodes selected dynamically at
+runtime.</li>
+</ul>
+<p>The output declaration binds the payload type <code>T</code> to the
+target node using the <code>[NodeId("TargetNodeName")]</code>
+attribute:</p>
+<pre class="hlsl"><code>[NodeLaunch(&quot;broadcasting&quot;)]
+[NodeDispatchGrid(1, 1, 1)]
+[NumThreads(64, 1, 1)]
+void ParentNode(
+    [MaxRecords(64)] NodeOutput&lt;ChildPayload&gt; childOutput)
+{
+    // Node logic...
+}</code></pre>
+<p>The <code>[MaxRecords(N)]</code> attribute provides a static upper
+bound to the driver for the maximum number of records the thread or
+thread group can allocate, allowing the runtime to size scratch and
+payload memory appropriately.</p>
+<h3 id="allocating-node-records">Allocating Node Records</h3>
+<p>Before writing data, a parent node must allocate space for the
+payload. Allocations can occur at the individual thread level or
+cooperatively at the thread-group level:</p>
+<ul>
+<li><strong>Thread-Level Allocation:</strong> A single thread calls
+<code>childOutput.GetThreadNodeOutputRecords(count)</code> to reserve
+one or more records dedicated to that thread.</li>
+<li><strong>Group-Level Allocation:</strong> For collective decisions,
+the group calls
+<code>childOutput.GetGroupNodeOutputRecords(count)</code>, where all
+threads in the thread group share the reservation pool, usually indexed
+via <code>SV_GroupIndex</code>.</li>
+</ul>
+<p>DirectX 12 also supports
+<code>ThreadNodeOutputRecords&lt;T&gt;</code> and
+<code>GroupNodeOutputRecords&lt;T&gt;</code> wrappers to manage the
+lifetime and direct array indexing of the reserved records.</p>
+<h3 id="writing-to-the-payload-buffer">Writing to the Payload
+Buffer</h3>
+<p>Once reserved, the method returns a handle or reference to the
+allocated memory. The parent node writes data directly into the fields
+of the record structure:</p>
+<pre class="hlsl"><code>ThreadNodeOutputRecords&lt;ChildPayload&gt; records = childOutput.GetThreadNodeOutputRecords(1);
+records[0].TileID = uint2(10, 20);
+records[0].Threshold = 0.75f;</code></pre>
+<p>These writes target memory managed internally by the work graph
+runtime, eliminating manual buffer offset calculations and standard UAV
+atomic pointer manipulation.</p>
+<h3 id="record-finalization-and-launch">Record Finalization and
+Launch</h3>
+<p>Record commitment notifies the hardware scheduler that the payload is
+complete and ready for downstream processing:</p>
+<ul>
+<li><strong>Explicit Output Completion:</strong> Calling
+<code>records.OutputComplete()</code> explicitly finalizes the records,
+allowing the GPU work-creation pipeline to queue the target child node
+immediately.</li>
+<li><strong>Implicit Scope Exit:</strong> If
+<code>OutputComplete()</code> is not invoked explicitly, the runtime
+automatically finalizes records when the record handle exits scope.</li>
+</ul>
+<p>After completion, the driver routes the payload records into the
+execution queue of the specified child compute node. The child receives
+the data via its <code>[NodeLaunch]</code> entry point parameters,
+executing across the GPU with hardware-level load balancing.</p>
+<h3 id="runtime-memory-management">Runtime Memory Management</h3>
+<p>Underlying payload memory is provisioned through the work graph
+backing store. During graph creation, the application queries the
+graph's memory requirements using
+<code>ID3D12StateObjectProperties1::GetWorkGraphMemoryRequirements</code>
+and assigns a dedicated backing buffer via a GPU virtual address. The
+runtime slices this backing store into internal ring buffers and
+transient pools that handle record allocations, child node dispatch
+arguments, and synchronization automatically.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

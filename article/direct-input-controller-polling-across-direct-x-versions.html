@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectInput Controller Polling Across DirectX Versions - directx</title>
+    <meta name="description" content="DirectInput was Microsoft&#39;s dedicated API designed to provide low-latency access to input devices, evolving from a basic wrapper around legacy Windows APIs into a robust COM-based subsystem. Throughout its development across various DirectX releases, Dire">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-input-controller-polling-across-direct-x-versions">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectInput Controller Polling Across DirectX Versions - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-input-controller-polling-across-direct-x-versions" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectInput was Microsoft&#39;s dedicated API designed to provide low-latency access to input devices, evolving from a basic wrapper around legacy Windows APIs into a robust COM-based subsystem. Throughout its development across various DirectX releases, Dire" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="directinput-controller-polling-across-directx-versions">DirectInput
+Controller Polling Across DirectX Versions</h1>
+<p>DirectInput was Microsoft's dedicated API designed to provide
+low-latency access to input devices, evolving from a basic wrapper
+around legacy Windows APIs into a robust COM-based subsystem. Throughout
+its development across various DirectX releases, DirectInput
+fundamentally altered how games acquired state data from joysticks and
+controllers, transitioning between synchronous polling loops,
+interrupt-driven buffered events, and explicit hardware
+interrogation.</p>
+<h3 id="directx-10-to-30-the-win32-foundations">DirectX 1.0 to 3.0: The
+Win32 Foundations</h3>
+<p>In DirectX 1.0 and 2.0, DirectInput was largely an abstraction layer
+over existing Win32 multimedia APIs, such as <code>joyGetPos</code> and
+<code>joyGetPosEx</code>. Joystick polling relied on the operating
+system's standard message pump and driver timers, which often introduced
+measurable latency and jitter unsuitable for fast-paced gaming.</p>
+<p>With DirectX 3.0, Microsoft completely redesigned DirectInput into a
+Component Object Model (COM) interface (<code>IDirectInput</code> and
+<code>IDirectInputDevice</code>). This version bypassed the Windows
+message queue to communicate directly with hardware ring-0 drivers. For
+joysticks, polling was achieved primarily through immediate mode: games
+directly queried the device for instantaneous state using
+<code>IDirectInputDevice::GetDeviceState</code>, passing standard data
+structures to receive current axis positions and button presses.</p>
+<h3 id="directx-50-explicit-polling-and-force-feedback">DirectX 5.0:
+Explicit Polling and Force Feedback</h3>
+<p>DirectX 5.0 represented one of the most critical updates to
+DirectInput with the introduction of the
+<code>IDirectInputDevice2</code> interface and support for
+force-feedback peripherals. This update formally codified the
+distinction between devices that automatically push updates via hardware
+interrupts and devices that require active interrogation.</p>
+<p>DirectX 5.0 introduced the explicit
+<code>IDirectInputDevice2::Poll</code> method. Because complex
+controllers and force-feedback joysticks often operated over legacy game
+ports, USB, or proprietary serial protocols, hardware could not always
+generate interrupts on state changes. Developers were required to call
+<code>Poll()</code> before querying state to instruct the device driver
+to update its internal buffers. DirectX 5.0 also defined two primary
+data acquisition models:</p>
+<ul>
+<li><strong>Immediate Mode (State Polling):</strong> Developers called
+<code>Poll()</code>, followed by <code>GetDeviceState()</code>,
+returning an instantaneous snapshot of the joystick axes, hats, and
+buttons into a <code>DIJOYSTATE</code> structure.</li>
+<li><strong>Buffered Mode (Event Tracking):</strong> Games set up event
+notifications using standard Win32 synchronization objects via
+<code>SetEventNotification</code>. When the controller state changed, an
+event signaled the game thread to retrieve queued historical data via
+<code>GetDeviceData()</code>, preventing missed inputs between rendering
+frames.</li>
+</ul>
+<p>DirectX 5.0 also implemented cooperative levels through
+<code>SetCooperativeLevel</code>, allowing games to choose between
+<code>DISCL_EXCLUSIVE</code> and <code>DISCL_NONEXCLUSIVE</code>, as
+well as <code>DISCL_FOREGROUND</code> and <code>DISCL_BACKGROUND</code>.
+These flags determined whether a backgrounded application would continue
+receiving polled joystick states or yield access to the operating
+system.</p>
+<h3 id="directx-70-and-80-directinput8-and-action-mapping">DirectX 7.0
+and 8.0: DirectInput8 and Action Mapping</h3>
+<p>DirectX 7.0 expanded the data structures to <code>DIJOYSTATE2</code>,
+accommodating modern controllers with up to eight axes, multiple
+directional hats, and up to 128 buttons.</p>
+<p>DirectX 8.0 consolidated the API into <code>DirectInput8</code>
+(<code>IDirectInput8</code> and <code>IDirectInputDevice8</code>), which
+became the final major architectural revision. In DirectInput8, polling
+remained central:</p>
+<ol type="1">
+<li><strong>Mandatory Polling Verification:</strong> Drivers declared
+whether they required active polling via capabilities flags
+(<code>DIDCT_POLLEDDATAFORCE</code> or <code>DIDCT_POLLEDDEVICE</code>).
+If set, calling <code>IDirectInputDevice8::Poll()</code> was strictly
+mandatory before calling <code>GetDeviceState()</code> or reading from
+<code>GetDeviceData()</code>. If a device did not require explicit
+polling, calling <code>Poll()</code> simply returned
+<code>DI_NOEFFECT</code>.</li>
+<li><strong>Action Mapping:</strong> DirectInput8 introduced Action
+Mapping (<code>IDirectInput8::ConfigureDevices</code>), which allowed
+developers to map in-game actions (e.g., "Fire", "Accelerate") directly
+to input types rather than managing physical axis indices. While Action
+Mapping abstracted input binding, the underlying data retrieval still
+operated via the established polled or buffered pipelines.</li>
+</ol>
+<h3 id="the-shift-toward-xinput">The Shift Toward XInput</h3>
+<p>Following DirectX 8.1, Microsoft froze development on DirectInput,
+steering developers toward XInput alongside the launch of the Xbox 360
+controller for Windows. XInput discarded the complex COM configuration,
+cooperative levels, and buffered event systems of DirectInput in favor
+of a streamlined, synchronous polling function:
+<code>XInputGetState</code>.</p>
+<p>While DirectInput handled arbitrary joystick hardware, multi-axis
+throttles, and flight pedals via configurable polling intervals, XInput
+limited developers to a rigid four-controller model. Despite this shift,
+DirectInput's hybrid model—allowing developers to choose between
+frame-bound <code>GetDeviceState</code> polling and high-frequency
+<code>GetDeviceData</code> buffering—remains the baseline standard for
+legacy flight simulation and racing peripheral support in Windows.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

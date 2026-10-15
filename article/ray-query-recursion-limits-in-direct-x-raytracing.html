@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ray Query Recursion Limits in DirectX Raytracing - directx</title>
+    <meta name="description" content="Inline ray queries, introduced in DirectX Raytracing (DXR) 1.1, allow developers to traverse acceleration structures directly inside existing shader stages such as compute or pixel shaders. While they offer lower overhead and greater control compared to f">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/ray-query-recursion-limits-in-direct-x-raytracing">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Ray Query Recursion Limits in DirectX Raytracing - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/ray-query-recursion-limits-in-direct-x-raytracing" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Inline ray queries, introduced in DirectX Raytracing (DXR) 1.1, allow developers to traverse acceleration structures directly inside existing shader stages such as compute or pixel shaders. While they offer lower overhead and greater control compared to f" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="ray-query-recursion-limits-in-directx-raytracing">Ray Query
+Recursion Limits in DirectX Raytracing</h1>
+<p>Inline ray queries, introduced in DirectX Raytracing (DXR) 1.1, allow
+developers to traverse acceleration structures directly inside existing
+shader stages such as compute or pixel shaders. While they offer lower
+overhead and greater control compared to full DXR state-object
+pipelines, inline ray queries fundamentally lack native hardware
+recursion. This article explains the architectural limitations of ray
+queries regarding recursive ray generation, how multi-bounce effects
+must be handled instead, and the performance trade-offs involved.</p>
+<h3 id="absence-of-native-recursive-dispatch">Absence of Native
+Recursive Dispatch</h3>
+<p>In a full DXR pipeline, shaders interact with rays dynamically
+through dedicated stages (Ray Generation, Closest Hit, Any Hit, and Miss
+shaders). A Closest Hit shader can execute <code>TraceRay()</code> to
+fire secondary rays directly from the point of intersection. The driver
+and hardware manage the call stack and execution state up to a maximum
+declared recursion depth.</p>
+<p>Inline ray queries, by contrast, operate via an iterative
+object-based polling mechanism (<code>RayQuery&lt;Flags&gt;</code>)
+contained entirely within the caller shader. There is no concept of a
+runtime-managed call stack that allows a hit point to automatically
+trigger another shader execution. The query simply returns traversal
+status flags (such as candidate or committed intersections) back to the
+originating thread.</p>
+<h3 id="mandatory-iterative-emulation">Mandatory Iterative
+Emulation</h3>
+<p>Because inline ray queries cannot recursively invoke child shaders,
+any multi-bounce light transport (such as reflections, refractions, or
+diffuse global illumination) must be manually structured using iterative
+loops.</p>
+<p>To simulate depth:</p>
+<ul>
+<li>Developers must maintain their own path state (ray origin,
+direction, throughput, and hit results) in shader local variables.</li>
+<li>A secondary bounce requires resetting the query object or
+initializing a new one within a loop.</li>
+<li>The control flow remains strictly serial per thread, rather than
+delegating secondary work to separate scheduling queues.</li>
+</ul>
+<h3 id="complexities-with-branching-rays">Complexities with Branching
+Rays</h3>
+<p>Full raytracing pipelines naturally support branching recursion
+trees, such as a surface that splits an incoming ray into both a
+reflected ray and a refracted ray. The pipeline schedules both paths
+independently across available execution units.</p>
+<p>With inline ray queries, true branching requires the developer to
+manually implement a traversal stack in local shader memory or execute
+queries sequentially within the same thread. Managing a software stack
+in registers or thread-group shared memory introduces significant code
+complexity and inherently limits the practical tree depth.</p>
+<h3 id="register-pressure-and-occupancy-degradation">Register Pressure
+and Occupancy Degradation</h3>
+<p>When recursion is flattened into an iterative loop inside an inline
+ray query, all state for every potential bounce must reside in the host
+shader's register space. Storing accumulated radiance, surface normals,
+material properties, and query states across multiple iterations causes
+high Vector General Purpose Register (VGPR) consumption.</p>
+<p>High register pressure limits GPU occupancy by reducing the number of
+active wavefronts that can run concurrently on a Compute Unit. Full DXR
+pipelines mitigate this by decoupling hit shading into separate,
+specialized shaders with smaller, distinct register footprints, allowing
+the hardware scheduler to interleave ray workloads more efficiently.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

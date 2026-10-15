@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>scRGB Color Space for HDR Rendering in DirectX - directx</title>
+    <meta name="description" content="This article provides an overview of the scRGB color space and explains its role in modern graphics pipelines, specifically focusing on its implementation within Microsoft DirectX for high-precision and high dynamic range (HDR) rendering. You will learn t">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/sc-rgb-color-space-for-hdr-rendering-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="scRGB Color Space for HDR Rendering in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/sc-rgb-color-space-for-hdr-rendering-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of the scRGB color space and explains its role in modern graphics pipelines, specifically focusing on its implementation within Microsoft DirectX for high-precision and high dynamic range (HDR) rendering. You will learn t" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="scrgb-color-space-for-hdr-rendering-in-directx">scRGB Color
+Space for HDR Rendering in DirectX</h1>
+<p>This article provides an overview of the scRGB color space and
+explains its role in modern graphics pipelines, specifically focusing on
+its implementation within Microsoft DirectX for high-precision and high
+dynamic range (HDR) rendering. You will learn the fundamental
+differences between scRGB and conventional color spaces, why
+floating-point precision is essential, and how DirectX utilizes scRGB
+swap chains to achieve physically accurate lighting and wide color
+gamuts.</p>
+<h2 id="what-is-scrgb-color-space">What is scRGB Color Space?</h2>
+<p>The scRGB standard (IEC 61966-2-2) is an extended-gamut, linear color
+space designed to maintain compatibility with conventional sRGB while
+supporting high dynamic range (HDR) and wide color gamuts (WCG).</p>
+<p>Key characteristics of scRGB include:</p>
+<ul>
+<li><strong>Identical Primaries to sRGB:</strong> scRGB uses the exact
+same color primaries (Rec. 709) and reference white point (D65) as
+standard sRGB. A value of <code>(1.0, 1.0, 1.0)</code> represents the
+standard dynamic range (SDR) white level, typically calibrated to 80
+nits.</li>
+<li><strong>Linear Transfer Function:</strong> Unlike standard sRGB,
+which applies a non-linear gamma curve to maximize precision in 8-bit
+integers, scRGB is strictly linear. Optical operations—such as lighting
+calculations, reflections, and alpha blending—can be calculated directly
+without gamma conversion.</li>
+<li><strong>Extended Range (Values Below 0.0 and Above 1.0):</strong>
+Standard color encodings clamp color channels between <code>0.0</code>
+and <code>1.0</code>. scRGB permits values below <code>0.0</code>
+(negative numbers) and values well above <code>1.0</code>. Negative
+values allow scRGB to represent colors outside the physical sRGB
+triangle, effectively covering wider gamuts like DCI-P3 and BT.2020.
+Values greater than <code>1.0</code> represent HDR highlights that
+exceed standard reference white.</li>
+</ul>
+<h2 id="how-directx-uses-scrgb-for-high-precision-rendering">How DirectX
+Uses scRGB for High Precision Rendering</h2>
+<p>In DirectX (Direct3D 11 and Direct3D 12), scRGB is primarily used as
+an intermediate and presentation format for high-precision HDR
+rendering. It simplifies pipeline math and eliminates common banding and
+clipping artifacts.</p>
+<h3 id="1-pixel-format-and-the-dxgi-swap-chain">1. Pixel Format and the
+DXGI Swap Chain</h3>
+<p>DirectX implements scRGB using the 64-bit floating-point format:
+<code>DXGI_FORMAT_R16G16B16A16_FLOAT</code> (FP16 per channel).</p>
+<p>When configuring a DXGI swap chain for scRGB HDR output, developers
+pair this 16-bit floating-point format with the color space
+enumeration:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709</span></code></pre></div>
+<ul>
+<li><strong>RGB:</strong> Red, Green, and Blue channels.</li>
+<li><strong>FULL:</strong> Uses the full numerical range rather than
+video/studio levels.</li>
+<li><strong>G10:</strong> Signifies a linear gamma of 1.0 (no transfer
+function applied).</li>
+<li><strong>NONE:</strong> No display-specific transform is baked into
+the buffer.</li>
+<li><strong>P709:</strong> Uses the BT.709 / sRGB color primaries.</li>
+</ul>
+<h3 id="2-linear-arithmetic-without-compression">2. Linear Arithmetic
+Without Compression</h3>
+<p>Because scRGB is linear, graphics shaders do not need to convert
+textures back and forth between perceptual (gamma) space and linear
+space during rendering. Operations such as physically based rendering
+(PBR), bloom filters, motion blur, and exposure adjustments occur
+natively within linear numerical space.</p>
+<p>Because <code>DXGI_FORMAT_R16G16B16A16_FLOAT</code> provides 16 bits
+of half-precision floating-point data per channel, rounding errors and
+color banding are virtually eliminated compared to standard 8-bit or
+10-bit integer pipelines.</p>
+<h3 id="3-desktop-window-manager-dwm-integration">3. Desktop Window
+Manager (DWM) Integration</h3>
+<p>When an application presents an scRGB frame buffer on Windows, the
+Desktop Window Manager (DWM) reads the floating-point values directly.
+DWM reads values where <code>1.0</code> equals the system's configured
+SDR white level.</p>
+<p>If the output display supports HDR:</p>
+<ol type="1">
+<li>The game or application writes values beyond <code>1.0</code> for
+specular highlights and intense light sources.</li>
+<li>The GPU driver or Windows DWM maps the linear scRGB data directly to
+the native color space and transfer function of the display (such as
+converting to BT.2020 color primaries using the SMPTE ST 2084 / PQ
+transfer curve).</li>
+</ol>
+<h2 id="scrgb-vs-hdr10-bt2020-pq-in-directx">scRGB vs. HDR10 (BT.2020
+PQ) in DirectX</h2>
+<p>DirectX developers targeting HDR typically choose between scRGB and
+HDR10:</p>
+<ul>
+<li><strong>HDR10 (<code>DXGI_FORMAT_R10G10B10A2_UNORM</code> with
+BT.2020 primaries and PQ curve):</strong> Uses 10 bits per channel. It
+requires lower memory bandwidth than 16-bit float buffers, but final
+shader passes must explicitly convert linear data into the non-linear PQ
+curve and apply Rec. 2020 matrix transforms before presenting.</li>
+<li><strong>scRGB
+(<code>DXGI_FORMAT_R16G16B16A16_FLOAT</code>):</strong> Consumes twice
+the video memory bandwidth for swap chains compared to 10-bit formats.
+However, it preserves full floating-point precision, requires no special
+tone-mapping math to fit a PQ curve, and allows the Windows display
+pipeline to handle the target display's color mastering
+automatically.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

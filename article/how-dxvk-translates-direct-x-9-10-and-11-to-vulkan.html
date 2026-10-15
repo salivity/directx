@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DXVK Translates DirectX 9, 10, and 11 to Vulkan - directx</title>
+    <meta name="description" content="DXVK is a high-performance translation layer that converts Microsoft DirectX 9, 10, and 11 API calls into Vulkan commands in real time. Typically utilized inside compatibility layers like Wine or Valve&#39;s Proton, it replaces the native Windows dynamic link">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-dxvk-translates-direct-x-9-10-and-11-to-vulkan">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DXVK Translates DirectX 9, 10, and 11 to Vulkan - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-dxvk-translates-direct-x-9-10-and-11-to-vulkan" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DXVK is a high-performance translation layer that converts Microsoft DirectX 9, 10, and 11 API calls into Vulkan commands in real time. Typically utilized inside compatibility layers like Wine or Valve&#39;s Proton, it replaces the native Windows dynamic link" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-dxvk-translates-directx-9-10-and-11-to-vulkan">How DXVK
+Translates DirectX 9, 10, and 11 to Vulkan</h1>
+<p>DXVK is a high-performance translation layer that converts Microsoft
+DirectX 9, 10, and 11 API calls into Vulkan commands in real time.
+Typically utilized inside compatibility layers like Wine or Valve's
+Proton, it replaces the native Windows dynamic link libraries
+(<code>d3d9.dll</code>, <code>d3d11.dll</code>, <code>dxgi.dll</code>)
+to allow non-Windows platforms like Linux to execute Windows games with
+near-native performance. DXVK achieves this efficiency through
+just-in-time shader compilation, asynchronous pipeline generation, thin
+abstraction layers, and low-overhead memory management.</p>
+<h2 id="api-interception-and-translation-architecture">API Interception
+and Translation Architecture</h2>
+<p>When a Windows-based game executes on Linux via Wine or Proton, it
+makes calls to DirectX runtime libraries. DXVK provides drop-in
+replacement dynamic libraries that intercept these API calls before they
+reach the operating system.</p>
+<p>Instead of translating DirectX calls into intermediate software
+abstractions, DXVK directly transforms the high-level states and
+commands of Direct3D into low-level Vulkan commands. Because Vulkan is
+an explicit, modern graphics API designed to interact closely with
+physical GPU hardware, it provides the low-level controls necessary to
+emulate Direct3D behaviors with minimal CPU overhead.</p>
+<h2 id="dxbc-to-spir-v-shader-translation">DXBC to SPIR-V Shader
+Translation</h2>
+<p>DirectX 9, 10, and 11 games do not ship raw HLSL (High-Level Shader
+Language) code; they ship pre-compiled DirectX Bytecode (DXBC). Vulkan
+cannot execute DXBC directly and instead consumes SPIR-V, a standardized
+intermediate representation.</p>
+<p>DXVK incorporates an internal bytecode compiler that parses DXBC
+tokens and translates them into equivalent SPIR-V instructions at
+runtime:</p>
+<ul>
+<li><strong>Instruction Mapping:</strong> Most arithmetic, texture
+sampling, and control flow instructions in DXBC have direct 1:1 or
+near-equivalent equivalents in SPIR-V.</li>
+<li><strong>Resource Binding:</strong> Direct3D binds resources
+(constant buffers, textures, samplers) using register slots (e.g.,
+<code>b0</code>, <code>t0</code>, <code>s0</code>). DXVK maps these
+registers to Vulkan descriptor sets and bindings.</li>
+<li><strong>Register Flattening and Emulation:</strong> Where
+architectural mismatches occur—such as Direct3D 9's specific coordinate
+spaces or clip-plane handling—DXVK injects small math operations into
+the generated SPIR-V to match the expected Direct3D visual output.</li>
+</ul>
+<h2 id="overcoming-pipeline-state-mismatches">Overcoming Pipeline State
+Mismatches</h2>
+<p>One of the largest architectural hurdles between Direct3D 11 and
+Vulkan is state management:</p>
+<ul>
+<li><strong>Direct3D 11</strong> uses a mutable state model, allowing
+games to swap out individual rasterizer, blend, or depth-stencil states
+dynamically mid-frame.</li>
+<li><strong>Vulkan</strong> uses an immutable Pipeline State Object
+(PSO) model, requiring all shaders, blend modes, rasterizer states, and
+render pass formats to be compiled together into a single pipeline
+object before drawing.</li>
+</ul>
+<p>To reconcile this without causing performance freezes (shader
+stutter), DXVK uses several techniques:</p>
+<ol type="1">
+<li><strong>State Tracking:</strong> DXVK tracks the active state flags
+of the Direct3D pipeline. When a draw command occurs, it computes a hash
+representing the current combined state.</li>
+<li><strong>Pipeline Caching:</strong> If a pipeline with that hash
+exists in memory, DXVK binds it immediately. If not, it compiles the
+pipeline on demand.</li>
+<li><strong>The DXVK State Cache:</strong> DXVK writes seen state
+combinations to a file on disk. On subsequent launches, DXVK
+pre-compiles these pipelines before the game needs them, eliminating
+in-game stutter.</li>
+<li><strong>Vulkan Graphics Pipeline Library
+(<code>VK_EXT_graphics_pipeline_library</code>):</strong> On drivers
+that support it, DXVK decouples shader compilation from final state
+compilation. Shaders can be compiled into parts ahead of time and
+quickly linked with runtime state data, virtually removing pipeline
+compilation hitches during gameplay.</li>
+</ol>
+<h2 id="dedicated-worker-threads-and-command-submission">Dedicated
+Worker Threads and Command Submission</h2>
+<p>Direct3D 11 games often assume the driver manages background
+threading, or they rely on a single render thread issuing drawing
+commands. Vulkan, by contrast, relies on explicit command buffer
+recording and queue submissions.</p>
+<p>To avoid blocking the game’s main simulation thread, DXVK offloads
+execution through an internal submission queue:</p>
+<ul>
+<li>The calling thread writes high-level Direct3D commands into a
+lock-free ring buffer.</li>
+<li>A dedicated DXVK worker thread consumes this buffer, performs the
+heavy lifting of state translation, and records native Vulkan command
+buffers (<code>VkCommandBuffer</code>).</li>
+<li>Once recorded, the commands are submitted to the GPU via Vulkan
+queues (<code>vkQueueSubmit</code>).</li>
+</ul>
+<p>This command-stream multithreading model decouples the game’s frame
+execution from Vulkan API submission overhead.</p>
+<h2 id="memory-and-resource-sub-allocation">Memory and Resource
+Sub-Allocation</h2>
+<p>Vulkan requires manual GPU memory allocation and has strict limits on
+the total number of individual allocations a program can make (often
+between 4,096 and 65,536). Direct3D 9 and 11 abstract this entirely,
+allocating buffers and textures on demand.</p>
+<p>DXVK manages this through custom sub-allocators:</p>
+<ul>
+<li>DXVK allocates large chunks of device memory (typically 256 MiB
+blocks) using Vulkan’s memory management routines.</li>
+<li>Game resources (vertex buffers, index buffers, dynamic textures) are
+sub-allocated from these large memory pools.</li>
+<li>For dynamic resources that update every frame (using Direct3D
+<code>D3D11_MAP_WRITE_DISCARD</code>), DXVK dynamically reallocates
+memory ranges within its staging pools to prevent CPU-GPU
+synchronization stalls.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

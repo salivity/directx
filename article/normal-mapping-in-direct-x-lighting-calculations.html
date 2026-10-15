@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Normal Mapping in DirectX Lighting Calculations - directx</title>
+    <meta name="description" content="Normal mapping is a foundational rendering technique in DirectX that simulates high-frequency geometric detail on 3D models without incurring the computational cost of dense polygonal meshes. By encoding modified surface normal vectors into an RGB texture">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/normal-mapping-in-direct-x-lighting-calculations">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Normal Mapping in DirectX Lighting Calculations - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/normal-mapping-in-direct-x-lighting-calculations" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Normal mapping is a foundational rendering technique in DirectX that simulates high-frequency geometric detail on 3D models without incurring the computational cost of dense polygonal meshes. By encoding modified surface normal vectors into an RGB texture" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="normal-mapping-in-directx-lighting-calculations">Normal Mapping
+in DirectX Lighting Calculations</h1>
+<p>Normal mapping is a foundational rendering technique in DirectX that
+simulates high-frequency geometric detail on 3D models without incurring
+the computational cost of dense polygonal meshes. By encoding modified
+surface normal vectors into an RGB texture map, DirectX pixel shaders
+substitute standard interpolated vertex normals with per-pixel normals
+during real-time lighting calculations. This article examines the
+functional role of normal mapping inside the DirectX pipeline, detailing
+how it modifies the mathematical inputs of lighting models, utilizes
+tangent space transformations, and delivers high-fidelity visual depth
+in modern real-time graphics.</p>
+<h3 id="the-mechanism-of-normal-maps">The Mechanism of Normal Maps</h3>
+<p>In standard 3D rendering, a mesh's curvature is defined by its
+geometric normals—vectors perpendicular to each vertex, which are
+interpolated across the surface of a triangle. While this approach
+produces smooth transitions, it lacks the ability to represent cracks,
+rivets, wrinkles, or granular textures without drastically increasing
+the polygon count.</p>
+<p>A normal map solves this by storing directional vectors directly
+within a texture:</p>
+<ul>
+<li>The red channel stores the <span class="math inline">\(X\)</span>
+component (tangent direction).</li>
+<li>The green channel stores the <span class="math inline">\(Y\)</span>
+component (bitangent direction).</li>
+<li>The blue channel stores the <span class="math inline">\(Z\)</span>
+component (perpendicular surface normal).</li>
+</ul>
+<p>Because color values in a standard DirectX texture range from <span
+class="math inline">\([0.0, 1.0]\)</span>, the pixel shader decodes
+these values back into signed vector coordinates ranging from <span
+class="math inline">\([-1.0, 1.0]\)</span> using the standard
+transformation:</p>
+<p><span class="math display">\[\mathbf{N} = 2.0 \times \text{Color} -
+1.0\]</span></p>
+<h3 id="tangent-space-and-coordinate-transformations">Tangent Space and
+Coordinate Transformations</h3>
+<p>DirectX lighting models generally calculate light interaction in
+either World Space or View Space. However, normal maps are authored in
+Tangent Space—a localized coordinate system aligned to the surface of
+the UV mapping.</p>
+<p>To use these vectors in lighting equations, the DirectX graphics
+pipeline relies on the Tangent-Bitangent-Normal (TBN) matrix:</p>
+<ol type="1">
+<li><strong>Vertex Shader:</strong> The vertex shader receives vertex
+attributes (positions, normals, and tangents) and computes the bitangent
+(or receives it precalculated). It builds the <span
+class="math inline">\(3 \times 3\)</span> TBN rotation matrix.</li>
+<li><strong>Pixel Shader:</strong> The sampled normal vector from the
+normal map is multiplied by the TBN matrix to orient it from tangent
+space into world space. Alternatively, light and view vectors can be
+transformed into tangent space inside the vertex shader to save
+instruction cycles in the pixel shader.</li>
+</ol>
+<h3 id="integration-into-lighting-calculations">Integration into
+Lighting Calculations</h3>
+<p>Once the perturbed normal vector <span
+class="math inline">\(\mathbf{N}\)</span> is transformed into the common
+coordinate space, it directly replaces the geometric normal across all
+standard lighting equations within High-Level Shading Language
+(HLSL).</p>
+<h4 id="1-diffuse-lighting-lambertian-reflection">1. Diffuse Lighting
+(Lambertian Reflection)</h4>
+<p>Diffuse shading depends on the angle between the surface normal <span
+class="math inline">\(\mathbf{N}\)</span> and the incoming light
+direction <span class="math inline">\(\mathbf{L}\)</span>:</p>
+<p><span class="math display">\[I_{\text{diffuse}} = \max(\mathbf{N}
+\cdot \mathbf{L}, 0.0)\]</span></p>
+<p>By substituting the interpolated geometric normal with the per-pixel
+normal from the map, adjacent pixels receive drastically different
+dot-product results. This variation produces realistic micro-shadows,
+bevels, and surface bumps that convincingly respond as light sources
+move.</p>
+<h4 id="2-specular-highlights-blinn-phong-and-pbr">2. Specular
+Highlights (Blinn-Phong and PBR)</h4>
+<p>Specular reflection and roughness calculations depend heavily on
+surface orientation. In the Blinn-Phong model, the half-vector <span
+class="math inline">\(\mathbf{H}\)</span> (the normalized sum of the
+light direction and view direction) is dotted with the normal:</p>
+<p><span class="math display">\[I_{\text{specular}} = \max(\mathbf{N}
+\cdot \mathbf{H}, 0.0)^{\text{shininess}}\]</span></p>
+<p>In modern Physically Based Rendering (PBR) pipelines using DirectX,
+the normal affects microfacet distribution functions (such as GGX) and
+Fresnel reflection terms. The normal map breaks up specular highlights
+across flat polygons, simulating accurate surface roughness and dynamic,
+localized glints.</p>
+<h3 id="performance-efficiency-in-directx">Performance Efficiency in
+DirectX</h3>
+<p>The fundamental advantage of normal mapping in DirectX is operational
+efficiency. Evaluating a texture fetch and vector dot products in the
+pixel shader is computationally inexpensive compared to processing,
+transforming, and rasterizing millions of additional geometric vertices.
+Normal mapping allows game engines and real-time visualization
+applications to maintain low-poly base geometry while achieving the
+visual fidelity of extremely complex surfaces.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

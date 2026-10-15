@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forward+ Rendering: Solving DirectX Lighting Bottlenecks - directx</title>
+    <meta name="description" content="Traditional forward rendering struggles with performance scaling when scenes contain hundreds or thousands of dynamic lights, resulting in an algorithmic bottleneck of $O(\text{geometry} \times \text{lights})$ and excessive redundant calculations on occlu">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/forward-rendering-solving-direct-x-lighting-bottlenecks">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Forward+ Rendering: Solving DirectX Lighting Bottlenecks - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/forward-rendering-solving-direct-x-lighting-bottlenecks" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Traditional forward rendering struggles with performance scaling when scenes contain hundreds or thousands of dynamic lights, resulting in an algorithmic bottleneck of $O(\text{geometry} \times \text{lights})$ and excessive redundant calculations on occlu" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="forward-rendering-solving-directx-lighting-bottlenecks">Forward+
+Rendering: Solving DirectX Lighting Bottlenecks</h1>
+<p>Traditional forward rendering struggles with performance scaling when
+scenes contain hundreds or thousands of dynamic lights, resulting in an
+algorithmic bottleneck of <span class="math inline">\(O(\text{geometry}
+\times \text{lights})\)</span> and excessive redundant calculations on
+occluded pixels. Forward+ rendering—also known as Tiled Forward
+Shading—solves this light accumulation bottleneck in DirectX by
+introducing a compute-shader-driven light culling phase before the final
+shading pass. By binning lights into screen-space tiles, Forward+
+drastically reduces the number of light evaluations per pixel while
+preserving native forward-rendering advantages such as hardware
+multi-sample anti-aliasing (MSAA) and flexible material pipelines.</p>
+<h3 id="the-forward-shading-bottleneck">The Forward Shading
+Bottleneck</h3>
+<p>In a traditional forward rendering pipeline implemented in DirectX,
+scene geometry is rasterized, and lighting calculations occur inside the
+pixel shader for each fragment. If a scene contains <span
+class="math inline">\(M\)</span> active lights and <span
+class="math inline">\(N\)</span> fragments, the GPU potentially executes
+<span class="math inline">\(M \times N\)</span> light iterations.</p>
+<p>This architecture introduces two primary bottlenecks:</p>
+<ol type="1">
+<li><strong>Overdraw:</strong> When multiple opaque primitives overlap
+the same pixel, the pixel shader evaluates lighting for all overlapping
+fragments, even though only the front-most fragment is ultimately
+visible.</li>
+<li><strong>Global Light Iteration:</strong> Without fine-grained
+spatial light management, the pixel shader must loop through every
+active light in the scene, testing distance and attenuation even if a
+light's radius of influence never reaches the rendered surface.</li>
+</ol>
+<p>While deferred rendering addresses these issues by decoupling
+lighting from geometry, it consumes high memory bandwidth via
+Multi-Render Targets (G-Buffers), complicates transparency rendering,
+and disables native hardware MSAA.</p>
+<h3 id="the-three-stages-of-forward-in-directx">The Three Stages of
+Forward+ in DirectX</h3>
+<p>Forward+ resolves the limitations of standard forward shading and
+deferred shading through a three-stage pipeline:</p>
+<h4 id="1-depth-pre-pass">1. Depth Pre-Pass</h4>
+<p>The DirectX pipeline first renders the scene’s opaque geometry to a
+depth target using a minimal vertex shader and no pixel shader (or a
+depth-only state). This pass produces a full-resolution screen-space
+depth buffer and populates the hardware Early-Z buffer, ensuring that
+subsequent passes do not waste cycles on hidden surfaces.</p>
+<h4 id="2-tile-based-light-culling-via-directcompute">2. Tile-Based
+Light Culling via DirectCompute</h4>
+<p>The screen is divided into a 2D grid of uniform tiles, typically
+<span class="math inline">\(16 \times 16\)</span> pixels. A DirectX
+Compute Shader (<code>CS</code>) processes these tiles in parallel:</p>
+<ul>
+<li><strong>Frustum Extraction:</strong> Each compute thread group
+computes the minimum and maximum depth values for its assigned tile by
+sampling the depth buffer generated in the pre-pass. These depth bounds
+define a tight tile frustum in view space.</li>
+<li><strong>Light Intersection:</strong> The thread group iterates
+through the scene's light array (stored in a
+<code>StructuredBuffer</code> or constant buffer). Lights—modeled as
+bounding spheres for point lights or cones for spotlights—are tested for
+intersection against the tile's frustum.</li>
+<li><strong>Shared Memory Light Lists:</strong> Threads collaborate
+using thread group shared memory (<code>groupshared</code>) to construct
+a local list of light indices overlapping the tile.</li>
+<li><strong>Global Output:</strong> Once the intersection tests
+complete, the final list of active light indices for each tile is
+written to an unbounded <code>RWStructuredBuffer</code>, along with a
+tile grid offset buffer indicating the start index and light count per
+tile.</li>
+</ul>
+<h4 id="3-shaded-forward-pass">3. Shaded Forward Pass</h4>
+<p>The scene is rendered a second time with full materials and normal
+pixel shaders. However, unlike traditional forward rendering, the pixel
+shader does not iterate over all global lights.</p>
+<p>Instead, the pixel shader calculates its screen-space tile coordinate
+from <code>SV_Position</code>:</p>
+<ol type="1">
+<li>It samples the tile grid buffer to fetch the offset and count of
+lights affecting that specific <span class="math inline">\(16 \times
+16\)</span> region.</li>
+<li>It fetches light data exclusively for those indices from the culled
+light buffer.</li>
+<li>It accumulates lighting only from relevant sources.</li>
+</ol>
+<p>Because the depth pre-pass already initialized the depth buffer,
+DirectX's hardware Early-Z feature automatically discards occluded
+geometry before pixel shading starts, eliminating the overdraw cost.</p>
+<h3 id="performance-gains-and-architectural-advantages">Performance
+Gains and Architectural Advantages</h3>
+<p>By shifting light culling to DirectCompute, Forward+ changes the
+lighting complexity from <span class="math inline">\(O(\text{geometry}
+\times \text{lights})\)</span> to <span
+class="math inline">\(O(\text{geometry}) + O(\text{tiles} \times
+\text{lights})\)</span>. The number of light evaluations per pixel drops
+from thousands to only the handful of lights that physically intersect
+that pixel's tile frustum.</p>
+<p>Additionally, because the final pass is still standard forward
+rendering, developers can use multiple unique material shaders, read
+anisotropic surface attributes without G-buffer storage constraints,
+support native hardware MSAA, and cleanly integrate alpha-blended
+transparent surfaces by reusing the culled light grids.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/directx'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>
