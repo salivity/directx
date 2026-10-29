@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX Texture Arrays and Pipeline State Switches - directx</title>
+    <meta name="description" content="This article provides an overview of texture arrays in DirectX, detailing what they are and how they optimize rendering performance. You will learn the architectural differences between traditional multi-texture binding and texture arrays, and specificall">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-texture-arrays-and-pipeline-state-switches">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX Texture Arrays and Pipeline State Switches - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-texture-arrays-and-pipeline-state-switches" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of texture arrays in DirectX, detailing what they are and how they optimize rendering performance. You will learn the architectural differences between traditional multi-texture binding and texture arrays, and specificall" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-texture-arrays-and-pipeline-state-switches">DirectX
+Texture Arrays and Pipeline State Switches</h1>
+<p>This article provides an overview of texture arrays in DirectX,
+detailing what they are and how they optimize rendering performance. You
+will learn the architectural differences between traditional
+multi-texture binding and texture arrays, and specifically how grouping
+textures into a single contiguous resource minimizes pipeline state
+switches, enables efficient batching, and reduces CPU and GPU overhead
+during rendering.</p>
+<h3 id="what-are-texture-arrays-in-directx">What Are Texture Arrays in
+DirectX?</h3>
+<p>A texture array is a Direct3D resource that contains a collection of
+individual, identically sized textures sharing the same format, bit
+depth, and mipmap structure. Introduced in Direct3D 10 and standard
+across modern Direct3D 11 and 12 pipelines, texture arrays can be
+created as 1D, 2D, or cube map variants (such as
+<code>Texture2DArray</code> in HLSL).</p>
+<p>Unlike 3D volume textures, which blend and interpolate texels across
+all three spatial dimensions, texture arrays treat each slice as an
+independent 2D surface. In HLSL, a shader indexes a specific slice
+within an array by passing a coordinate containing the standard UV
+coordinates plus an explicit integer or float slice index, such as
+<code>myTextureArray.Sample(mySampler, float3(u, v, sliceIndex))</code>.
+Because no filtering occurs between adjacent slices, each slice behaves
+conceptually as a distinct texture file.</p>
+<h3 id="the-problem-with-traditional-texture-swapping">The Problem with
+Traditional Texture Swapping</h3>
+<p>In a standard rendering loop, rendering multiple meshes with
+different textures requires individual draw calls. Prior to each draw
+call, the application must update the pipeline state:</p>
+<ol type="1">
+<li>The CPU signals the graphics API to unbind the previous
+texture.</li>
+<li>The CPU binds the new texture to a Shader Resource View (SRV)
+slot.</li>
+<li>The API validates the binding and issues the draw command.</li>
+</ol>
+<p>These updates represent pipeline state switches. Frequent state
+switches create significant CPU overhead due to driver validation and
+API command generation. Furthermore, changing pipeline states can
+introduce pipeline bubbles on the GPU, where execution units stall while
+waiting for dependent resources to update before beginning the next set
+of primitives.</p>
+<h3 id="how-texture-arrays-reduce-pipeline-state-switches">How Texture
+Arrays Reduce Pipeline State Switches</h3>
+<p>Texture arrays eliminate the need to constantly swap texture bindings
+by consolidating disparate textures into one resource.</p>
+<h4 id="1-single-bind-architecture">1. Single-Bind Architecture</h4>
+<p>Instead of binding dozens of separate <code>Texture2D</code>
+resources across consecutive draw calls, a developer packs the textures
+into a single <code>Texture2DArray</code>. The entire array is bound to
+the graphics pipeline just once. Multiple objects can then be drawn
+sequentially without rebinding textures, completely removing the SRV
+state-switch cost between those calls.</p>
+<h4 id="2-enabling-dynamic-batching-and-instancing">2. Enabling Dynamic
+Batching and Instancing</h4>
+<p>Because hardware instancing and batching require objects to share the
+same material and pipeline state, traditional rendering prevents objects
+with different textures from sharing a single draw call. With a texture
+array:</p>
+<ul>
+<li>Multiple objects with different appearances can be merged into a
+single vertex buffer or rendered using
+<code>DrawIndexedInstanced</code>.</li>
+<li>The texture identifier for each object or instance is passed as
+per-instance vertex data, a root constant, or a uniform buffer
+variable.</li>
+<li>The pixel shader dynamically selects the slice index on a
+per-primitive or per-instance basis.</li>
+</ul>
+<p>This transforms dozens or hundreds of individual draw calls and
+associated state switches into a single instanced draw call.</p>
+<h4 id="3-reduced-driver-validation-and-gpu-stalls">3. Reduced Driver
+Validation and GPU Stalls</h4>
+<p>In modern low-level APIs like DirectX 12, changing descriptor tables
+or root parameters still incurs costs in memory bandwidth and cache
+synchronization. Texture arrays allow shaders to retrieve textures
+uniformly without updating descriptor tables on the CPU side. By keeping
+resource bindings static over longer rendering periods, the GPU
+maintains higher occupancy and minimizes execution stalls caused by
+resource dependencies.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-texture-arrays-and-pipeline-state-switches';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voxel Cone Tracing with 3D Clipmaps in DirectX - directx</title>
+    <meta name="description" content="Voxel cone tracing is a real-time global illumination technique that approximates ray tracing by voxelizing scene geometry and casting wide cones through a filtered spatial hierarchy to compute indirect lighting, specular reflections, and ambient occlusio">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/voxel-cone-tracing-with-3-d-clipmaps-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Voxel Cone Tracing with 3D Clipmaps in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/voxel-cone-tracing-with-3-d-clipmaps-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Voxel cone tracing is a real-time global illumination technique that approximates ray tracing by voxelizing scene geometry and casting wide cones through a filtered spatial hierarchy to compute indirect lighting, specular reflections, and ambient occlusio" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="voxel-cone-tracing-with-3d-clipmaps-in-directx">Voxel Cone
+Tracing with 3D Clipmaps in DirectX</h1>
+<p>Voxel cone tracing is a real-time global illumination technique that
+approximates ray tracing by voxelizing scene geometry and casting wide
+cones through a filtered spatial hierarchy to compute indirect lighting,
+specular reflections, and ambient occlusion. Because storing uniform
+high-resolution voxel grids over large scenes requires prohibitive
+amounts of video memory, developers employ 3D clipmaps—a series of
+nested, view-dependent 3D grids—to manage memory and detail. Within
+Microsoft DirectX, these clipmaps are realized through 3D textures,
+conservative rasterization, and compute shaders, delivering scalable,
+dynamic indirect lighting for modern graphical applications.</p>
+<h3 id="understanding-voxel-cone-tracing">Understanding Voxel Cone
+Tracing</h3>
+<p>Voxel cone tracing (VCT) simplifies the computational burden of
+traditional path tracing. Instead of evaluating thousands of individual
+rays per pixel to resolve indirect light paths, the scene is transformed
+into an emissive and opaque 3D volume known as a voxel grid. During
+rendering, shaders trace continuous cones through this volume.</p>
+<p>As a cone advances through space, its radius expands proportionally
+with distance. The shader queries pre-filtered voxel data whose level of
+detail matches the footprint of the cone at that specific distance. A
+narrow cone with a tight opening angle represents sharp, glossy
+reflections, while a wide cone simulates diffuse indirect bounces or
+ambient occlusion. This process relies on hardware trilinear
+interpolation between filtered voxel levels, turning what would be
+thousands of stochastic ray-triangle intersections into a handful of
+texture samples.</p>
+<h3 id="the-problem-of-spatial-scale-and-the-3d-clipmap-solution">The
+Problem of Spatial Scale and the 3D Clipmap Solution</h3>
+<p>A naive voxel grid scales cubically: doubling the resolution across
+three dimensions increases memory consumption by a factor of eight. A
+uniform grid dense enough to capture fine geometry across a typical game
+world quickly exceeds modern GPU memory limits.</p>
+<p>To solve this, developers implement 3D clipmaps (or cascading voxel
+grids). Rather than maintaining a single high-resolution grid for the
+entire scene, 3D clipmaps arrange multiple concentric voxel volumes
+centered around the camera:</p>
+<ul>
+<li><strong>Inner Levels:</strong> Cover a small volume immediately
+surrounding the viewer at very high spatial density, preserving
+geometric detail where it is most noticeable.</li>
+<li><strong>Outer Levels:</strong> Span exponentially larger volumes
+with progressively lower spatial resolution, capturing distant blockers
+and large-scale light bouncers.</li>
+</ul>
+<p>When a cone is traced, it starts in the finest clipmap level. If the
+cone travels beyond the boundaries of that level or expands wider than
+the level's cell resolution, the sampling algorithm smoothly transitions
+into the next, coarser clipmap level.</p>
+<h3 id="implementing-3d-clipmaps-in-directx">Implementing 3D Clipmaps in
+DirectX</h3>
+<p>Modern DirectX (DirectX 11 and DirectX 12) provides the low-level
+graphics pipeline controls required to generate and sample 3D clipmaps
+efficiently.</p>
+<h4 id="1-storage-via-texture3d-arrays-and-uavs">1. Storage via
+Texture3D Arrays and UAVs</h4>
+<p>Clipmap levels are commonly allocated as a single
+<code>Texture3D</code> array or multiple flat 3D texture resources bound
+to the pipeline. In DirectX 12, these textures are accessed via
+Unordered Access Views (UAVs) using formats such as
+<code>DXGI_FORMAT_R8G8B8A8_UNORM</code> for color and occlusion, or
+16-bit half-float formats for higher dynamic range radiance.</p>
+<h4 id="2-voxelization-and-conservative-rasterization">2. Voxelization
+and Conservative Rasterization</h4>
+<p>Geometry is injected into the clipmap during a voxelization pass
+without generating an actual 2D render target. DirectX’s hardware
+Conservative Rasterization (available through Direct3D 12 Feature Levels
+12_0 and higher) ensures that any voxel touched by a triangle
+fragment—even partially—is rasterized. Geometry shaders or primitive
+amplification route the primitives to the major projection axis (X, Y,
+or Z) to maximize the projected surface area, and pixel shaders write
+directly to the 3D texture UAV using atomic operations to accumulate
+color, normal, and opacity values.</p>
+<h4 id="3-toroidal-addressing-for-dynamic-camera-movement">3. Toroidal
+Addressing for Dynamic Camera Movement</h4>
+<p>Re-voxelizing the entire world every frame is computationally
+expensive. As the camera translates through the world, DirectX compute
+shaders update the clipmaps using toroidal (wrap-around) addressing. The
+3D coordinates wrap mathematically using modulo arithmetic. When the
+camera shifts, only the newly exposed boundary slices of the clipmap
+volume need to be cleared and re-voxelized, while existing data remains
+valid and shifts virtually within memory.</p>
+<h4 id="4-cone-sampling-in-hlsl">4. Cone Sampling in HLSL</h4>
+<p>During the final deferred shading or forward-plus pass, High-Level
+Shading Language (HLSL) shaders cast cones from visible surface
+positions. The sampling routine checks the cone's current world-space
+footprint against the resolution of the clipmap levels. The shader
+queries the appropriate clipmap texture using hardware filtering,
+blending across clipmap boundaries to eliminate visual popping. This
+architecture enables dynamic environments to exhibit accurate, soft
+global illumination and realistic secondary light bounces at interactive
+frame rates.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/voxel-cone-tracing-with-3-d-clipmaps-in-direct-x';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

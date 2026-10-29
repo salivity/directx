@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What Are Mesh Shaders in DirectX 12 Ultimate? - directx</title>
+    <meta name="description" content="Mesh shaders represent a revolutionary overhaul of the graphics geometry pipeline introduced in DirectX 12 Ultimate. By replacing the decades-old, fixed-function geometry stages with a flexible, compute-centric programming model, mesh shaders empower deve">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/what-are-mesh-shaders-in-direct-x-12-ultimate">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="What Are Mesh Shaders in DirectX 12 Ultimate? - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/what-are-mesh-shaders-in-direct-x-12-ultimate" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Mesh shaders represent a revolutionary overhaul of the graphics geometry pipeline introduced in DirectX 12 Ultimate. By replacing the decades-old, fixed-function geometry stages with a flexible, compute-centric programming model, mesh shaders empower deve" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="what-are-mesh-shaders-in-directx-12-ultimate">What Are Mesh
+Shaders in DirectX 12 Ultimate?</h1>
+<p>Mesh shaders represent a revolutionary overhaul of the graphics
+geometry pipeline introduced in DirectX 12 Ultimate. By replacing the
+decades-old, fixed-function geometry stages with a flexible,
+compute-centric programming model, mesh shaders empower developers to
+render vastly more complex geometric detail with significantly higher
+efficiency. This article explains how mesh shaders work, their two-stage
+execution model, and how they fundamentally replace the traditional
+vertex processing pipeline to eliminate hardware bottlenecks.</p>
+<h3 id="the-traditional-geometry-pipeline-and-its-bottlenecks">The
+Traditional Geometry Pipeline and Its Bottlenecks</h3>
+<p>For years, the standard 3D graphics pipeline relied on a sequence of
+discrete, rigid stages:</p>
+<ol type="1">
+<li><strong>Input Assembler (IA):</strong> Fetches index and vertex data
+from memory.</li>
+<li><strong>Vertex Shader (VS):</strong> Processes vertices
+individually.</li>
+<li><strong>Hull/Domain Shaders (Optional):</strong> Handle hardware
+tessellation.</li>
+<li><strong>Geometry Shader (GS, Optional):</strong> Generates or
+destroys primitives per-triangle.</li>
+<li><strong>Rasterizer:</strong> Converts primitives into pixels for the
+Pixel Shader.</li>
+</ol>
+<p>While functional, this architecture struggled under modern workloads.
+The Input Assembler is fixed-function hardware with limited memory
+access patterns. Geometry and Hull shaders often suffer from poor
+execution efficiency and high memory bandwidth costs when generating new
+geometry. Crucially, the traditional model processes data sequentially
+on a per-vertex or per-primitive basis, preventing threads within a GPU
+wave from collaborating efficiently via fast, on-chip shared memory.</p>
+<h3 id="enter-mesh-shaders-a-compute-style-approach">Enter Mesh Shaders:
+A Compute-Style Approach</h3>
+<p>DirectX 12 Ultimate replaces the Input Assembler, Vertex Shader,
+Tessellation stages, and Geometry Shader with a unified, two-stage
+compute-like pipeline: the <strong>Amplification Shader</strong> and the
+<strong>Mesh Shader</strong>.</p>
+<h4 id="1-the-amplification-shader">1. The Amplification Shader</h4>
+<p>The Amplification Shader runs first. It acts as an optional,
+high-level culling and dispatch filter. Running as a compute-style
+thread group, it evaluates objects or bounding volumes in world space.
+It can instantly discard geometry outside the camera view frustum or
+behind occluders before any vertex calculations take place. If geometry
+is visible, the Amplification Shader determines how many Mesh Shaders to
+dispatch, dynamically allocating work based on distance or detail
+levels.</p>
+<h4 id="2-the-mesh-shader">2. The Mesh Shader</h4>
+<p>The Mesh Shader receives the work dispatched by the Amplification
+Shader. Instead of processing arbitrary global vertex buffers, it
+operates on compact data structures known as
+<strong>meshlets</strong>.</p>
+<p>A meshlet is a small partition of a 3D model containing a localized
+set of vertices and primitives (typically up to 64 vertices and 126
+triangles). Because meshlets are self-contained and small:</p>
+<ul>
+<li>GPU threads work cooperatively within a thread group to process
+vertices and connectivity.</li>
+<li>Geometry data is held in fast on-chip shared memory (L1/L2 cache)
+rather than continuously written to and read from slower VRAM.</li>
+<li>Vertices shared between adjacent triangles are computed only once
+per meshlet, maximizing vertex reuse.</li>
+</ul>
+<p>Once processed, the Mesh Shader outputs transformed triangles
+directly to the rasterizer.</p>
+<h3 id="how-mesh-shaders-transform-rendering">How Mesh Shaders Transform
+Rendering</h3>
+<ul>
+<li><strong>Massive Geometric Scalability:</strong> By shifting to
+meshlet-based processing, GPUs can scale to millions of rendered
+triangles per frame without stalling the rasterizer or exhausting memory
+bandwidth.</li>
+<li><strong>Early and Granular Culling:</strong> Instead of waiting for
+primitives to reach the rasterizer to be culled, mesh shaders eliminate
+invisible back-facing triangles, frustum-culled meshlets, and sub-pixel
+details directly on-chip.</li>
+<li><strong>Algorithmic Freedom:</strong> Developers are no longer
+restricted to rigid vertex formats. The compute-driven approach allows
+for custom procedural geometry generation, runtime level-of-detail (LOD)
+transitions, and bespoke compression schemes inside the shader
+code.</li>
+</ul>
+<p>Mesh shaders shift geometry processing from a fixed, assembly-line
+design to a cooperative, highly parallel compute architecture, unlocking
+unprecedented visual fidelity and performance in modern real-time
+rendering.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/what-are-mesh-shaders-in-direct-x-12-ultimate';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Texture Swizzling and GPU Tiling in DirectX - directx</title>
+    <meta name="description" content="This article explores how texture swizzling and GPU tiling resolve memory bandwidth bottlenecks in modern graphics pipelines, specifically within DirectX. By reorganizing traditional linear pixel data into multidimensional, cache-friendly memory layouts,">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/texture-swizzling-and-gpu-tiling-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Texture Swizzling and GPU Tiling in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/texture-swizzling-and-gpu-tiling-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how texture swizzling and GPU tiling resolve memory bandwidth bottlenecks in modern graphics pipelines, specifically within DirectX. By reorganizing traditional linear pixel data into multidimensional, cache-friendly memory layouts," />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="texture-swizzling-and-gpu-tiling-in-directx">Texture Swizzling
+and GPU Tiling in DirectX</h1>
+<p>This article explores how texture swizzling and GPU tiling resolve
+memory bandwidth bottlenecks in modern graphics pipelines, specifically
+within DirectX. By reorganizing traditional linear pixel data into
+multidimensional, cache-friendly memory layouts, graphics hardware
+minimizes cache misses during common 2D and 3D sampling operations.
+Below, we break down the mechanics of texture swizzling, the role of GPU
+tiling patterns, and how DirectX interfaces with these hardware-level
+memory optimizations to ensure high-performance rendering.</p>
+<h2 id="the-limitation-of-linear-texture-memory">The Limitation of
+Linear Texture Memory</h2>
+<p>In traditional computing, image data is stored in a linear or
+row-major format, where pixels are arranged consecutively from left to
+right, line by line. While this works well for horizontal memory access,
+it causes severe performance penalties during texture sampling in 3D
+rendering.</p>
+<p>When a GPU samples a texture using bilinear or trilinear filtering,
+it fetches a cluster of neighboring texels across both the X and Y axes.
+In a row-major layout, moving one pixel down vertically requires jumping
+across an entire row’s worth of memory addresses. Because GPU L1 and L2
+caches load contiguous blocks of memory (cache lines), vertical lookups
+often trigger cache misses, leading to redundant fetches, cache line
+thrashing, and stalled execution units.</p>
+<h2 id="what-is-texture-swizzling-and-gpu-tiling">What Is Texture
+Swizzling and GPU Tiling?</h2>
+<p>Texture swizzling—often synonymous with or a component of GPU
+tiling—is the process of mapping multi-dimensional coordinates (X, Y,
+and optionally Z) into a one-dimensional memory address using non-linear
+patterns. Instead of storing entire rows sequentially, the memory
+controller divides the texture into small 2D blocks, typically called
+tiles or micro-tiles (e.g., 4x4 or 8x8 pixels).</p>
+<p>Within these tiles, texel addresses are determined by
+bit-interleaving the coordinate bits, a pattern frequently known as
+Morton order or a Z-order curve. By interleaving the binary
+representation of the X and Y coordinates (e.g., <span
+class="math inline">\(X_0, Y_0, X_1, Y_1, \dots\)</span>), nearby 2D
+coordinates map directly to adjacent memory addresses in the GPU's
+physical RAM.</p>
+<h2 id="how-tiling-improves-spatial-cache-locality">How Tiling Improves
+Spatial Cache Locality</h2>
+<p>GPU tiling directly improves spatial cache locality by ensuring that
+physical proximity in memory corresponds to 2D screen-space proximity
+rather than purely horizontal distance.</p>
+<ol type="1">
+<li><strong>Uniform Multi-Directional Access:</strong> Because
+contiguous cache lines contain a 2D footprint of texels rather than a
+single horizontal strip, fetching a texel pulls its horizontal,
+vertical, and diagonal neighbors into the cache simultaneously.</li>
+<li><strong>Reduced Bandwidth Consumption:</strong> A standard bilinear
+fetch requires four neighboring texels. In a swizzled layout, these four
+texels usually reside within the exact same cache line, reducing four
+potential memory transactions down to one.</li>
+<li><strong>Anisotropic and Mipmap Efficiency:</strong> During oblique
+surface sampling (anisotropic filtering) or across varying mip levels,
+lookups occur across arbitrary 2D angles. Tiled arrangements prevent
+worst-case memory stride penalties regardless of the orientation of the
+surface relative to the camera.</li>
+</ol>
+<h2 id="swizzling-and-tiling-in-directx">Swizzling and Tiling in
+DirectX</h2>
+<p>In DirectX (particularly DirectX 11 and 12), texture tiling is
+largely abstracted by hardware vendors (IHVs) like NVIDIA, AMD, and
+Intel, who each implement proprietary micro-tiling and macro-tiling
+architectures under the hood. However, DirectX 12 exposes specific
+controls over these layouts:</p>
+<ul>
+<li><strong><code>D3D12_TEXTURE_LAYOUT_ROW_MAJOR</code>:</strong> Forces
+linear formatting. This is primarily reserved for staging buffers or
+textures that require CPU readback/write operations, as the CPU cannot
+easily interpret proprietary GPU swizzle patterns.</li>
+<li><strong><code>D3D12_TEXTURE_LAYOUT_UNKNOWN</code>:</strong> Allows
+the GPU driver to select its most optimal, proprietary swizzled/tiled
+format for the target hardware. This yields the highest sampling
+performance for render targets, depth buffers, and sampled
+textures.</li>
+<li><strong><code>D3D12_TEXTURE_LAYOUT_64KB_STANDARD_SWIZZLE</code>:</strong>
+A standardized cross-vendor tiling format introduced in Direct3D 12. It
+arranges textures into uniform 64KB tiles containing predictable Z-order
+patterns. This layout enables advanced features such as Direct3D
+Reserved Resources (tiled textures) and allows inter-process or
+inter-adapter sharing without requiring de-swizzling copies, balancing
+vendor neutrality with spatial cache efficiency.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/texture-swizzling-and-gpu-tiling-in-direct-x';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

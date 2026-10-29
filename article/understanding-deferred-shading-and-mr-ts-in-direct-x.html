@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding Deferred Shading and MRTs in DirectX - directx</title>
+    <meta name="description" content="Deferred shading is a rendering technique designed to handle complex scenes with numerous dynamic light sources by separating geometry processing from lighting calculations. Instead of computing the shading for every polygon as it is rasterized, deferred">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/understanding-deferred-shading-and-mr-ts-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Understanding Deferred Shading and MRTs in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/understanding-deferred-shading-and-mr-ts-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Deferred shading is a rendering technique designed to handle complex scenes with numerous dynamic light sources by separating geometry processing from lighting calculations. Instead of computing the shading for every polygon as it is rasterized, deferred" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="understanding-deferred-shading-and-mrts-in-directx">Understanding
+Deferred Shading and MRTs in DirectX</h1>
+<p>Deferred shading is a rendering technique designed to handle complex
+scenes with numerous dynamic light sources by separating geometry
+processing from lighting calculations. Instead of computing the shading
+for every polygon as it is rasterized, deferred shading stores surface
+attributes in a set of intermediate textures known as the G-buffer
+during an initial geometry pass. This article explains the fundamentals
+of deferred shading, how it solves performance bottlenecks associated
+with traditional forward rendering, and how it leverages Multiple Render
+Targets (MRTs) within DirectX to efficiently populate the G-buffer.</p>
+<h3 id="the-problem-with-forward-shading">The Problem with Forward
+Shading</h3>
+<p>In traditional forward shading, each object in a scene is
+transformed, rasterized, and shaded in a single pipeline execution. If a
+scene contains <span class="math inline">\(M\)</span> objects and <span
+class="math inline">\(N\)</span> dynamic lights, the theoretical
+worst-case rendering complexity scales to <span
+class="math inline">\(O(M \times N)\)</span>.</p>
+<p>This approach introduces significant overdraw. Pixels shaded for
+occluded geometry are ultimately overwritten by objects closer to the
+camera, wasting expensive lighting and material calculations. While
+depth pre-passes can mitigate overdraw, forward shading still requires
+switching shader variants or looping through complex light arrays for
+every rendered mesh.</p>
+<h3 id="the-deferred-shading-paradigm">The Deferred Shading
+Paradigm</h3>
+<p>Deferred shading circumvents this overhead by decoupling geometric
+rasterization from illumination. The process is divided into two primary
+stages:</p>
+<ol type="1">
+<li><strong>The Geometry Pass:</strong> The scene’s geometry is drawn
+without performing any lighting calculations. Instead, surface
+attributes—such as diffuse color, world-space or view-space normals,
+roughness, metalness, and depth—are written directly to separate
+screen-space textures.</li>
+<li><strong>The Lighting Pass:</strong> A full-screen quad or bounding
+light volumes are rendered. Shaders read the stored material and
+geometric data from the intermediate textures, evaluate the lighting
+equations only for visible pixels, and output the final image.</li>
+</ol>
+<p>By deferring the lighting to screen space, the computational
+complexity drops to <span class="math inline">\(O(\text{geometry}) +
+O(\text{lighting})\)</span>. Shading cost becomes proportional to screen
+resolution and the screen-space coverage of the lights, rather than the
+total geometric density of the scene.</p>
+<h3 id="the-role-of-multiple-render-targets-mrts">The Role of Multiple
+Render Targets (MRTs)</h3>
+<p>To make deferred shading viable, the geometry pass must write
+multiple surface properties in a single draw call. Rendering the scene
+multiple times to capture each attribute individually would saturate the
+CPU and GPU with redundant draw calls and state changes.</p>
+<p>DirectX enables this through <strong>Multiple Render Targets
+(MRTs)</strong>. MRT allows a single pixel shader to write output to
+multiple render target views (RTVs) bound to the Output Merger (OM)
+stage simultaneously.</p>
+<h3 id="implementing-mrts-in-directx">Implementing MRTs in DirectX</h3>
+<p>In DirectX (such as Direct3D 11 or 12), using MRTs involves
+configuring both the API pipeline state and the High-Level Shader
+Language (HLSL) code:</p>
+<h4 id="1-pipeline-configuration">1. Pipeline Configuration</h4>
+<p>The application allocates several textures that match the screen
+dimensions, typically utilizing optimized formats to conserve memory
+bandwidth:</p>
+<ul>
+<li><strong>Albedo / Base Color:</strong>
+<code>DXGI_FORMAT_R8G8B8A8_UNORM</code></li>
+<li><strong>Normals:</strong>
+<code>DXGI_FORMAT_R16G16B16A16_FLOAT</code> (or encoded into two-channel
+formats)</li>
+<li><strong>Material Properties (Roughness, Metalness, Ambient
+Occlusion):</strong> <code>DXGI_FORMAT_R8G8B8A8_UNORM</code></li>
+<li><strong>Depth:</strong> Managed via the standard Depth-Stencil View
+(<code>DXGI_FORMAT_D24_UNORM_S8_UINT</code> or
+<code>DXGI_FORMAT_D32_FLOAT</code>)</li>
+</ul>
+<p>In Direct3D 11, these textures are bound simultaneously using
+<code>ID3D11DeviceContext::OMSetRenderTargets</code>. In Direct3D 12,
+descriptor tables containing CPU descriptors for each RTV are bound via
+<code>OMSetRenderTargets</code> inside a graphics command list.</p>
+<h4 id="2-hlsl-pixel-shader-output">2. HLSL Pixel Shader Output</h4>
+<p>The pixel shader uses semantic bindings (<code>SV_Target0</code>
+through <code>SV_TargetN</code>) to route different data elements to
+their respective textures in parallel:</p>
+<pre class="hlsl"><code>struct PixelOutput
+{
+    float4 Albedo    : SV_Target0;
+    float4 Normal    : SV_Target1;
+    float4 Material  : SV_Target2;
+};
+
+PixelOutput GeometryPassPS(VertexOutput input)
+{
+    PixelOutput output;
+    
+    // Sample textures and calculate attributes
+    output.Albedo   = diffuseTexture.Sample(samplerState, input.UV);
+    output.Normal   = float4(normalize(input.Normal), 1.0f);
+    output.Material = float4(roughness, metalness, ambientOcclusion, 1.0f);
+    
+    return output;
+}</code></pre>
+<p>The depth is automatically written to the bound depth-stencil buffer
+by the hardware rasterizer, eliminating the need to write it manually to
+an additional render target.</p>
+<h3 id="executing-the-lighting-pass">Executing the Lighting Pass</h3>
+<p>Once the G-buffer is populated via MRTs, the DirectX runtime unbinds
+the render targets and binds them as Shader Resource Views (SRVs) for
+the lighting pass.</p>
+<p>In the lighting pass, pixel shaders reconstruct the 3D position of
+each pixel using the screen UV coordinates, the depth buffer value, and
+the inverse view-projection matrix. With position, normal, and material
+data available on demand, the shader evaluates analytical light
+equations (such as Cook-Torrance or Blinn-Phong) across arbitrary
+numbers of point, spot, and directional lights.</p>
+<h3 id="technical-trade-offs">Technical Trade-Offs</h3>
+<p>While deferred shading paired with MRTs handles dense lighting
+scenarios efficiently, it introduces specific engineering
+challenges:</p>
+<ul>
+<li><strong>High Memory Bandwidth:</strong> Reading and writing multiple
+high-resolution textures significantly increases memory bandwidth
+requirements.</li>
+<li><strong>Hardware Anti-Aliasing (MSAA):</strong> Traditional
+hardware-based multi-sampling does not work cleanly with MRT setups,
+requiring specialized MSAA resolve passes or alternative post-process
+techniques like FXAA or TAA.</li>
+<li><strong>Transparency:</strong> Because the G-buffer stores only the
+closest opaque surface attributes per pixel, deferred shading cannot
+natively handle transparent geometry. Transparent objects must be
+rendered afterward using a standard forward rendering pass on top of the
+deferred lighting results.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/understanding-deferred-shading-and-mr-ts-in-direct-x';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

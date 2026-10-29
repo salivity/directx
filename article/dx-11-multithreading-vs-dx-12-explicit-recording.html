@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DX11 Multithreading vs DX12 Explicit Recording - directx</title>
+    <meta name="description" content="This article examines the core architectural shift between DirectX 11 and DirectX 12, focusing on how rendering commands are generated and submitted to the GPU. While DirectX 11 relies on driver-managed multi-threading and deferred contexts that frequentl">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dx-11-multithreading-vs-dx-12-explicit-recording">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DX11 Multithreading vs DX12 Explicit Recording - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dx-11-multithreading-vs-dx-12-explicit-recording" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article examines the core architectural shift between DirectX 11 and DirectX 12, focusing on how rendering commands are generated and submitted to the GPU. While DirectX 11 relies on driver-managed multi-threading and deferred contexts that frequentl" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="dx11-multithreading-vs-dx12-explicit-recording">DX11
+Multithreading vs DX12 Explicit Recording</h1>
+<p>This article examines the core architectural shift between DirectX 11
+and DirectX 12, focusing on how rendering commands are generated and
+submitted to the GPU. While DirectX 11 relies on driver-managed
+multi-threading and deferred contexts that frequently bottle-neck at the
+submission stage, DirectX 12 moves resource tracking and synchronization
+directly into user space through explicit command lists and allocators.
+Understanding this contrast reveals why modern graphics APIs achieve
+significantly better CPU utilization, linear core scaling, and
+predictable hardware performance.</p>
+<h3 id="the-directx-11-approach-driver-multi-threading">The DirectX 11
+Approach: Driver Multi-Threading</h3>
+<p>In DirectX 11, the runtime abstracts the GPU through two primary
+interfaces: the Immediate Context and Deferred Contexts. The Immediate
+Context handles direct rendering and final command submission to the
+hardware, while Deferred Contexts are intended to allow secondary
+threads to record rendering commands into command lists.</p>
+<p>Despite this design, multi-threading in DirectX 11 suffers from
+inherent architectural limitations:</p>
+<ul>
+<li><strong>Serialization at Submission:</strong> Recorded command lists
+from deferred contexts cannot be executed independently. They must be
+passed back to the single Immediate Context for playback on the main
+thread. This handoff reintroduces a serialization bottleneck, blunting
+the performance gains of multi-threaded recording.</li>
+<li><strong>Driver Heuristics and Overhead:</strong> The GPU driver
+carries the burden of tracking state changes, validating resources, and
+resolving memory hazards dynamically at runtime. To make multithreading
+work, the driver must maintain complex internal synchronization
+locks.</li>
+<li><strong>Inconsistent Vendor Implementations:</strong> Because the
+heavy lifting is delegated to the driver, multithreading performance
+varies wildly between different GPU manufacturers and driver versions.
+In many cases, developers found that standard single-threaded rendering
+yielded higher, more consistent frame rates than DirectX 11's deferred
+contexts.</li>
+</ul>
+<h3 id="the-directx-12-approach-explicit-user-space-recording">The
+DirectX 12 Approach: Explicit User-Space Recording</h3>
+<p>DirectX 12 eliminates the Immediate Context entirely, replacing it
+with a low-level, user-space paradigm composed of Command Lists, Command
+Allocators, and Command Queues.</p>
+<ul>
+<li><strong>Independent Command Allocators:</strong> Each rendering
+thread can own its own <code>ID3D12CommandAllocator</code> and
+<code>ID3D12GraphicsCommandList</code>. Threads record draw calls,
+dispatch compute tasks, and set pipeline states concurrently without
+locks or driver intervention.</li>
+<li><strong>Pre-Baked Pipeline State Objects (PSOs):</strong> DirectX 11
+compiles shaders and validates state dynamically during command
+recording. DirectX 12 requires developers to define the entire state
+upfront using PSOs. Because the state is pre-compiled, recording a
+command requires almost zero CPU validation overhead.</li>
+<li><strong>Lightweight Submission:</strong> Once worker threads finish
+recording into command lists, the lists are submitted directly to an
+<code>ID3D12CommandQueue</code> via <code>ExecuteCommandLists</code>.
+This operation simply passes pointers to the recorded hardware tokens,
+avoiding the playback and re-validation overhead found in DirectX
+11.</li>
+</ul>
+<h3 id="key-contrasts">Key Contrasts</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Feature</th>
+<th style="text-align: left;">DirectX 11 (Driver Multi-Threading)</th>
+<th style="text-align: left;">DirectX 12 (User-Space Explicit
+Recording)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Command Generation</strong></td>
+<td style="text-align: left;">Abstracted via Deferred Contexts</td>
+<td style="text-align: left;">Explicit via
+<code>ID3D12GraphicsCommandList</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>CPU Synchronization</strong></td>
+<td style="text-align: left;">Handled internally by the graphics
+driver</td>
+<td style="text-align: left;">Managed explicitly by the application
+(Fences, Barriers)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>State Validation</strong></td>
+<td style="text-align: left;">Dynamic, per-draw-call state
+validation</td>
+<td style="text-align: left;">Baked upfront via Pipeline State Objects
+(PSOs)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Submission
+Bottleneck</strong></td>
+<td style="text-align: left;">High; all work must funnel through the
+Immediate Context</td>
+<td style="text-align: left;">Low; arrays of recorded command lists
+execute in batches</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Core Scaling</strong></td>
+<td style="text-align: left;">Sub-linear, often bottlenecked beyond 2–4
+CPU threads</td>
+<td style="text-align: left;">Scales near-linearly across modern
+high-core-count CPUs</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Deterministic
+Behavior</strong></td>
+<td style="text-align: left;">Low; subject to driver heuristics and
+hidden stalls</td>
+<td style="text-align: left;">High; execution timing and memory
+transitions are fully visible</td>
+</tr>
+</tbody>
+</table>
+<p>DirectX 11 attempts to automate parallelism through driver-managed
+abstractions, which introduces synchronization overhead and execution
+stalls. In contrast, DirectX 12 strips the driver of its management
+duties, placing synchronization, memory aliasing, and command recording
+directly into the application space. This fundamentally changes GPU
+programming from relying on driver optimization to executing
+deterministic, developer-governed parallel workflows.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/dx-11-multithreading-vs-dx-12-explicit-recording';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

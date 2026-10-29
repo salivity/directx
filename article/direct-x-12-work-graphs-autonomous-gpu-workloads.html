@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Work Graphs: Autonomous GPU Workloads - directx</title>
+    <meta name="description" content="DirectX 12 Work Graphs represent a major architectural shift in GPU computing by enabling the GPU to dynamically generate, schedule, and execute tasks without CPU intervention. Traditionally, the CPU acts as an orchestrator, dispatching command lists and">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-work-graphs-autonomous-gpu-workloads">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Work Graphs: Autonomous GPU Workloads - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-work-graphs-autonomous-gpu-workloads" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 Work Graphs represent a major architectural shift in GPU computing by enabling the GPU to dynamically generate, schedule, and execute tasks without CPU intervention. Traditionally, the CPU acts as an orchestrator, dispatching command lists and" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-work-graphs-autonomous-gpu-workloads">DirectX 12 Work
+Graphs: Autonomous GPU Workloads</h1>
+<p>DirectX 12 Work Graphs represent a major architectural shift in GPU
+computing by enabling the GPU to dynamically generate, schedule, and
+execute tasks without CPU intervention. Traditionally, the CPU acts as
+an orchestrator, dispatching command lists and managing synchronization
+points between rendering passes. Work graphs eliminate this dependency
+by replacing rigid, linear compute dispatches with a graph-based
+execution model where compute shaders trigger subsequent tasks directly
+in hardware. This article explains how work graphs operate, how they
+manage dynamic workloads on-chip, and why they unlock fully autonomous
+GPU-driven rendering.</p>
+<h3 id="the-problem-with-traditional-dispatch-models">The Problem with
+Traditional Dispatch Models</h3>
+<p>In traditional GPU pipelines, even advanced GPU-driven techniques
+like <code>ExecuteIndirect</code> rely on the CPU to define the
+boundaries of execution. A typical GPU-driven culling pipeline requires
+a compute pass to evaluate geometry, write surviving draw arguments to a
+buffer, and wait for the CPU to trigger an indirect draw call.</p>
+<p>While this avoids CPU-side bounding-box checks, it still requires the
+CPU to manage pipeline state objects (PSOs), resource barriers, and
+dispatch sequences. If a shader generates an unpredictable amount of
+work—such as procedural subdivision, ray tracing rays, or adaptive mesh
+refinement—developers must either allocate worst-case memory buffers or
+introduce CPU readbacks and synchronization points, creating latency and
+stalling execution units.</p>
+<h3 id="how-work-graphs-function">How Work Graphs Function</h3>
+<p>A work graph models GPU workloads as a directed acyclic graph (DAG)
+composed of interconnected nodes. Each node represents a compute shader,
+and the edges represent the flow of data (records) passed between
+them.</p>
+<p>Instead of executing a fixed grid of thread groups determined upfront
+by the CPU, a work graph functions through dynamic data propagation:</p>
+<ol type="1">
+<li><strong>Entry Nodes:</strong> The CPU kicks off the graph by
+dispatching an entry node with an initial set of inputs.</li>
+<li><strong>Record Generation:</strong> As threads within a node
+execute, they evaluate data and programmatically generate "records"
+(payloads of data containing inputs for downstream nodes).</li>
+<li><strong>Child Node Invocation:</strong> When a node outputs a record
+targeting another node, the GPU’s hardware scheduler automatically
+instantiates and executes the target node using that record.</li>
+<li><strong>Execution Flow:</strong> This process cascades down the
+graph until leaf nodes complete their tasks, with work expanding and
+contracting dynamically.</li>
+</ol>
+<h3 id="node-types-and-dynamic-parallelism">Node Types and Dynamic
+Parallelism</h3>
+<p>Work graphs introduce distinct node types tailored to handle varying
+workloads efficiently:</p>
+<ul>
+<li><strong>Broadcasting Nodes:</strong> A single input record spawns a
+predefined grid of thread groups, making it ideal for standard
+data-parallel processing.</li>
+<li><strong>Thread Nodes:</strong> A single record directly maps to a
+single GPU thread, allowing fine-grained execution without wasting idle
+threads in partially filled warps.</li>
+<li><strong>Coalescing Nodes:</strong> The runtime aggregates multiple
+records from upstream tasks into a shared batch before launching a
+thread group. This ensures maximum occupancy and warp efficiency when
+upstream nodes output varying, small quantities of work.</li>
+</ul>
+<p>Because shaders can select which downstream node to invoke at
+runtime, work graphs support conditional branching across entirely
+different compute pipelines directly on the GPU.</p>
+<h3 id="autonomous-memory-management">Autonomous Memory Management</h3>
+<p>A critical barrier to prior autonomous GPU execution was memory
+management. Unpredictable work generation often leads to buffer
+overflows or massive memory waste.</p>
+<p>Work graphs resolve this through driver-managed backing memory.
+Developers assign a single memory pool to the graph runtime, which
+autonomously allocates, reuses, and reclaims scratch memory for records
+passing between nodes. Because the driver and GPU hardware track the
+lifecycle of intermediate records, data can remain in fast on-chip
+caches or tightly recycled memory regions, dramatically reducing
+high-bandwidth memory (HBM/VRAM) round-trips.</p>
+<h3 id="elimination-of-pipeline-barriers-and-state-changes">Elimination
+of Pipeline Barriers and State Changes</h3>
+<p>In standard execution, transitions between algorithms require
+explicit synchronization barriers that drain the GPU pipeline, forcing
+execution units to idle.</p>
+<p>In a work graph, synchronization occurs at the record and node level.
+Downstream nodes can begin executing as soon as their input records are
+ready, overlapping with unrelated upstream tasks still in progress. The
+GPU scheduler continuously matches available hardware resources with
+ready-to-run nodes, saturating compute units and eliminating the latency
+associated with coarse pipeline-level synchronization.</p>
+<h3 id="practical-impact-on-real-time-rendering">Practical Impact on
+Real-Time Rendering</h3>
+<p>By shifting scheduling authority entirely to the GPU, work graphs
+enable algorithms that were previously impractical in real-time
+graphics:</p>
+<ul>
+<li><strong>Hierarchical Scene Traversal:</strong> A single work graph
+can perform bounding volume hierarchy (BVH) traversal, coarse culling,
+fine cluster culling, level-of-detail (LOD) selection, and rasterization
+setup continuously in one unified execution.</li>
+<li><strong>Adaptive Ray Tracing:</strong> Primary rays can launch
+secondary shadow, reflection, or diffuse rays directly, where each ray
+type routes to specialized nodes without writing state back to global
+memory buffers.</li>
+<li><strong>Procedural Content Generation:</strong> Complex procedural
+generation can evaluate terrain or geometry density, dynamically
+subdividing and generating mesh data precisely where needed without CPU
+oversight.</li>
+</ul>
+<p>DirectX 12 Work Graphs transform the GPU from a passive execution
+engine into an autonomous, self-scheduling compute platform, minimizing
+CPU overhead and maximizing hardware utilization.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-12-work-graphs-autonomous-gpu-workloads';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

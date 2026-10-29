@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX Deferred Rendering: G-Buffer Layout Trade-Offs - directx</title>
+    <meta name="description" content="Designing a geometry buffer (G-buffer) in DirectX requires balancing visual fidelity, memory bandwidth, hardware compatibility, and material flexibility. In deferred rendering, geometry attributes are decoupled from lighting calculations by rasterizing sc">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-deferred-rendering-g-buffer-layout-trade-offs">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX Deferred Rendering: G-Buffer Layout Trade-Offs - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-deferred-rendering-g-buffer-layout-trade-offs" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Designing a geometry buffer (G-buffer) in DirectX requires balancing visual fidelity, memory bandwidth, hardware compatibility, and material flexibility. In deferred rendering, geometry attributes are decoupled from lighting calculations by rasterizing sc" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-deferred-rendering-g-buffer-layout-trade-offs">DirectX
+Deferred Rendering: G-Buffer Layout Trade-Offs</h1>
+<p>Designing a geometry buffer (G-buffer) in DirectX requires balancing
+visual fidelity, memory bandwidth, hardware compatibility, and material
+flexibility. In deferred rendering, geometry attributes are decoupled
+from lighting calculations by rasterizing scene properties into multiple
+render targets (MRTs) during a preliminary pass. Selecting the optimal
+layout dictates the runtime performance of both the geometry pass and
+the subsequent lighting passes, with modern DirectX 11 and 12
+implementations focusing heavily on minimizing memory footprint,
+bandwidth bottlenecks, and cache thrashing.</p>
+<h3 id="memory-bandwidth-vs-render-target-count">Memory Bandwidth vs.
+Render Target Count</h3>
+<p>Every additional render target attached to an output merger pipeline
+stage increases the fill-rate burden and memory bandwidth during the
+base geometry pass. In DirectX, while hardware supports up to eight
+simultaneous render targets, real-time performance profiles generally
+restrict standard deferred setups to three or four targets (excluding
+the depth-stencil buffer).</p>
+<ul>
+<li><strong>Fat G-Buffers (4+ Targets):</strong> Providing discrete
+targets for albedo, normals, roughness, metalness, ambient occlusion,
+emissive, and custom material flags reduces shader ALU overhead during
+decoding. However, writing 64 to 128 bits per pixel heavily penalizes
+high-resolution rendering (1440p, 4K) and stresses the memory bus.</li>
+<li><strong>Lean G-Buffers (2–3 Targets):</strong> Storing only the most
+essential properties reduces bandwidth consumption, keeps the geometry
+pass cache-friendly, and improves performance on bandwidth-constrained
+hardware. The trade-off is higher ALU cost in both the write and read
+stages due to packing, quantization, and unpacking operations.</li>
+</ul>
+<h3 id="position-reconstruction-vs-explicit-world-positions">Position
+Reconstruction vs. Explicit World Positions</h3>
+<p>Storing explicit world-space or view-space positions in a G-buffer
+(typically as <code>DXGI_FORMAT_R32G32B32A32_FLOAT</code>) is an
+obsolete practice that creates unnecessary bandwidth strain.</p>
+<p>Modern DirectX architectures reconstruct 3D positions directly from
+the hardware depth buffer (<code>DXGI_FORMAT_D32_FLOAT</code> or
+<code>DXGI_FORMAT_D24_UNORM_S8_UINT</code>). By binding the depth
+texture as a shader resource view (SRV) in the lighting pass and
+utilizing the inverse view-projection matrix or screen-space ray
+reconstruction, a complete render target is eliminated from the G-buffer
+layout. The trade-off is a minimal increase in ALU cycles per pixel
+during lighting evaluation to perform the matrix transformation.</p>
+<h3 id="normal-encoding-techniques-and-precision">Normal Encoding
+Techniques and Precision</h3>
+<p>Normals represent one of the most critical visual elements in the
+G-buffer. Artifacts such as banding or normal flattening significantly
+degrade lighting and specular highlights.</p>
+<ul>
+<li><strong>Full Precision (<code>R16G16B16A16_FLOAT</code>):</strong>
+Offers immaculate precision without decoding logic, but consumes massive
+bandwidth (64 bits per pixel solely for vectors).</li>
+<li><strong>Octahedral Mapping (<code>R8G8_SNORM</code> or
+<code>R16G16_SNORM</code>):</strong> Projects a 3D unit vector onto an
+octahedron unwrapped into 2D space. Using <code>R8G8_SNORM</code> stores
+normals in 16 bits with minimal quality degradation, while
+<code>R16G16_SNORM</code> completely eliminates precision artifacts
+while still saving 50% bandwidth compared to a 64-bit format.</li>
+<li><strong>Spherical Coordinates / View-Space Encoding:</strong>
+Encoding view-space normals allows discarding the Z-component (<span
+class="math inline">\(Z = \sqrt{1 - X^2 - Y^2}\)</span>), fitting
+vectors into two channels. However, this introduces sign ambiguity near
+glancing angles and edge discontinuities that require additional ALU
+branching to resolve.</li>
+</ul>
+<h3 id="material-packing-and-bit-packing-strategies">Material Packing
+and Bit-Packing Strategies</h3>
+<p>Physically Based Rendering (PBR) workflows demand several scalar
+material inputs: roughness, metallic, ambient occlusion, subsurface
+scattering masks, and specular reflectance.</p>
+<p>A common standard is packing these parameters alongside color
+channels in 32-bit <code>DXGI_FORMAT_R8G8B8A8_UNORM</code> targets:</p>
+<ul>
+<li><strong>Target 0 (<code>R8G8B8A8_UNORM</code>):</strong> Base Color
+(RGB) and Ambient Occlusion or Material ID (A).</li>
+<li><strong>Target 1 (<code>R16G16_SNORM</code> or
+<code>R8G8B8A8_UNORM</code>):</strong> Octahedral Normal (RG) alongside
+Roughness (B) and Metalness (A).</li>
+<li><strong>Target 2 (<code>R11G11B10_FLOAT</code>):</strong> Emissive
+lighting or cached direct lighting.</li>
+</ul>
+<p>The compromise in 8-bit quantization is precision loss, notably in
+roughness, where low-bit depths can cause stepping artifacts in
+low-roughness specular highlights. Conversely, expanding to 16-bit
+integer or floating-point channels doubles the target footprint.</p>
+<h3 id="directx-12-architectural-factors">DirectX 12 Architectural
+Factors</h3>
+<p>DirectX 12 introduces specific hardware interactions that impact
+G-buffer layouts:</p>
+<ul>
+<li><strong>Resource Barriers and Transitions:</strong> Transitioning
+multiple G-buffer resources from
+<code>D3D12_RESOURCE_STATE_RENDER_TARGET</code> to
+<code>D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE</code> incurs pipeline
+stalls if state synchronization is suboptimal. Minimizing target count
+simplifies dependency tracking.</li>
+<li><strong>DirectX 12 Render Passes and Tile-Based GPUs:</strong> On
+integrated graphics or architectures using tile-based deferred rendering
+(TBDR), G-buffers defined within a <code>D3D12_RENDER_PASS</code> can
+reside entirely in on-chip fast memory (transient attachments), avoiding
+VRAM writes entirely. However, large G-buffer layouts exceed the local
+cache limits of these devices, forcing cache spills directly to system
+memory.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-deferred-rendering-g-buffer-layout-trade-offs';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

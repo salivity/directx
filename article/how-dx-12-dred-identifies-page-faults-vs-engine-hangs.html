@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DX12 DRED Identifies Page Faults vs Engine Hangs - directx</title>
+    <meta name="description" content="DirectX 12 Device Removed Extended Data (DRED) provides post-mortem diagnostics to determine the exact cause of GPU crashes, which typically manifest as Device Removed or Timeout Detection and Recovery (TDR) events. DRED differentiates between an engine h">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-dx-12-dred-identifies-page-faults-vs-engine-hangs">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DX12 DRED Identifies Page Faults vs Engine Hangs - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-dx-12-dred-identifies-page-faults-vs-engine-hangs" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 Device Removed Extended Data (DRED) provides post-mortem diagnostics to determine the exact cause of GPU crashes, which typically manifest as Device Removed or Timeout Detection and Recovery (TDR) events. DRED differentiates between an engine h" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-dx12-dred-identifies-page-faults-vs-engine-hangs">How DX12
+DRED Identifies Page Faults vs Engine Hangs</h1>
+<p>DirectX 12 Device Removed Extended Data (DRED) provides post-mortem
+diagnostics to determine the exact cause of GPU crashes, which typically
+manifest as Device Removed or Timeout Detection and Recovery (TDR)
+events. DRED differentiates between an engine hang and a GPU page fault
+by isolating the hardware mechanism that triggered the device removal:
+it uses execution timeline markers (AutoBreadcrumbs) to detect stalled
+commands that cause engine hangs, and it matches faulting virtual
+addresses against an allocation database to pinpoint GPU page
+faults.</p>
+<h3 id="the-dred-architecture-overview">The DRED Architecture
+Overview</h3>
+<p>When a DirectX 12 device is removed, the runtime queries the driver
+and the GPU's memory management unit (MMU) through the
+<code>ID3D12DeviceRemovedExtendedData</code> interface. DRED gathers
+crash telemetry into two primary data structures:</p>
+<ul>
+<li><strong>AutoBreadcrumbs
+(<code>D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT</code>)</strong>: Tracks the
+progress of command execution.</li>
+<li><strong>Page Fault Allocations
+(<code>D3D12_DRED_PAGE_FAULT_OUTPUT</code>)</strong>: Tracks active and
+recently freed resource memory allocations.</li>
+</ul>
+<p>The presence, state, and contents of these outputs reveal whether the
+device removal stemmed from an infinite execution loop/deadlock (engine
+hang) or an invalid memory access (page fault).</p>
+<h3 id="how-dred-identifies-an-engine-hang">How DRED Identifies an
+Engine Hang</h3>
+<p>An engine hang occurs when the GPU becomes unresponsive because a
+shader enters an infinite loop, a synchronization primitive causes a
+deadlock, or the workload exceeds the operating system's TDR timeout
+period (typically two seconds).</p>
+<p>DRED identifies an engine hang using AutoBreadcrumbs:</p>
+<ol type="1">
+<li><strong>Command Insertion</strong>: While recording command lists,
+the DRED runtime injects lightweight write commands before and after
+every draw call, dispatch, copy, and barrier. These commands write
+sequential counter values into an internal GPU-visible memory
+buffer.</li>
+<li><strong>Execution Tracking</strong>: As the GPU hardware processes
+each command, it writes completion markers back to the buffer.</li>
+<li><strong>Post-TDR Analysis</strong>: When the OS triggers a TDR due
+to a non-responsive engine, DRED reads the AutoBreadcrumbs buffer from
+system memory.</li>
+<li><strong>Hang Confirmation</strong>: If no memory fault was signaled
+by the GPU MMU, DRED inspects the breadcrumb nodes. An engine hang is
+identified when an execution node shows that a command was started by
+the GPU but never finished. DRED reports the exact command list, the
+specific draw or dispatch index, and the shader pipeline state where
+execution stalled.</li>
+</ol>
+<h3 id="how-dred-identifies-a-gpu-page-fault">How DRED Identifies a GPU
+Page Fault</h3>
+<p>A GPU page fault occurs when the GPU executes a memory operation
+targeting an invalid, unmapped, or unauthorized Virtual Address (VA).
+This commonly happens during use-after-free scenarios, buffer overflows,
+or when accessing uncommitted tiled resources.</p>
+<p>DRED identifies a page fault through the GPU MMU and allocation
+tracking:</p>
+<ol type="1">
+<li><strong>Hardware Trap</strong>: When the GPU MMU encounters an
+access violation, it triggers a hardware trap that halts the device and
+logs the specific 64-bit faulting Virtual Address.</li>
+<li><strong>VA Capture</strong>: The display driver passes this faulting
+address directly to DRED via the <code>PageFaultVA</code> field of
+<code>D3D12_DRED_PAGE_FAULT_OUTPUT</code>.</li>
+<li><strong>Allocation Correlation</strong>: DRED maintains two internal
+allocation lists:
+<ul>
+<li><strong>Active Allocations</strong>: Currently allocated and bound
+resources (textures, buffers, heaps).</li>
+<li><strong>Recent Freed Allocations</strong>: A ring buffer of recently
+deleted resources (tombstones).</li>
+</ul></li>
+<li><strong>Root-Cause Mapping</strong>: DRED compares the
+<code>PageFaultVA</code> against the ranges of these allocation lists:
+<ul>
+<li>If the address matches a recently freed resource, DRED classifies
+the crash as a <strong>use-after-free</strong> error and outputs the
+resource name and allocation history.</li>
+<li>If the address falls immediately outside an active resource's
+bounds, DRED flags it as an <strong>out-of-bounds access / buffer
+overrun</strong>.</li>
+<li>If the address does not match any known resource, DRED indicates an
+access to completely unmapped or wild memory.</li>
+</ul></li>
+</ol>
+<h3 id="key-differences-in-output">Key Differences in Output</h3>
+<p>Developers can query
+<code>ID3D12DeviceRemovedExtendedData::GetAutoBreadcrumbsOutput</code>
+and
+<code>ID3D12DeviceRemovedExtendedData::GetPageFaultAllocationOutput</code>
+to programmatically evaluate the crash:</p>
+<ul>
+<li><strong>In an Engine Hang</strong>: <code>PageFaultVA</code> is set
+to <code>0</code> (or <code>nullptr</code>), indicating no MMU violation
+occurred. The breadcrumb list contains active command nodes where the
+completion count is lower than the start count.</li>
+<li><strong>In a Page Fault</strong>: <code>PageFaultVA</code> contains
+a non-zero address. While the breadcrumbs will also show an incomplete
+command (the command that executed the faulting memory access), the
+non-zero page fault output takes precedence, definitively marking the
+crash as a memory violation rather than an algorithmic hang.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-dx-12-dred-identifies-page-faults-vs-engine-hangs';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

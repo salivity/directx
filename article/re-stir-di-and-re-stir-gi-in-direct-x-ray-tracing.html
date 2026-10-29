@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReSTIR DI and ReSTIR GI in DirectX Ray Tracing - directx</title>
+    <meta name="description" content="This article provides an overview of Reservoir-based Spatio-Temporal Importance Resampling (ReSTIR) algorithms, focusing on ReSTIR Direct Illumination (DI) and ReSTIR Global Illumination (GI), and explains how they scale real-time ray-traced lighting with">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/re-stir-di-and-re-stir-gi-in-direct-x-ray-tracing">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="ReSTIR DI and ReSTIR GI in DirectX Ray Tracing - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/re-stir-di-and-re-stir-gi-in-direct-x-ray-tracing" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of Reservoir-based Spatio-Temporal Importance Resampling (ReSTIR) algorithms, focusing on ReSTIR Direct Illumination (DI) and ReSTIR Global Illumination (GI), and explains how they scale real-time ray-traced lighting with" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="restir-di-and-restir-gi-in-directx-ray-tracing">ReSTIR DI and
+ReSTIR GI in DirectX Ray Tracing</h1>
+<p>This article provides an overview of Reservoir-based Spatio-Temporal
+Importance Resampling (ReSTIR) algorithms, focusing on ReSTIR Direct
+Illumination (DI) and ReSTIR Global Illumination (GI), and explains how
+they scale real-time ray-traced lighting within Microsoft DirectX
+Raytracing (DXR). Readers will learn the operational mechanics of both
+algorithms, how they solve traditional performance bottlenecks, and the
+technical methods used to deploy them efficiently inside modern DirectX
+pipelines.</p>
+<h3 id="understanding-restir">Understanding ReSTIR</h3>
+<p>ReSTIR stands for Reservoir-based Spatio-Temporal Importance
+Resampling. In traditional real-time ray tracing, rendering scenes with
+complex illumination requires tracing dozens or hundreds of rays per
+pixel to avoid unacceptable noise. Because tracing that many rays is too
+expensive for interactive frame rates, standard pipelines trace only one
+or two rays per pixel and rely heavily on spatial-temporal denoisers,
+which often causes ghosting and blurriness.</p>
+<p>ReSTIR replaces brute-force ray casting with statistical resampling.
+Instead of evaluating full ray paths for every light source, the
+algorithm generates lightweight candidate samples, evaluates their
+approximate contribution, and stores the most promising candidates in
+compact data structures called "reservoirs." These reservoirs are then
+shared with neighboring pixels (spatial reuse) and across consecutive
+frames (temporal reuse), allowing a GPU to achieve the visual fidelity
+of hundreds of ray samples using only a fraction of the ray budget.</p>
+<h3 id="what-is-restir-di">What is ReSTIR DI?</h3>
+<p>ReSTIR DI focuses on direct illumination—light traveling directly
+from an emissive source to a visible surface. It addresses the
+"many-light problem," where dynamic scenes contain tens of thousands to
+millions of individual dynamic lights or emissive triangles.</p>
+<p>Under ReSTIR DI:</p>
+<ol type="1">
+<li><strong>Initial Sampling:</strong> The shader generates a small set
+of random candidate light sources per pixel.</li>
+<li><strong>Temporal Reuse:</strong> The current pixel exchanges
+reservoirs with its corresponding pixel from the previous frame via
+motion vectors.</li>
+<li><strong>Spatial Reuse:</strong> The pixel shares reservoirs with
+valid neighboring pixels that have similar geometric normals and depth
+values.</li>
+<li><strong>Final Visibility:</strong> Once the algorithm selects the
+single best light candidate from the resampled distribution, it casts a
+single shadow ray using hardware ray tracing to verify visibility.</li>
+</ol>
+<p>This workflow enables scenes with millions of dynamic, un-baked
+lights with fully dynamic shadows, all while tracing as few as one or
+two shadow rays per pixel.</p>
+<h3 id="what-is-restir-gi">What is ReSTIR GI?</h3>
+<p>ReSTIR GI extends the resampling methodology to indirect
+illumination—light that bounces off one or more surfaces before hitting
+the camera. Indirect light paths are significantly harder to sample than
+direct light because the secondary light sources are scattered randomly
+across the entire 3D scene.</p>
+<p>ReSTIR GI works by:</p>
+<ol type="1">
+<li><strong>Path Generation:</strong> Tracing short initial indirect
+rays from the camera's primary hit point to find secondary bounce
+surfaces.</li>
+<li><strong>Reservoir Creation:</strong> Storing the incoming radiance,
+hit positions, and normals of those secondary surfaces inside
+reservoirs.</li>
+<li><strong>Spatio-Temporal Shift Mapping:</strong> Reusing these
+indirect paths across adjacent pixels and frames through geometric shift
+mappings, ensuring that light arriving from complex secondary bounces
+remains physically plausible across different surface viewpoints.</li>
+<li><strong>Validation Rays:</strong> Casting lightweight visibility
+rays to verify that the resampled indirect path is not occluded by newly
+shifted geometry.</li>
+</ol>
+<p>This allows games to render multi-bounce global illumination,
+detailed color bleeding, and complex ambient lighting without the
+extreme performance penalties typically associated with real-time path
+tracing.</p>
+<h3 id="how-restir-di-and-gi-scale-ray-tracing-in-directx">How ReSTIR DI
+and GI Scale Ray Tracing in DirectX</h3>
+<p>DirectX 12 exposes hardware-accelerated ray tracing through DirectX
+Raytracing (DXR) Tier 1.0 and Tier 1.1. ReSTIR scales ray tracing
+performance in DirectX through three primary mechanisms:</p>
+<h4 id="1-leveraging-dxr-11-inline-ray-tracing-rayquery">1. Leveraging
+DXR 1.1 Inline Ray Tracing (RayQuery)</h4>
+<p>ReSTIR relies heavily on compute shaders rather than traditional
+ray-generation shaders. In DirectX 12, developers use DXR 1.1
+<code>RayQuery</code> (Inline Ray Tracing) directly inside compute
+shaders. This avoids the overhead of dynamic shader dispatch
+(<code>DispatchRays</code>) and state-object switches. The GPU evaluates
+candidate selection, performs temporal and spatial reservoir exchanges
+via group shared memory (<code>groupshared</code>), and uses
+<code>RayQuery</code> strictly for final visibility checks.</p>
+<h4 id="2-ray-budget-decoupling">2. Ray Budget Decoupling</h4>
+<p>In standard DirectX ray tracing, performance scales linearly with the
+number of lights and bounces; doubling the active lights or adding
+indirect bounces exponentially increases ray counts. ReSTIR decouples
+the number of light sources from the ray budget. Whether a DirectX
+application features 100 lights or 1,000,000 lights, the number of
+ray-traversal operations executed via DXR remains fixed to the small
+number of final visibility checks required by the reservoirs.</p>
+<h4 id="3-efficient-bandwidth-and-cache-utilization">3. Efficient
+Bandwidth and Cache Utilization</h4>
+<p>Reservoirs are lightweight 16-to-24-byte structs that store sample
+weights, light identifiers, and positions. In DirectX, these structures
+fit cleanly into standard structured buffers and 2D textures
+(<code>RWTexture2D</code>). Because neighbor queries during spatial
+resampling target local pixel neighborhoods, they maximize L1 and L2
+cache hits on the GPU.</p>
+<p>By shifting the computational burden from hardware ray-traversal
+units to standard ALU compute operations and memory reuse, ReSTIR DI and
+GI allow DirectX-based game engines to deliver cinematic path-traced
+lighting on mainstream graphics hardware.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/re-stir-di-and-re-stir-gi-in-direct-x-ray-tracing';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

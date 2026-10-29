@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Enhanced Barriers in Agility SDK - directx</title>
+    <meta name="description" content="Enhanced barriers in the DirectX 12 Agility SDK provide a modernized, fine-grained synchronization model designed to replace the original, coarse-grained resource barrier system. By decoupling execution synchronization, cache flushes, and texture layout t">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-enhanced-barriers-in-agility-sdk">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Enhanced Barriers in Agility SDK - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-enhanced-barriers-in-agility-sdk" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Enhanced barriers in the DirectX 12 Agility SDK provide a modernized, fine-grained synchronization model designed to replace the original, coarse-grained resource barrier system. By decoupling execution synchronization, cache flushes, and texture layout t" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-enhanced-barriers-in-agility-sdk">DirectX 12 Enhanced
+Barriers in Agility SDK</h1>
+<p>Enhanced barriers in the DirectX 12 Agility SDK provide a modernized,
+fine-grained synchronization model designed to replace the original,
+coarse-grained resource barrier system. By decoupling execution
+synchronization, cache flushes, and texture layout transitions, enhanced
+barriers give developers precise control over GPU hardware, reducing
+unnecessary pipeline stalls and improving memory efficiency. This
+article details the architectural shift from legacy
+<code>D3D12_RESOURCE_BARRIER</code> structures to the new buffer,
+texture, and global barrier models.</p>
+<h2 id="limitations-of-legacy-resource-barriers">Limitations of Legacy
+Resource Barriers</h2>
+<p>The original DirectX 12 barrier system relied on the
+<code>D3D12_RESOURCE_BARRIER</code> structure, which grouped all
+synchronization into three broad categories: Transition, Aliasing, and
+Unordered Access View (UAV) barriers.</p>
+<p>While functional, this legacy system had significant drawbacks:</p>
+<ul>
+<li><strong>Coupled Semantics:</strong> Resource states
+(<code>D3D12_RESOURCE_STATES</code>) combined execution synchronization
+(which pipeline stages must finish), memory visibility (which caches
+must be flushed or invalidated), and layout transitions (decompression
+or tiling formats) into a single bitfield flag.</li>
+<li><strong>Redundant Operations:</strong> Combining multiple read or
+write states often forced the GPU driver to insert overly conservative
+pipeline stalls and redundant cache flushes to ensure safety.</li>
+<li><strong>Subresource Overhead:</strong> Transitioning mip levels or
+array slices individually required separate barrier structures for each
+subresource, bloating the command stream and increasing CPU
+overhead.</li>
+</ul>
+<h2 id="the-architecture-of-enhanced-barriers">The Architecture of
+Enhanced Barriers</h2>
+<p>Enhanced barriers eliminate the unified
+<code>D3D12_RESOURCE_STATES</code> bitmask. Instead, synchronization is
+split into three distinct, explicit components:</p>
+<ol type="1">
+<li><strong>Synchronization Scope
+(<code>D3D12_BARRIER_SYNC</code>):</strong> Specifies the exact GPU
+pipeline stages that must complete before the barrier can be passed
+(<code>SyncBefore</code>), and the stages that must wait until the
+barrier completes (<code>SyncAfter</code>).</li>
+<li><strong>Access Scope (<code>D3D12_BARRIER_ACCESS</code>):</strong>
+Defines the specific CPU/GPU memory access and cache visibility
+requirements before (<code>AccessBefore</code>) and after
+(<code>AccessAfter</code>) the barrier.</li>
+<li><strong>Layout (<code>D3D12_BARRIER_LAYOUT</code>):</strong>
+Dictates the hardware data compression and tiling format for texture
+resources, completely separated from memory access types.</li>
+</ol>
+<h2 id="how-enhanced-barriers-replace-legacy-structures">How Enhanced
+Barriers Replace Legacy Structures</h2>
+<p>Instead of using
+<code>ID3D12GraphicsCommandList::ResourceBarrier</code>, developers
+submit enhanced barriers using
+<code>ID3D12GraphicsCommandList7::Barrier</code>. This API accepts an
+array of barrier groups (<code>D3D12_BARRIER_GROUP</code>), which
+categorize synchronization into three dedicated structures.</p>
+<h3 id="1-global-barriers-d3d12_global_barrier">1. Global Barriers
+(<code>D3D12_GLOBAL_BARRIER</code>)</h3>
+<p>Legacy UAV barriers (<code>D3D12_RESOURCE_BARRIER_TYPE_UAV</code>)
+were tied to specific resources, even though UAV synchronization often
+applies globally across multiple dispatches.</p>
+<p>The <code>D3D12_GLOBAL_BARRIER</code> replaces this by controlling
+pipeline synchronization and memory access across the entire GPU without
+referencing any individual resource pointer. It ensures that preceding
+writes (like compute shader UAV writes) are visible to subsequent reads
+across any stage, matching hardware-level cache flushes much closer than
+the legacy model.</p>
+<h3 id="2-buffer-barriers-d3d12_buffer_barrier">2. Buffer Barriers
+(<code>D3D12_BUFFER_BARRIER</code>)</h3>
+<p>Buffers do not possess complex layouts or compression states; they
+are simple linear allocations. The <code>D3D12_BUFFER_BARRIER</code>
+structure explicitly reflects this by eliminating layout flags entirely.
+It only defines:</p>
+<ul>
+<li>The resource pointer.</li>
+<li><code>SyncBefore</code> and <code>SyncAfter</code> stages.</li>
+<li><code>AccessBefore</code> and <code>AccessAfter</code> states.</li>
+<li>Byte offset and size, allowing sub-allocation tracking.</li>
+</ul>
+<p>This removes the overhead of treating buffers like textures within
+the driver, preventing unnecessary compression checks.</p>
+<h3 id="3-texture-barriers-d3d12_texture_barrier">3. Texture Barriers
+(<code>D3D12_TEXTURE_BARRIER</code>)</h3>
+<p>Texture transitions were the primary source of inefficiencies in
+legacy barriers. <code>D3D12_TEXTURE_BARRIER</code> directly replaces
+<code>D3D12_RESOURCE_TRANSITION_BARRIER</code> with major
+improvements:</p>
+<ul>
+<li><strong>Explicit Layout Transitions:</strong> Controls formats such
+as render targets, depth-stencil writes, or shader-readable states
+independently of cache invalidation.</li>
+<li><strong>Native Range Support:</strong> A single structure can target
+a contiguous range of subresources (mip slices, array slices, or planes)
+using a <code>D3D12_BARRIER_SUBRESOURCE_RANGE</code>, removing the need
+to issue loops of individual transition barriers.</li>
+<li><strong>Discard Flags:</strong> Includes flags like
+<code>D3D12_TEXTURE_BARRIER_FLAG_DISCARD</code>, allowing the GPU to
+drop existing subresource data during transitions, bypassing redundant
+memory copies or decompressive resolves.</li>
+</ul>
+<h2 id="key-advantages">Key Advantages</h2>
+<p>By transitioning to enhanced barriers in the Agility SDK,
+applications gain:</p>
+<ul>
+<li><strong>Lower Driver Overhead:</strong> Drivers spend less time
+inferring hardware intentions from overloaded bitmasks.</li>
+<li><strong>Reduced Stalls:</strong> Finer control over pipeline stages
+avoids full pipeline flushes when only specific shader stages need
+coordination.</li>
+<li><strong>Optimized Cache Use:</strong> Caches are only flushed and
+invalidated when the access masks explicitly demand it, improving
+overall memory bandwidth utilization.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-12-enhanced-barriers-in-agility-sdk';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

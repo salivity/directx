@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fixing DirectX TAA Ghosting Using History Rejection - directx</title>
+    <meta name="description" content="Temporal Anti-Aliasing (TAA) is a vital technique in modern DirectX rendering pipelines for eliminating jagged edges and specular shimmer, but it frequently introduces distracting visual trails known as ghosting. This article examines the core causes of g">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/fixing-direct-x-taa-ghosting-using-history-rejection">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Fixing DirectX TAA Ghosting Using History Rejection - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/fixing-direct-x-taa-ghosting-using-history-rejection" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Temporal Anti-Aliasing (TAA) is a vital technique in modern DirectX rendering pipelines for eliminating jagged edges and specular shimmer, but it frequently introduces distracting visual trails known as ghosting. This article examines the core causes of g" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="fixing-directx-taa-ghosting-using-history-rejection">Fixing
+DirectX TAA Ghosting Using History Rejection</h1>
+<p>Temporal Anti-Aliasing (TAA) is a vital technique in modern DirectX
+rendering pipelines for eliminating jagged edges and specular shimmer,
+but it frequently introduces distracting visual trails known as
+ghosting. This article examines the core causes of ghosting artifacts in
+DirectX-based TAA implementations—including inaccurate motion vectors,
+disocclusion, and sub-pixel geometric changes—and details how
+implementing robust history rejection mechanisms effectively eliminates
+these trails while preserving image stability.</p>
+<h3 id="the-causes-of-ghosting-artifacts-in-taa">The Causes of Ghosting
+Artifacts in TAA</h3>
+<p>TAA achieves smooth edges by reprojecting pixels from previous frames
+into the current frame using 2D screen-space motion vectors (velocity
+buffers). Ghosting occurs when the temporal accumulator erroneously
+blends outdated visual information from the history buffer into pixels
+where the scene's actual content has fundamentally changed.</p>
+<p>In a DirectX pipeline, several specific factors trigger this
+failure:</p>
+<ul>
+<li><strong>Disocclusion:</strong> When a moving object uncovers a
+previously hidden background, the newly revealed pixels have no valid
+historical counterpart from the prior frame. If the shader attempts to
+sample the history buffer at the reprojected location, it fetches data
+belonging to the foreground object that was previously there, leaving a
+smear of the moving object behind it.</li>
+<li><strong>Incomplete or Inaccurate Velocity Buffers:</strong> Motion
+vectors are typically generated using vertex transformations between the
+current and previous frames. However, many visual elements fail to write
+accurate velocity:
+<ul>
+<li><em>Alpha-tested and transparent surfaces</em> (foliage, glass,
+water) often do not write to the velocity or depth buffers.</li>
+<li><em>Procedural animations</em> (wind shaders, vertex deformation
+shaders) may skip previous-position calculations in the vertex shader to
+save performance.</li>
+<li><em>Particle systems and post-processing effects</em> rarely track
+per-pixel temporal motion.</li>
+</ul></li>
+<li><strong>Depth Discontinuities and Sub-Pixel Details:</strong>
+Extremely thin geometry, such as wires or distant foliage, can move
+across pixels faster than the sampling rate. If the velocity buffer
+samples an incorrect depth at a geometry edge (e.g., background velocity
+instead of foreground edge velocity), stale color data is smeared across
+the silhouette.</li>
+</ul>
+<h3 id="how-history-rejection-resolves-ghosting">How History Rejection
+Resolves Ghosting</h3>
+<p>History rejection detects when the historical sample no longer
+represents the current surface and dynamically discards or down-weights
+the accumulated temporal data. Instead of blindly blending the history
+buffer via a simple lerp operation, DirectX compute or pixel shaders
+execute several validation steps:</p>
+<h4 id="1-color-clamping-and-clipping">1. Color Clamping and
+Clipping</h4>
+<p>The most common and effective history rejection technique is
+color-space bounding. The shader samples a small neighborhood (typically
+a 3x3 pixel kernel) around the current pixel to determine the local
+color distribution.</p>
+<ul>
+<li><strong>AABB Clamping:</strong> The shader computes the minimum and
+maximum color values within the 3x3 footprint in a perceptual color
+space, such as YCoCg. The reprojected history color is then clamped to
+this Axis-Aligned Bounding Box (AABB). If an object moves away, the
+stale history color will fall far outside the current 3x3 color bounds
+and be clamped immediately to the current neighborhood's colors, erasing
+the ghost trail.</li>
+<li><strong>Variance Clipping:</strong> Rather than using strict minimum
+and maximum values, variance clipping calculates the mean and standard
+deviation (<span class="math inline">\(\sigma\)</span>) of the 3x3
+neighborhood to define an oriented bounding box. History colors are
+clipped along the segment connecting the history sample to the current
+color. This significantly reduces ghosting while allowing for softer,
+more stable anti-aliasing on static geometry.</li>
+</ul>
+<h4 id="2-depth-based-disocclusion-testing">2. Depth-Based Disocclusion
+Testing</h4>
+<p>DirectX implementations can compare the current pixel's linear depth
+against the depth recorded in the history buffer at the reprojected
+coordinate. If the reprojected depth is substantially closer to the
+camera than the current depth, the foreground object has moved away,
+exposing the background. The shader triggers a rejection flag, instantly
+dropping the history weight to zero and forcing the pixel to rely
+entirely on the current frame's rasterized data.</p>
+<h4 id="3-velocity-weighting-and-dilation">3. Velocity Weighting and
+Dilation</h4>
+<p>To prevent thin edges from inheriting background motion vectors,
+implementations use velocity dilation. A 3x3 search finds the motion
+vector associated with the closest depth sample to the camera and
+applies it to the entire local neighborhood. Ensuring the motion vector
+accurately follows foreground contours prevents the history sampler from
+pulling pixels from unrelated scene surfaces.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/fixing-direct-x-taa-ghosting-using-history-rejection';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

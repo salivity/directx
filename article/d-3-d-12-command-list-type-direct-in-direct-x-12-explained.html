@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D3D12_COMMAND_LIST_TYPE_DIRECT in DirectX 12 Explained - directx</title>
+    <meta name="description" content="In DirectX 12, D3D12COMMANDLISTTYPEDIRECT serves as the primary, fully featured command list type responsible for driving standard 3D rendering pipelines. This article explores the significance of direct command lists, their architectural role in GPU exec">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/d-3-d-12-command-list-type-direct-in-direct-x-12-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="D3D12_COMMAND_LIST_TYPE_DIRECT in DirectX 12 Explained - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/d-3-d-12-command-list-type-direct-in-direct-x-12-explained" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, D3D12COMMANDLISTTYPEDIRECT serves as the primary, fully featured command list type responsible for driving standard 3D rendering pipelines. This article explores the significance of direct command lists, their architectural role in GPU exec" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="d3d12_command_list_type_direct-in-directx-12-explained">D3D12_COMMAND_LIST_TYPE_DIRECT
+in DirectX 12 Explained</h1>
+<p>In DirectX 12, <code>D3D12_COMMAND_LIST_TYPE_DIRECT</code> serves as
+the primary, fully featured command list type responsible for driving
+standard 3D rendering pipelines. This article explores the significance
+of direct command lists, their architectural role in GPU execution, how
+they differ from specialized queues like compute and copy, and why they
+form the backbone of graphics rendering in modern low-level APIs.</p>
+<h3 id="what-is-d3d12_command_list_type_direct">What Is
+D3D12_COMMAND_LIST_TYPE_DIRECT?</h3>
+<p><code>D3D12_COMMAND_LIST_TYPE_DIRECT</code> defines a command
+list—and an associated command queue and allocator—that has access to
+all capabilities of the GPU's main 3D engine. In DirectX 12's
+multi-engine hardware model, the GPU is divided into separate engines,
+typically including a main 3D/compute engine, dedicated asynchronous
+compute engines, and dedicated copy (DMA) engines. Direct command lists
+target the 3D/compute engine and possess complete access to graphics,
+compute, and copy command sets.</p>
+<h3 id="full-pipeline-access">Full Pipeline Access</h3>
+<p>The primary significance of the direct execution mode is its
+unrestricted access to the entire rendering pipeline. While other
+command list types are restricted to specific operations, direct command
+lists can execute:</p>
+<ul>
+<li><strong>Rasterization and Draw Calls:</strong> Commands such as
+<code>DrawInstanced</code>, <code>DrawIndexedInstanced</code>, and
+rasterizer state configuration are exclusive to direct command
+lists.</li>
+<li><strong>Full State Bindings:</strong> Binding render targets,
+depth-stencil views, stream-output buffers, and viewport configurations
+require a direct context.</li>
+<li><strong>Compute Operations:</strong> Direct command lists can
+dispatch compute shaders (<code>Dispatch</code>) alongside graphics
+commands without needing a separate compute queue.</li>
+<li><strong>Memory and Copy Operations:</strong> They can perform
+resource copies, buffer updates, and blits directly within the graphics
+workflow.</li>
+</ul>
+<h3 id="resource-state-transitions-and-flexibility">Resource State
+Transitions and Flexibility</h3>
+<p>Direct command lists provide the broadest support for resource state
+transitions using <code>ResourceBarrier</code>. Because they interact
+with every stage of the GPU pipeline, resources in a direct command list
+can transition across any valid <code>D3D12_RESOURCE_STATES</code>,
+including <code>D3D12_RESOURCE_STATE_RENDER_TARGET</code>,
+<code>D3D12_RESOURCE_STATE_DEPTH_WRITE</code>,
+<code>D3D12_RESOURCE_STATE_UNORDERED_ACCESS</code>, and
+<code>D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE</code>. Specialized
+queues (like Copy or Compute) only permit transitions between a strict
+subset of states relevant to their operations.</p>
+<h3 id="queue-compatibility-and-work-submission">Queue Compatibility and
+Work Submission</h3>
+<p>Direct command lists must be recorded using a
+<code>D3D12_COMMAND_LIST_TYPE_DIRECT</code> allocator and submitted to a
+<code>D3D12_COMMAND_LIST_TYPE_DIRECT</code> command queue
+(<code>ID3D12CommandQueue::ExecuteCommandLists</code>).</p>
+<p>However, direct command queues have unique submission
+capabilities:</p>
+<ul>
+<li>A direct command queue can execute direct command lists.</li>
+<li>A direct command queue can also execute command lists recorded with
+<code>D3D12_COMMAND_LIST_TYPE_BUNDLE</code>, provided the bundles were
+created under a direct-compatible context.</li>
+<li>Direct queues can execute
+<code>D3D12_COMMAND_LIST_TYPE_COMPUTE</code> and
+<code>D3D12_COMMAND_LIST_TYPE_COPY</code> command lists, giving them
+universal submission compatibility.</li>
+</ul>
+<h3 id="role-in-multi-engine-synchronization">Role in Multi-Engine
+Synchronization</h3>
+<p>While <code>D3D12_COMMAND_LIST_TYPE_DIRECT</code> provides all-in-one
+functionality, its primary architectural role is serving as the master
+synchronization point for frame generation. High-performance DirectX 12
+renderers often offload asset streaming to copy queues and
+post-processing or physics simulations to asynchronous compute
+queues.</p>
+<p>Direct command lists integrate these concurrent tasks using GPU
+fences (<code>ID3D12Fence</code>). The direct queue waits on fences
+signaled by background copy or compute queues before consuming newly
+uploaded textures or asynchronously computed buffers, ensuring
+serialized correctness without stalling the CPU or unnecessarily
+blocking the GPU’s main 3D rasterizer.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/d-3-d-12-command-list-type-direct-in-direct-x-12-explained';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

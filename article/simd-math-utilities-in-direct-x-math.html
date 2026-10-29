@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIMD Math Utilities in DirectXMath - directx</title>
+    <meta name="description" content="DirectXMath is a high-performance, SIMD-accelerated C++ library designed for game developers and graphics programmers working with DirectX. It provides low-level mathematical types and operations optimized for modern CPU architectures via instruction sets">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/simd-math-utilities-in-direct-x-math">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="SIMD Math Utilities in DirectXMath - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/simd-math-utilities-in-direct-x-math" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectXMath is a high-performance, SIMD-accelerated C++ library designed for game developers and graphics programmers working with DirectX. It provides low-level mathematical types and operations optimized for modern CPU architectures via instruction sets" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="simd-math-utilities-in-directxmath">SIMD Math Utilities in
+DirectXMath</h1>
+<p>DirectXMath is a high-performance, SIMD-accelerated C++ library
+designed for game developers and graphics programmers working with
+DirectX. It provides low-level mathematical types and operations
+optimized for modern CPU architectures via instruction sets like SSE2,
+AVX, and ARM NEON. This article outlines the core math utilities
+available in the DirectXMath library, detailing its fundamental SIMD
+types, vector and matrix operations, geometric algorithms, collision
+detection utilities, and format conversions.</p>
+<h3 id="fundamental-simd-types-and-storage">Fundamental SIMD Types and
+Storage</h3>
+<p>DirectXMath splits mathematical types into SIMD-friendly compute
+registers and memory-efficient storage formats to maximize hardware
+throughput:</p>
+<ul>
+<li><strong>Compute Types:</strong> The foundation of the library is
+<code>XMVECTOR</code>, a 128-bit type mapping directly to a SIMD
+hardware register representing four 32-bit floating-point or integer
+values. For transformations, <code>XMMATRIX</code> provides a 4x4 matrix
+structure mapped across four <code>XMVECTOR</code> registers.</li>
+<li><strong>Storage Types:</strong> To save cache memory and avoid
+alignment requirements in data structures, the library provides storage
+structures such as <code>XMFLOAT2</code>, <code>XMFLOAT3</code>,
+<code>XMFLOAT4</code>, and <code>XMFLOAT4X4</code>.</li>
+<li><strong>Load and Store Functions:</strong> Dedicated conversion
+functions, such as <code>XMLoadFloat3</code> and
+<code>XMStoreFloat4</code>, efficiently marshal data between memory
+storage structures and SIMD execution registers.</li>
+</ul>
+<h3 id="vector-arithmetic-and-utilities">Vector Arithmetic and
+Utilities</h3>
+<p>DirectXMath provides fully vectorized functions that operate across
+2D, 3D, and 4D spaces:</p>
+<ul>
+<li><strong>Basic Arithmetic:</strong> Functions for component-wise
+addition, subtraction, multiplication, division, reciprocal estimates,
+square roots, and fused multiply-add operations.</li>
+<li><strong>Geometric Operations:</strong> Dot products
+(<code>XMVector2Dot</code>, <code>XMVector3Dot</code>,
+<code>XMVector4Dot</code>), cross products
+(<code>XMVector3Cross</code>), vector lengths, distances, and
+normalization functions (<code>XMVector3Normalize</code>).</li>
+<li><strong>Component Manipulation:</strong> Utilities for component
+selection, swizzling, shuffling, masking, and clamping
+(<code>XMVectorClamp</code>, <code>XMVectorMin</code>,
+<code>XMVectorMax</code>).</li>
+<li><strong>Angle and Trigonometry:</strong> SIMD implementations of
+sine, cosine, tangent, and their inverses, alongside degree-to-radian
+conversions, evaluated across vector components simultaneously.</li>
+</ul>
+<h3 id="matrix-operations-and-transformations">Matrix Operations and
+Transformations</h3>
+<p>The library delivers comprehensive tools for affine transformations
+and camera setups commonly required in 3D graphics:</p>
+<ul>
+<li><strong>Matrix Math:</strong> Matrix multiplication
+(<code>XMMatrixMultiply</code>), transpose
+(<code>XMMatrixTranspose</code>), determinant calculation
+(<code>XMMatrixDeterminant</code>), and matrix inversion
+(<code>XMMatrixInverse</code>).</li>
+<li><strong>Transform Generators:</strong> Helper utilities to generate
+translation (<code>XMMatrixTranslation</code>), uniform/non-uniform
+scaling (<code>XMMatrixScaling</code>), and rotation matrices across
+individual axes or arbitrary vectors.</li>
+<li><strong>Camera and Projection Matrices:</strong> Built-in functions
+to construct View matrices (<code>XMMatrixLookAtLH</code>,
+<code>XMMatrixLookToRH</code>) and Projection matrices (both perspective
+and orthographic, supporting left-handed and right-handed coordinate
+systems).</li>
+</ul>
+<h3 id="quaternion-and-rotation-math">Quaternion and Rotation Math</h3>
+<p>DirectXMath supports rotational calculations without gimbal lock:</p>
+<ul>
+<li><strong>Quaternion Operations:</strong> Quaternion multiplication,
+conjugate, inverse, and normalization.</li>
+<li><strong>Interpolation:</strong> Spherical linear interpolation
+(<code>XMQuaternionSlerp</code>) and normalized linear interpolation
+(<code>XMQuaternionSquad</code>).</li>
+<li><strong>Interoperability:</strong> Utilities to convert freely
+between Euler angles, rotation matrices, axis-angle representations, and
+quaternions.</li>
+</ul>
+<h3 id="plane-and-ray-utilities">Plane and Ray Utilities</h3>
+<p>Geometric spatial testing is facilitated by dedicated plane
+functions:</p>
+<ul>
+<li><strong>Plane Construction:</strong> Plane creation from points or
+normal vectors (<code>XMPlaneFromPointNormal</code>,
+<code>XMPlaneFromPoints</code>).</li>
+<li><strong>Plane Tests:</strong> Dot products between planes and 4D
+vectors/rays to evaluate distance, intersection points, and
+classification of space relative to the plane.</li>
+</ul>
+<h3 id="collision-and-bounding-volumes">Collision and Bounding
+Volumes</h3>
+<p>The <code>DirectXCollision</code> header extends the math utilities
+with bounding volumes and spatial queries:</p>
+<ul>
+<li><strong>Bounding Primitives:</strong> Includes standard classes for
+<code>BoundingSphere</code>, <code>BoundingBox</code> (Axis-Aligned
+Bounding Box), <code>BoundingOrientedBox</code> (Oriented Bounding Box),
+and <code>BoundingFrustum</code>.</li>
+<li><strong>Spatial Queries:</strong> Methods for intersection detection
+(ray-box, box-box, sphere-frustum) and containment checks
+(<code>ContainmentType</code> indicating whether a volume is disjoint,
+intersects, or contains another).</li>
+<li><strong>Volume Transformations:</strong> Facilities to transform
+bounding boxes and frustums using standard <code>XMMATRIX</code>
+transformations.</li>
+</ul>
+<h3 id="color-and-data-conversion-utilities">Color and Data Conversion
+Utilities</h3>
+<p>DirectXMath provides utility functions for packed data formats:</p>
+<ul>
+<li><strong>Color Math:</strong> Functions for loading, storing, and
+adjusting RGBA colors, including conversions between standard linear
+color space and sRGB (<code>XMColorSRGBToRGB</code>,
+<code>XMColorRGBToSRGB</code>).</li>
+<li><strong>Format Packing:</strong> Conversion utilities for packed
+graphics formats, such as half-precision floating-point (FP16) values
+(<code>XMConvertFloatToHalf</code>), 10-bit packed vectors, and
+normalized integer arrays.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/simd-math-utilities-in-direct-x-math';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

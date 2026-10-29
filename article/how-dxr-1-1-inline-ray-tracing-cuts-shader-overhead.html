@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DXR 1.1 Inline Ray Tracing Cuts Shader Overhead - directx</title>
+    <meta name="description" content="DirectX Raytracing (DXR) Tier 1.1 introduced inline ray tracing, also known as ray queries, providing developers with an alternative to traditional dynamic ray tracing pipelines. This article examines how inline ray tracing eliminates the performance over">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-dxr-1-1-inline-ray-tracing-cuts-shader-overhead">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DXR 1.1 Inline Ray Tracing Cuts Shader Overhead - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-dxr-1-1-inline-ray-tracing-cuts-shader-overhead" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX Raytracing (DXR) Tier 1.1 introduced inline ray tracing, also known as ray queries, providing developers with an alternative to traditional dynamic ray tracing pipelines. This article examines how inline ray tracing eliminates the performance over" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-dxr-11-inline-ray-tracing-cuts-shader-overhead">How DXR 1.1
+Inline Ray Tracing Cuts Shader Overhead</h1>
+<p>DirectX Raytracing (DXR) Tier 1.1 introduced inline ray tracing, also
+known as ray queries, providing developers with an alternative to
+traditional dynamic ray tracing pipelines. This article examines how
+inline ray tracing eliminates the performance overhead associated with
+the Shader Binding Table (SBT) and dynamic shader dispatches. By
+enabling ray traversal directly within existing shader stages—such as
+compute or pixel shaders—inline ray tracing bypasses dynamic function
+calls, reduces register pressure, and streamlines the ray traversal
+process for performance-critical rendering tasks.</p>
+<h3 id="the-overhead-of-traditional-dxr-10-dispatches">The Overhead of
+Traditional DXR 1.0 Dispatches</h3>
+<p>In DXR Tier 1.0, ray tracing relies on the <code>DispatchRays</code>
+API call and a fully pipeline-driven execution model. Under this
+architecture, the GPU traverses acceleration structures and relies on
+the Shader Binding Table to resolve what happens when a ray hits an
+object or misses entirely.</p>
+<p>The SBT acts as an array of records matching geometry instances to
+specific shader identifiers (such as Any-Hit, Closest-Hit, Intersection,
+and Miss shaders) along with their corresponding resources. Executing
+shaders via the SBT introduces significant performance costs:</p>
+<ul>
+<li><strong>Dynamic Indirection:</strong> The GPU must look up function
+pointers or shader identifiers dynamically based on the geometry hit
+during traversal.</li>
+<li><strong>Context Switching and Stack Management:</strong> Switching
+between distinct hit shaders requires maintaining a shader call stack,
+saving and restoring execution state, and managing heterogeneous ray
+payloads.</li>
+<li><strong>Register Pressure:</strong> The GPU must allocate registers
+based on the worst-case scenario across all shaders that could be
+invoked by the SBT, often limiting wave/warp occupancy across the entire
+ray tracing dispatch.</li>
+<li><strong>Thread Divergence:</strong> Adjacent rays in a wavefront
+that hit different surfaces branch into entirely different shaders,
+breaking execution coherency and stalling execution units.</li>
+</ul>
+<h3 id="how-inline-ray-tracing-bypasses-the-shader-binding-table">How
+Inline Ray Tracing Bypasses the Shader Binding Table</h3>
+<p>DXR Tier 1.1 resolves these bottlenecks by introducing
+<code>RayQuery</code> objects into standard High-Level Shader Language
+(HLSL) code. Instead of handing execution control over to a separate
+pipeline state object managed by the driver, the originating shader
+retains complete control over the ray traversal loop.</p>
+<h4 id="1-direct-execution-within-existing-stages">1. Direct Execution
+Within Existing Stages</h4>
+<p>Inline ray tracing operates inside ordinary compute, pixel, or vertex
+shaders. There is no call to <code>DispatchRays</code> and no separate
+Ray Generation shader. Rays are initialized and traversed natively
+inside the active thread, entirely circumventing the setup, memory
+structures, and indexing logic required to traverse an SBT.</p>
+<h4 id="2-rejection-of-dynamic-function-dispatch">2. Rejection of
+Dynamic Function Dispatch</h4>
+<p>Because hit shaders are eliminated, the GPU never performs indirect
+jumps to external Closest-Hit or Any-Hit functions. When a
+<code>RayQuery</code> detects an intersection, the host shader processes
+the result using standard procedural code (such as <code>if-else</code>
+blocks or flat loops). The GPU treats the intersection test as a data
+query rather than a trigger for an external function execution.</p>
+<h4 id="3-flattened-control-flow-and-loop-driven-traversal">3. Flattened
+Control Flow and Loop-Driven Traversal</h4>
+<p>Ray traversal is driven explicitly through an API loop using methods
+like <code>RayQuery::Proceed()</code>. The shader steps through
+acceleration structures iteratively:</p>
+<ul>
+<li>Candidates (such as non-opaque geometry requiring alpha testing) are
+returned directly to the loop body.</li>
+<li>The host shader decides whether to commit or reject the intersection
+on the spot.</li>
+<li>Fully opaque geometry is handled automatically by the hardware
+traversal engine without interrupting the shader.</li>
+</ul>
+<p>This design converts what used to be a dynamic, fragmented call graph
+into deterministic, localized control flow.</p>
+<h4 id="4-unified-register-footprints">4. Unified Register
+Footprints</h4>
+<p>Without the need to accommodate the disparate register demands of
+multiple hit shaders from an SBT, the compiler optimizes registers
+solely for the host shader. Ray payloads do not need to be packaged into
+generic memory buffers or saved across function boundaries. Local
+variables remain in their allocated registers, which drastically reduces
+memory spillover to scratch space and maintains higher GPU
+occupancy.</p>
+<h3 id="optimal-use-cases">Optimal Use Cases</h3>
+<p>By discarding the Shader Binding Table, inline ray tracing provides
+significant throughput gains in scenarios where dynamic shading is
+unnecessary. It is especially effective for:</p>
+<ul>
+<li><strong>Shadow Rays and Ambient Occlusion:</strong> Simple boolean
+visibility queries where any hit constitutes a blockage, requiring no
+complex material shading.</li>
+<li><strong>Compute-Based Pre-Passes:</strong> Screen-space or
+world-space spatial data structures where compute shaders require fast
+geometric intersection tests without pipeline state churn.</li>
+<li><strong>Light Culling and Probes:</strong> Fast gathering of scene
+visibility data where dynamic material evaluation would add redundant
+scheduling overhead.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-dxr-1-1-inline-ray-tracing-cuts-shader-overhead';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

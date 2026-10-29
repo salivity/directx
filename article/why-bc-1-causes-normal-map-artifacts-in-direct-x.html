@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why BC1 Causes Normal Map Artifacts in DirectX - directx</title>
+    <meta name="description" content="Compressing normal maps using the standard BC1 (DXT1) format in DirectX consistently produces severe visual artifacts, including harsh faceting, blocky banding, and distorted specular highlights. This article explains the technical reasons behind these de">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/why-bc-1-causes-normal-map-artifacts-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Why BC1 Causes Normal Map Artifacts in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/why-bc-1-causes-normal-map-artifacts-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Compressing normal maps using the standard BC1 (DXT1) format in DirectX consistently produces severe visual artifacts, including harsh faceting, blocky banding, and distorted specular highlights. This article explains the technical reasons behind these de" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="why-bc1-causes-normal-map-artifacts-in-directx">Why BC1 Causes
+Normal Map Artifacts in DirectX</h1>
+<p>Compressing normal maps using the standard BC1 (DXT1) format in
+DirectX consistently produces severe visual artifacts, including harsh
+faceting, blocky banding, and distorted specular highlights. This
+article explains the technical reasons behind these decompression
+artifacts, detailing how the 5:6:5 color quantization, shared
+single-line endpoint interpolation, cross-channel correlation
+assumptions, and subsequent vector normalization in shaders combine to
+degrade normal data.</p>
+<h3 id="the-limitation-of-16-bit-endpoints-and-2-bit-indices">The
+Limitation of 16-Bit Endpoints and 2-Bit Indices</h3>
+<p>BC1 divides textures into 4x4 pixel blocks and evaluates color values
+by establishing two representative 16-bit RGB endpoints per block. These
+endpoints use 5 bits for Red, 6 bits for Green, and 5 bits for Blue. The
+intermediate pixels inside the 4x4 block are then assigned 2-bit indices
+that interpolate along a straight line between the two endpoints,
+offering only four distinct color steps.</p>
+<p>Because normal vectors require high numerical precision to represent
+smooth angular gradations, 5-bit and 6-bit quantization introduces
+severe precision loss. The 2-bit index palette fails to represent subtle
+curvature, flattening smooth surfaces into a stepped, blocky staircase
+pattern across each 4x4 region.</p>
+<h3 id="the-assumption-of-linear-rgb-correlation">The Assumption of
+Linear RGB Correlation</h3>
+<p>BC1 was designed for standard diffuse color data, where luminance and
+chrominance across a 4x4 pixel block typically correlate closely along a
+single line in RGB space.</p>
+<p>Normal maps store spatial vectors <span class="math inline">\((X, Y,
+Z)\)</span> mapped into the range <span class="math inline">\([0,
+1]\)</span> via the formula: <span class="math display">\[\text{Color} =
+0.5 \times \text{Vector} + 0.5\]</span></p>
+<p>Directional vectors across a surface change continuously along a
+spherical manifold rather than a straight line in 3D color space.
+Forcing independent <span class="math inline">\(X\)</span> and <span
+class="math inline">\(Y\)</span> directional derivatives onto a single
+1D interpolation axis forces compromises: either the X component or the
+Y component must sacrifice precision, introducing severe cross-channel
+bleeding and directional skewing.</p>
+<h3 id="amplification-via-vector-normalization">Amplification via Vector
+Normalization</h3>
+<p>Normal vectors are unit vectors, defined by the constraint <span
+class="math inline">\(X^2 + Y^2 + Z^2 = 1\)</span>. When BC1
+decompresses a block, the resulting <span class="math inline">\((X, Y,
+Z)\)</span> coordinates rarely form a unit vector due to independent
+channel rounding and interpolation errors.</p>
+<p>Pixel shaders typically renormalize the sampled vector: <span
+class="math display">\[\vec{N} =
+\text{normalize}(\text{sample})\]</span></p>
+<p>Renormalization drastically magnifies subtle quantization errors.
+Small planar deviations in the quantized <span
+class="math inline">\(X\)</span> and <span
+class="math inline">\(Y\)</span> channels cause significant shifts in
+the final vector's angle. Because specular lighting models (such as
+Blinn-Phong or Cook-Torrance) depend heavily on the dot product between
+the surface normal and the half-vector raised to high specular powers,
+minute angular errors appear as glaring jagged edges and specular noise
+on rendered models.</p>
+<h3 id="modern-solutions">Modern Solutions</h3>
+<p>Because of these structural flaws in BC1, modern DirectX pipelines
+avoid BC1 for normal maps entirely:</p>
+<ul>
+<li><strong>BC5 (DXGI_FORMAT_BC5_UNORM):</strong> The industry standard
+for tangent-space normal maps. It provides two separate 8-bit endpoint
+channels for <span class="math inline">\(X\)</span> and <span
+class="math inline">\(Y\)</span>, while <span
+class="math inline">\(Z\)</span> is calculated dynamically in the pixel
+shader via <span class="math inline">\(Z = \sqrt{1 - X^2 -
+Y^2}\)</span>.</li>
+<li><strong>BC7 (DXGI_FORMAT_BC7_UNORM):</strong> A high-quality
+alternative that supports multiple partitioning lines and higher bit
+precision per block, suitable when all three vector components or
+additional alpha masks must be retained.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/why-bc-1-causes-normal-map-artifacts-in-direct-x';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

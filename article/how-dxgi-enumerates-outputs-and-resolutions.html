@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DXGI Enumerates Outputs and Resolutions - directx</title>
+    <meta name="description" content="DirectX Graphics Infrastructure (DXGI) acts as the bridge between graphics hardware, the operating system, and Direct3D rendering pipelines. To identify connected monitors and determine their supported screen resolutions, DXGI uses an object hierarchy sta">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-dxgi-enumerates-outputs-and-resolutions">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DXGI Enumerates Outputs and Resolutions - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-dxgi-enumerates-outputs-and-resolutions" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX Graphics Infrastructure (DXGI) acts as the bridge between graphics hardware, the operating system, and Direct3D rendering pipelines. To identify connected monitors and determine their supported screen resolutions, DXGI uses an object hierarchy sta" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-dxgi-enumerates-outputs-and-resolutions">How DXGI Enumerates
+Outputs and Resolutions</h1>
+<p>DirectX Graphics Infrastructure (DXGI) acts as the bridge between
+graphics hardware, the operating system, and Direct3D rendering
+pipelines. To identify connected monitors and determine their supported
+screen resolutions, DXGI uses an object hierarchy starting from a core
+factory interface down to individual display modes. This article
+explains the exact sequence of interfaces and methods DXGI utilizes to
+detect physical graphics adapters, enumerate monitor outputs attached to
+those adapters, and retrieve comprehensive lists of compatible
+resolutions, refresh rates, and color formats.</p>
+<h3 id="the-dxgi-object-hierarchy">The DXGI Object Hierarchy</h3>
+<p>DXGI structures hardware enumeration through four primary
+objects:</p>
+<ol type="1">
+<li><strong><code>IDXGIFactory</code></strong>: The root interface
+responsible for generating DXGI components and discovering hardware
+adapters.</li>
+<li><strong><code>IDXGIAdapter</code></strong>: Represents a physical
+GPU or software rasterizer.</li>
+<li><strong><code>IDXGIOutput</code></strong>: Represents an active
+display output (such as a physical monitor) connected to an
+adapter.</li>
+<li><strong>Display Modes (<code>DXGI_MODE_DESC</code>)</strong>: Data
+structures detailing the supported resolutions, refresh rates, scanline
+order, and pixel formats available on an output.</li>
+</ol>
+<h3 id="step-1-initialize-the-dxgi-factory">Step 1: Initialize the DXGI
+Factory</h3>
+<p>Enumeration begins by initializing the DXGI factory. Modern
+applications use <code>CreateDXGIFactory1</code> or
+<code>CreateDXGIFactory2</code> to create an <code>IDXGIFactory1</code>
+or <code>IDXGIFactory2</code> interface. This factory provides the
+initial access point to query the underlying hardware configuration.</p>
+<h3 id="step-2-enumerate-display-adapters-gpus">Step 2: Enumerate
+Display Adapters (GPUs)</h3>
+<p>Once the factory exists, you query the system's graphics
+adapters:</p>
+<ul>
+<li>Call <code>IDXGIFactory::EnumAdapters</code> (or
+<code>EnumAdapters1</code> on <code>IDXGIFactory1</code>) in a loop,
+incrementing an integer index starting at <code>0</code>.</li>
+<li>The method returns an <code>IDXGIAdapter</code> pointer for each
+detected GPU.</li>
+<li>When the index exceeds the number of available adapters, the method
+returns <code>DXGI_ERROR_NOT_FOUND</code>, signaling the end of the
+adapter list.</li>
+<li>Calling <code>IDXGIAdapter::GetDesc</code> populates a
+<code>DXGI_ADAPTER_DESC</code> structure containing the GPU name, vendor
+ID, device ID, and dedicated video memory.</li>
+</ul>
+<h3 id="step-3-enumerate-physical-monitor-outputs">Step 3: Enumerate
+Physical Monitor Outputs</h3>
+<p>Because physical monitors are driven by specific GPUs, outputs are
+enumerated through their respective adapter:</p>
+<ul>
+<li>Call <code>IDXGIAdapter::EnumOutputs</code>, passing an integer
+index starting at <code>0</code>.</li>
+<li>Each successful call returns an <code>IDXGIOutput</code> interface
+corresponding to an active display attached to that GPU.</li>
+<li>The loop terminates when <code>EnumOutputs</code> returns
+<code>DXGI_ERROR_NOT_FOUND</code>.</li>
+<li>Calling <code>IDXGIOutput::GetDesc</code> fills a
+<code>DXGI_OUTPUT_DESC</code> structure. This contains metadata such as
+the monitor's device name, desktop coordinates (<code>RECT</code>),
+rotation state, and the Win32 <code>HMONITOR</code> handle.</li>
+</ul>
+<h3 id="step-4-retrieve-supported-resolutions-and-display-modes">Step 4:
+Retrieve Supported Resolutions and Display Modes</h3>
+<p>Display resolutions and refresh rates vary depending on the chosen
+color format. DXGI queries display modes per format:</p>
+<ol type="1">
+<li><strong>Select a Target Format</strong>: Choose a display format,
+typically <code>DXGI_FORMAT_R8G8B8A8_UNORM</code> or
+<code>DXGI_FORMAT_B8G8R8A8_UNORM</code>.</li>
+<li><strong>Query Mode Count</strong>: Call
+<code>IDXGIOutput::GetDisplayModeList</code> passing the chosen format,
+flags (such as <code>DXGI_ENUM_MODES_INTERLACED</code> or
+<code>DXGI_ENUM_MODES_SCALING</code>), a pointer to a <code>UINT</code>
+to store the count, and <code>nullptr</code> for the mode list array.
+DXGI populates the integer with the total number of supported
+modes.</li>
+<li><strong>Fetch Mode Data</strong>: Allocate an array of
+<code>DXGI_MODE_DESC</code> structures sized according to the returned
+count, then call <code>IDXGIOutput::GetDisplayModeList</code> a second
+time, passing the array pointer to populate the list.</li>
+</ol>
+<h3 id="interpreting-the-mode-descriptions">Interpreting the Mode
+Descriptions</h3>
+<p>Each entry in the retrieved <code>DXGI_MODE_DESC</code> array
+contains the exact parameters required by the display hardware:</p>
+<ul>
+<li><strong>Width and Height</strong>: The pixel dimensions of the
+resolution (e.g., 1920x1080).</li>
+<li><strong>RefreshRate</strong>: Expressed as a rational fraction
+(<code>DXGI_RATIONAL</code>) with a numerator and denominator (e.g.,
+60000/1001 for 59.94 Hz or 60/1 for 60 Hz).</li>
+<li><strong>Format</strong>: The DXGI surface pixel format used for
+rendering.</li>
+<li><strong>ScanlineOrdering</strong>: Indicates progressive or
+interlaced rendering.</li>
+<li><strong>Scaling</strong>: Specifies how the monitor handles scaling
+when the target mode does not match the native panel resolution (e.g.,
+centered, stretched, or unscaled).</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-dxgi-enumerates-outputs-and-resolutions';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

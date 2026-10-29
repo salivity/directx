@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What Are Indirect Draw Calls in DirectX? - directx</title>
+    <meta name="description" content="Indirect draw calls are an advanced rendering technique where the arguments for a draw operation are sourced directly from GPU memory rather than passed from the CPU. In modern APIs like DirectX 11 and DirectX 12, this capability decouples the CPU from th">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/what-are-indirect-draw-calls-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="What Are Indirect Draw Calls in DirectX? - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/what-are-indirect-draw-calls-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Indirect draw calls are an advanced rendering technique where the arguments for a draw operation are sourced directly from GPU memory rather than passed from the CPU. In modern APIs like DirectX 11 and DirectX 12, this capability decouples the CPU from th" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="what-are-indirect-draw-calls-in-directx">What Are Indirect Draw
+Calls in DirectX?</h1>
+<p>Indirect draw calls are an advanced rendering technique where the
+arguments for a draw operation are sourced directly from GPU memory
+rather than passed from the CPU. In modern APIs like DirectX 11 and
+DirectX 12, this capability decouples the CPU from the frame-by-frame
+rendering workload, allowing compute shaders to dynamically generate
+geometry, perform culling, and dispatch draw calls entirely on the GPU.
+This article explains how indirect drawing works, the mechanics behind
+GPU-driven parameter generation in DirectX, and why this technique is
+fundamental to modern high-performance graphics engines.</p>
+<h2 id="understanding-traditional-vs-indirect-draw-calls">Understanding
+Traditional vs. Indirect Draw Calls</h2>
+<p>In a traditional rendering pipeline (direct drawing), the CPU
+determines the parameters for every object that needs to be rendered.
+Using functions such as <code>DrawInstanced</code> or
+<code>DrawIndexedInstanced</code>, the CPU specifies:</p>
+<ul>
+<li>The number of indices or vertices to draw.</li>
+<li>The number of instances to render.</li>
+<li>Start offsets for vertices, indices, and instances.</li>
+</ul>
+<p>This model creates a CPU bottleneck when rendering scenes with tens
+of thousands of objects. If the CPU must test bounding boxes against the
+view frustum (frustum culling) or check if an object is hidden behind
+another (occlusion culling), it must read data, process the scene
+hierarchy, and submit individual draw commands. If the GPU performs this
+work instead, copying the visibility results back to the CPU to assemble
+draw calls introduces severe synchronization stalls and pipeline
+latency.</p>
+<p>Indirect draw calls solve this problem by pointing the graphics
+command list to a GPU buffer (such as an <code>ID3D12Resource</code> in
+DirectX 12 or an <code>ID3D11Buffer</code> in DirectX 11) that contains
+the exact draw arguments the GPU needs to execute the command.</p>
+<h2 id="how-the-gpu-populates-draw-parameters">How the GPU Populates
+Draw Parameters</h2>
+<p>The core benefit of indirect drawing is the ability for the GPU to
+update its own drawing parameters on the fly using Compute Shaders.</p>
+<h3 id="1-the-argument-buffer-structure">1. The Argument Buffer
+Structure</h3>
+<p>The parameters for an indirect call mirror the standard parameters
+passed to CPU draw calls. For example, in DirectX 12, an indexed
+indirect draw uses the <code>D3D12_DRAW_INDEXED_ARGUMENTS</code>
+structure:</p>
+<ul>
+<li><code>IndexCountPerInstance</code> (UINT)</li>
+<li><code>InstanceCount</code> (UINT)</li>
+<li><code>StartIndexLocation</code> (UINT)</li>
+<li><code>BaseVertexLocation</code> (INT)</li>
+<li><code>StartInstanceLocation</code> (UINT)</li>
+</ul>
+<p>This data is stored inside a readable and writable buffer (such as an
+<code>RWStructuredBuffer</code> or <code>RWByteAddressBuffer</code> in
+HLSL).</p>
+<h3 id="2-compute-shader-execution-and-culling">2. Compute Shader
+Execution and Culling</h3>
+<p>Instead of the CPU determining visibility, a compute pass runs prior
+to drawing:</p>
+<ol type="1">
+<li><strong>Frustum and Occlusion Culling:</strong> The compute shader
+receives a list of candidate object bounds. It evaluates whether each
+object is within the camera's view frustum and checks its depth against
+a hierarchical Z-buffer (HZB).</li>
+<li><strong>Dynamic Instancing / Compaction:</strong> For all visible
+objects, the compute shader increments an atomic counter using HLSL
+atomic operations (like <code>InterlockedAdd</code>).</li>
+<li><strong>Parameter Writing:</strong> The compute shader writes the
+finalized instance count, or sets <code>IndexCountPerInstance</code>
+directly to zero for culled objects, into the GPU-resident argument
+buffer.</li>
+</ol>
+<p>Because these operations run massively in parallel across GPU
+execution units, thousands of visibility tests can be resolved in a
+fraction of a millisecond without any CPU intervention.</p>
+<h2 id="indirect-execution-in-directx">Indirect Execution in
+DirectX</h2>
+<p>The implementation details depend on the version of DirectX being
+targeted:</p>
+<h3 id="directx-11">DirectX 11</h3>
+<p>DirectX 11 provides specialized API functions:</p>
+<ul>
+<li><code>ID3D11DeviceContext::DrawInstancedIndirect</code></li>
+<li><code>ID3D11DeviceContext::DrawIndexedInstancedIndirect</code></li>
+</ul>
+<p>The developer binds the argument buffer created with the
+<code>D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS</code> flag. The draw call
+reads the structure at a specified byte offset within the buffer.</p>
+<h3 id="directx-12-and-executeindirect">DirectX 12 and
+<code>ExecuteIndirect</code></h3>
+<p>DirectX 12 expands this concept dramatically through the
+<code>ID3D12GraphicsCommandList::ExecuteIndirect</code> API and the
+<code>ID3D12CommandSignature</code> interface.</p>
+<p>Instead of being limited strictly to draw arguments, a DirectX 12
+command signature allows a single indirect buffer to package multiple
+commands together, including:</p>
+<ul>
+<li>Draw or Dispatch parameters (<code>DrawInstanced</code>,
+<code>DrawIndexedInstanced</code>, <code>Dispatch</code>).</li>
+<li>Root constants (<code>SetGraphicsRoot32BitConstants</code>).</li>
+<li>Vertex and index buffer views (<code>SetVertexBuffers</code>,
+<code>SetIndexBuffer</code>).</li>
+<li>Descriptor table bindings.</li>
+</ul>
+<p>Using <code>ExecuteIndirect</code>, the GPU can evaluate a scene,
+dynamically select different meshes and materials by binding new
+descriptor tables and vertex buffers, set instance counts, and dispatch
+drawing commands—all completely independent of the CPU.</p>
+<h2 id="key-advantages">Key Advantages</h2>
+<ul>
+<li><strong>Elimination of CPU Overhead:</strong> The CPU only needs to
+issue a single <code>ExecuteIndirect</code> command rather than
+thousands of individual direct draw calls.</li>
+<li><strong>No Pipeline Stalls:</strong> Because data stays entirely in
+VRAM, there is no need for costly readbacks from the GPU to the
+CPU.</li>
+<li><strong>Dynamic Level of Detail (LOD):</strong> Compute shaders can
+measure an object's distance from the camera and automatically populate
+the draw buffer with the correct mesh level of detail and index
+ranges.</li>
+<li><strong>Scalable Particle and Physics Systems:</strong> Simulation
+data produced entirely on the GPU (such as particle positions and
+alive-particle counts) can be rendered directly by writing the active
+particle count to the indirect argument buffer.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/what-are-indirect-draw-calls-in-direct-x';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

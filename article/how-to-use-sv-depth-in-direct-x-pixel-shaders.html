@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Use SV_Depth in DirectX Pixel Shaders - directx</title>
+    <meta name="description" content="This article provides an overview of how the SVDepth system-value semantic operates within DirectX High-Level Shader Language (HLSL) to override hardware-calculated depth values. By binding this semantic to a pixel shader output, developers can programmat">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-to-use-sv-depth-in-direct-x-pixel-shaders">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Use SV_Depth in DirectX Pixel Shaders - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-to-use-sv-depth-in-direct-x-pixel-shaders" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of how the SVDepth system-value semantic operates within DirectX High-Level Shader Language (HLSL) to override hardware-calculated depth values. By binding this semantic to a pixel shader output, developers can programmat" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-use-sv_depth-in-directx-pixel-shaders">How to Use
+SV_Depth in DirectX Pixel Shaders</h1>
+<p>This article provides an overview of how the <code>SV_Depth</code>
+system-value semantic operates within DirectX High-Level Shader Language
+(HLSL) to override hardware-calculated depth values. By binding this
+semantic to a pixel shader output, developers can programmatically alter
+the depth buffer on a per-pixel basis, allowing for custom occlusion,
+volumetric effects, and geometric depth manipulation beyond standard
+rasterizer interpolation.</p>
+<h2 id="the-role-of-sv_depth-in-hlsl">The Role of SV_Depth in HLSL</h2>
+<p>In a standard DirectX rendering pipeline, depth is calculated
+automatically during rasterization. The vertex shader outputs the
+position in clip space, and the hardware interpolates the <span
+class="math inline">\(z\)</span> and <span
+class="math inline">\(w\)</span> coordinates across the primitive to
+compute a depth value (<span class="math inline">\(z/w\)</span>) for
+each pixel. This default value is then tested against and written to the
+depth-stencil buffer.</p>
+<p>The <code>SV_Depth</code> semantic allows a pixel shader to intervene
+in this process by explicitly writing a custom floating-point value to
+the depth buffer instead of using the hardware-generated value.</p>
+<h2 id="implementation-in-the-pixel-shader">Implementation in the Pixel
+Shader</h2>
+<p>To use <code>SV_Depth</code>, you define it as an output attribute
+within the pixel shader's return structure or as an <code>out</code>
+parameter.</p>
+<pre class="hlsl"><code>struct PixelOutput
+{
+    float4 Color : SV_Target;
+    float  Depth : SV_Depth;
+};
+
+PixelOutput main(PixelInput input)
+{
+    PixelOutput output;
+    output.Color = float4(1.0, 0.0, 0.0, 1.0);
+    
+    // Explicitly modify the depth value (must be in the range [0.0, 1.0])
+    output.Depth = input.CustomDepth; 
+
+    return output;
+}</code></pre>
+<p>The value written to <code>SV_Depth</code> must fall within the
+normalized viewport depth range, typically <span
+class="math inline">\([0.0, 1.0]\)</span> in DirectX (representing the
+near and far clipping planes). Any value written outside this range is
+clamped or can cause clipping artifacts depending on the depth-stencil
+state configuration.</p>
+<h2 id="performance-impact-early-z-disabling">Performance Impact:
+Early-Z Disabling</h2>
+<p>Under normal conditions, modern GPUs utilize an optimization known as
+Early-Z, running the depth test before the pixel shader executes. If a
+pixel is occluded by previously rendered geometry, the GPU discards it
+immediately, saving the computational cost of running the pixel
+shader.</p>
+<p>When a pixel shader outputs to <code>SV_Depth</code>, the hardware
+can no longer predict the final depth value prior to execution. As a
+result:</p>
+<ol type="1">
+<li><strong>Early-Z is disabled:</strong> The GPU must execute the pixel
+shader for every rasterized fragment to discover its final depth.</li>
+<li><strong>Fill rate decreases:</strong> Scenes with high overdraw will
+experience a performance penalty because occluded pixels are fully
+shaded before depth rejection can occur.</li>
+</ol>
+<h2 id="preserving-optimizations-with-conservative-depth">Preserving
+Optimizations with Conservative Depth</h2>
+<p>To mitigate the performance loss associated with disabling Early-Z,
+DirectX 11 and later introduced conservative depth semantics. These
+semantics allow the developer to guarantee directional bounds on the
+modified depth, allowing the GPU to keep certain Early-Z optimizations
+active:</p>
+<ul>
+<li><strong><code>SV_DepthGreaterEqual</code>:</strong> Asserts that the
+shader will only output a depth value greater than or equal to the
+hardware-generated rasterizer depth. If the original depth already fails
+the depth test, the pixel can be discarded early.</li>
+<li><strong><code>SV_DepthLessEqual</code>:</strong> Asserts that the
+shader will only output a depth value less than or equal to the
+hardware-generated rasterizer depth.</li>
+</ul>
+<h2 id="practical-use-cases">Practical Use Cases</h2>
+<p>Explicit depth modification via <code>SV_Depth</code> is commonly
+employed in advanced graphics techniques:</p>
+<ul>
+<li><strong>Raymarching and Signed Distance Fields (SDFs):</strong> When
+rendering procedural surfaces inside a bounding proxy box,
+<code>SV_Depth</code> is used to write the exact intersection point
+calculated by the raymarcher into the depth buffer, ensuring correct
+interaction with standard rasterized objects.</li>
+<li><strong>Impostors and Billboards:</strong> Volumetric particles or
+spherical impostors can write reconstructed analytical depths so they
+clip and blend realistically against surrounding geometry.</li>
+<li><strong>Decals and Intersecting Geometry:</strong> Shaders can
+smooth out seams or adjust depth discrepancies dynamically to eliminate
+Z-fighting.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-to-use-sv-depth-in-direct-x-pixel-shaders';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

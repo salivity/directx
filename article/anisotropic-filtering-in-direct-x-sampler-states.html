@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anisotropic Filtering in DirectX Sampler States - directx</title>
+    <meta name="description" content="Anisotropic filtering in DirectX is configured through a sampler state object to significantly improve texture clarity on surfaces viewed at oblique angles. When enabled, the sampler calculates the projection of a screen-space pixel footprint onto texture">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/anisotropic-filtering-in-direct-x-sampler-states">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Anisotropic Filtering in DirectX Sampler States - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/anisotropic-filtering-in-direct-x-sampler-states" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Anisotropic filtering in DirectX is configured through a sampler state object to significantly improve texture clarity on surfaces viewed at oblique angles. When enabled, the sampler calculates the projection of a screen-space pixel footprint onto texture" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="anisotropic-filtering-in-directx-sampler-states">Anisotropic
+Filtering in DirectX Sampler States</h1>
+<p>Anisotropic filtering in DirectX is configured through a sampler
+state object to significantly improve texture clarity on surfaces viewed
+at oblique angles. When enabled, the sampler calculates the projection
+of a screen-space pixel footprint onto texture space, taking multiple
+samples along the axis of greatest distortion rather than assuming a
+symmetrical footprint. By setting the filtering mode to anisotropic and
+defining a maximum sample limit, developers allow the graphics hardware
+to dynamically eliminate perspective blur and aliasing on receding
+geometry without excessive performance penalties.</p>
+<h3 id="configuring-the-sampler-state">Configuring the Sampler
+State</h3>
+<p>In DirectX (Direct3D 11 and Direct3D 12), anisotropic filtering is
+established inside the sampler description structure
+(<code>D3D11_SAMPLER_DESC</code> or <code>D3D12_SAMPLER_DESC</code>).
+Two specific fields control its behavior:</p>
+<ol type="1">
+<li><strong><code>Filter</code></strong>: Must be set to an anisotropic
+variant, typically <code>D3D11_FILTER_ANISOTROPIC</code> (or
+<code>D3D12_FILTER_ANISOTROPIC</code>). DirectX also offers comparison
+variants (such as <code>D3D11_FILTER_COMPARISON_ANISOTROPIC</code>) for
+depth testing operations.</li>
+<li><strong><code>MaxAnisotropy</code></strong>: An integer value
+ranging from 1 to 16. This value defines the maximum ratio of elongation
+the sampler will account for, directly dictating the upper limit of
+samples taken per texture lookup. Setting this value to 1 effectively
+reduces the operation to standard isotropic (bilinear/trilinear)
+filtering.</li>
+</ol>
+<p>Once created, the sampler state is bound to the pipeline, where the
+pixel shader references it during texture sampling instructions.</p>
+<h3 id="the-underlying-mechanics">The Underlying Mechanics</h3>
+<p>Standard bilinear and trilinear filtering treat a screen pixel’s
+footprint in texture space as an isotropic (square or circular) shape.
+When a textured polygon is tilted sharply relative to the camera, that
+square pixel footprint projects into a stretched ellipse in UV space.
+Standard filtering resolves this by selecting a lower-resolution mipmap
+level that fits the largest dimension of the ellipse, which results in
+severe blurring along the shorter dimension.</p>
+<p>Anisotropic filtering resolves this distortion through the following
+steps:</p>
+<ol type="1">
+<li><strong>Derivative Calculation</strong>: The GPU evaluates
+screen-space partial derivatives (<span
+class="math inline">\(ddx\)</span> and <span
+class="math inline">\(ddy\)</span>) of the texture coordinates across
+adjacent pixels in a <span class="math inline">\(2 \times 2\)</span>
+pixel quad.</li>
+<li><strong>Footprint Mapping</strong>: These derivatives define the
+major (longest) and minor (shortest) axes of the projected ellipse in
+texture space.</li>
+<li><strong>Anisotropy Ratio Detection</strong>: The sampler computes
+the ratio of the major axis length to the minor axis length. This ratio
+determines the degree of anisotropy.</li>
+<li><strong>Clamping</strong>: The computed ratio is clamped against the
+<code>MaxAnisotropy</code> value defined in the sampler state.</li>
+<li><strong>Sampling Along the Line of Anisotropy</strong>: The sampler
+selects a mipmap level based primarily on the <em>minor</em> axis to
+preserve high-frequency details. It then takes a series of linearly
+spaced samples along the <em>major</em> axis within that mipmap level
+(or across two adjacent mip levels if combined with trilinear
+filtering).</li>
+<li><strong>Weighting and Reconstruction</strong>: The gathered samples
+are weighted and averaged together to construct the final texel color
+passed to the shader.</li>
+</ol>
+<h3 id="runtime-performance">Runtime Performance</h3>
+<p>The anisotropic sampler in DirectX is adaptive. If a surface faces
+the camera directly, the anisotropy ratio remains near 1:1, and the
+hardware performs standard isotropic filtering using minimal texture
+taps. As the angle of incidence becomes steeper, the hardware
+dynamically increases the number of sample taps up to the defined
+<code>MaxAnisotropy</code> limit. Consequently, the computational and
+memory bandwidth cost scales with geometric orientation rather than
+imposing a flat overhead across the entire scene.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/anisotropic-filtering-in-direct-x-sampler-states';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How WDDM GPU Preemption Prevents OS Freezes - directx</title>
+    <meta name="description" content="In modern Windows environments, the Windows Display Driver Model (WDDM) relies on GPU preemption to prevent complex DirectX shaders from monopolizing hardware and locking up the operating system. By enabling the operating system to interrupt low-priority">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-wddm-gpu-preemption-prevents-os-freezes">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How WDDM GPU Preemption Prevents OS Freezes - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-wddm-gpu-preemption-prevents-os-freezes" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In modern Windows environments, the Windows Display Driver Model (WDDM) relies on GPU preemption to prevent complex DirectX shaders from monopolizing hardware and locking up the operating system. By enabling the operating system to interrupt low-priority" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-wddm-gpu-preemption-prevents-os-freezes">How WDDM GPU
+Preemption Prevents OS Freezes</h1>
+<p>In modern Windows environments, the Windows Display Driver Model
+(WDDM) relies on GPU preemption to prevent complex DirectX shaders from
+monopolizing hardware and locking up the operating system. By enabling
+the operating system to interrupt low-priority or long-running rendering
+tasks to execute critical display updates, WDDM guarantees that the
+Desktop Window Manager (DWM) remains responsive. This mechanism prevents
+user interface freezes, maintains smooth frame presentation, and
+eliminates the need to trigger catastrophic driver resets during
+intensive compute or graphics workloads.</p>
+<h3 id="the-problem-of-gpu-monopolization">The Problem of GPU
+Monopolization</h3>
+<p>Historically, graphics processing units executed command buffers
+non-preemptively: once a batch of work was submitted to the hardware,
+the GPU executed it to completion. If a DirectX pixel or compute shader
+encountered an infinite loop, complex recursive calculations, or simply
+an exceptionally heavy workload, the GPU would stall. Because the
+Windows Desktop Window Manager relies on the GPU to compose the desktop
+user interface, a stalled GPU directly caused the operating system UI to
+freeze.</p>
+<p>To mitigate permanent hangs, Windows introduced Timeout Detection and
+Recovery (TDR). Under TDR, if the GPU does not complete a task within a
+predefined window (typically two seconds), the OS assumes the hardware
+has locked up and aggressively resets the display driver, crashing
+active DirectX applications. While TDR prevents an OS-level hard reboot,
+it disrupts the user experience. GPU preemption was designed to solve
+this problem dynamically without requiring a driver reset.</p>
+<h3 id="the-role-of-vidsch-video-memory-scheduler">The Role of VidSch
+(Video Memory Scheduler)</h3>
+<p>The Video Memory Scheduler (<code>VidSch</code>) is the core engine
+within WDDM responsible for orchestrating task execution on the GPU.
+Unlike CPU threads managed by the kernel thread scheduler, GPU tasks
+arrive as command buffers inside hardware queues.</p>
+<p>When high-priority work needs immediate rendering—such as a DWM frame
+update or a VR head-tracking calculation—<code>VidSch</code> detects
+that the GPU engine is currently occupied by a running DirectX shader.
+Instead of waiting for the workload to finish, <code>VidSch</code>
+submits a preemption request directly to the graphics hardware.</p>
+<h3 id="granularity-of-gpu-preemption-across-wddm-versions">Granularity
+of GPU Preemption Across WDDM Versions</h3>
+<p>The evolution of WDDM centers around shrinking preemption
+granularity, minimizing the delay between a preemption request and
+actual hardware context switching:</p>
+<ul>
+<li><strong>DMA-Buffer Preemption (WDDM 1.0):</strong> Early
+implementations could only interrupt workloads at the boundary of a
+Direct Memory Access (DMA) buffer. If a single buffer contained a
+complex draw call, the system still suffered from perceptible
+latency.</li>
+<li><strong>Primitive-Level Preemption (WDDM 1.2):</strong> Introduced
+with DirectX 11.1, hardware could halt processing at the boundary of a
+geometric primitive (such as a triangle). While an improvement, massive
+compute shaders or heavily tessellated geometry could still delay the
+preemption point.</li>
+<li><strong>Instruction-Level and Mid-Draw Preemption (WDDM
+2.0+):</strong> Modern GPUs paired with Windows 10/11 support preemption
+at the shader instruction level or thread-group boundary. This allows
+the GPU to pause execution midway through a single draw call or compute
+dispatch, reducing preemption latency to microseconds.</li>
+</ul>
+<h3 id="the-context-switch-mechanism">The Context Switch Mechanism</h3>
+<p>When the graphics driver receives a preemption signal from
+<code>VidSch</code>, the hardware executes a context switch:</p>
+<ol type="1">
+<li><strong>Halting Execution:</strong> The hardware execution units
+(Streaming Multiprocessors or Compute Units) finish the active
+instruction or thread group and pause incoming instructions.</li>
+<li><strong>Context Saving:</strong> The internal register states,
+program counters, and transient memory associated with the interrupted
+shader are evacuated into a dedicated hardware context buffer in
+VRAM.</li>
+<li><strong>Execution of High-Priority Work:</strong> The high-priority
+task (typically the DWM compositor or an urgent interrupt) loads its
+context onto the execution units, executes rapidly, and releases the
+queue.</li>
+<li><strong>Context Restoration:</strong> Once the priority task
+completes, the GPU reloads the saved registers and memory states,
+allowing the original DirectX shader to resume execution from the exact
+point it was interrupted.</li>
+</ol>
+<h3 id="hardware-queues-and-async-compute">Hardware Queues and Async
+Compute</h3>
+<p>With WDDM 2.0 and later, modern architectures feature hardware-based
+scheduling engines (such as the Hardware Scheduling feature enabled in
+Windows settings) and independent execution queues. Graphic workloads,
+compute workloads, and copy engines can operate concurrently.</p>
+<p>If an asynchronous compute shader runs a prolonged simulation, it
+does not block graphics queues. Preemption can occur independently
+within compute pipelines, ensuring that the critical presentation path
+remains isolated from compute-heavy tasks.</p>
+<h3 id="fail-safe-the-tdr-threshold">Fail-Safe: The TDR Threshold</h3>
+<p>GPU preemption acts as the primary buffer against UI latency, but TDR
+remains the final safeguard. If a faulty shader becomes non-responsive
+and ignores preemption requests—often due to memory lockups or driver
+bugs—the OS timer continues to count down. If the preemption request is
+not honored within the allotted TDR threshold, Windows executes a full
+engine reset, re-initializing the display pipeline and ensuring system
+stability.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-wddm-gpu-preemption-prevents-os-freezes';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

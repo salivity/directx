@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectX Handles MSAA During Rasterization - directx</title>
+    <meta name="description" content="This article explains how the DirectX graphics pipeline processes multi-sample anti-aliasing (MSAA) during the rasterization stage. In DirectX, MSAA reduces geometric edge aliasing by decoupling geometric coverage testing from pixel shading frequency. The">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-x-handles-msaa-during-rasterization">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectX Handles MSAA During Rasterization - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-x-handles-msaa-during-rasterization" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains how the DirectX graphics pipeline processes multi-sample anti-aliasing (MSAA) during the rasterization stage. In DirectX, MSAA reduces geometric edge aliasing by decoupling geometric coverage testing from pixel shading frequency. The" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directx-handles-msaa-during-rasterization">How DirectX
+Handles MSAA During Rasterization</h1>
+<p>This article explains how the DirectX graphics pipeline processes
+multi-sample anti-aliasing (MSAA) during the rasterization stage. In
+DirectX, MSAA reduces geometric edge aliasing by decoupling geometric
+coverage testing from pixel shading frequency. The rasterizer evaluates
+primitive coverage across multiple distinct sub-pixel sample locations,
+executes the pixel shader only once per covered pixel under standard
+configurations, and broadcasts the resulting color to all covered
+samples that pass depth and stencil tests.</p>
+<h3 id="sub-pixel-coverage-testing">Sub-Pixel Coverage Testing</h3>
+<p>When a primitive arrives at the rasterizer state with MSAA enabled
+(such as 2x, 4x, or 8x MSAA), the rasterizer evaluates geometric
+coverage at multiple fixed sub-pixel positions instead of a single point
+at the pixel center. The rasterizer tests the triangle's edges against
+each sample coordinate within the pixel's bounds.</p>
+<p>A bitmask, known as the coverage mask, is generated for each pixel.
+Each bit in the mask corresponds to a sample point, indicating whether
+that specific sub-pixel falls inside or outside the primitive's
+boundaries.</p>
+<h3 id="per-sample-depth-and-stencil-testing">Per-Sample Depth and
+Stencil Testing</h3>
+<p>Depth and stencil testing in an MSAA-enabled DirectX pipeline occurs
+at sub-pixel sample frequency, not pixel frequency. Each sample point
+maintains its own independent depth and stencil values in the
+multi-sampled depth-stencil buffer.</p>
+<p>The rasterizer interpolates the primitive's depth (<span
+class="math inline">\(z\)</span>) and <span
+class="math inline">\(w\)</span> values individually for each sample
+point that passed the coverage test. Early-Z or late-Z testing evaluates
+each sample against the existing values in the depth-stencil target. If
+a sample fails the depth test, its corresponding bit in the coverage
+mask is discarded.</p>
+<h3 id="decoupling-shading-from-coverage">Decoupling Shading from
+Coverage</h3>
+<p>The defining efficiency of MSAA in DirectX compared to Super-Sample
+Anti-Aliasing (SSAA) is the separation of coverage from shading. Unless
+Sample-Frequency Shading (SV_SampleIndex) is explicitly triggered in the
+pixel shader, the rasterizer invokes the pixel shader only once per
+primitive for any pixel where at least one sample is covered.</p>
+<p>By default, the pixel shader evaluates inputs at the pixel center.
+However, if the pixel center is not covered by the primitive, this can
+lead to sampling textures or attributes outside the triangle's
+boundaries, causing visual artifacts. To resolve this, DirectX supports
+centroid sampling. When attributes are declared with the
+<code>centroid</code> modifier in HLSL, the rasterizer evaluates the
+attribute values at a position within the area bounded by the primitive
+and the pixel, typically the average center of all covered samples.</p>
+<h3 id="output-and-sample-mask-application">Output and Sample Mask
+Application</h3>
+<p>Once the pixel shader finishes execution, it outputs a single color
+value. The rasterizer and output-merger apply this color to every sample
+location whose bit remains active in the coverage mask and has passed
+the depth/stencil test.</p>
+<p>DirectX also provides pipeline states such as <code>SampleMask</code>
+in the blend state description, which allows developers to globally mask
+out specific sub-pixel samples across all render operations.</p>
+<h3 id="final-resolve">Final Resolve</h3>
+<p>The result of the rasterization process is a multi-sampled render
+target where each pixel stores <span class="math inline">\(N\)</span>
+distinct color, depth, and stencil values (where <span
+class="math inline">\(N\)</span> is the sample count). These samples
+remain discrete until the application resolves the multi-sampled
+resource into a non-multisampled resource using the DirectX API call
+<code>ResolveSubresource</code> or custom compute/pixel shader resolve
+passes, which average the sub-pixel colors to produce smooth,
+anti-aliased edges.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-direct-x-handles-msaa-during-rasterization';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

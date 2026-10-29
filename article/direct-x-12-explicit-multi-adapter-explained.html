@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Explicit Multi-Adapter Explained - directx</title>
+    <meta name="description" content="DirectX 12&#39;s Explicit Multi-Adapter API shifts multi-GPU management from closed, driver-level abstraction directly into the hands of game developers. By exposing the physical hardware adapters directly to the application, DirectX allows developers to mana">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-explicit-multi-adapter-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Explicit Multi-Adapter Explained - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-explicit-multi-adapter-explained" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12&#39;s Explicit Multi-Adapter API shifts multi-GPU management from closed, driver-level abstraction directly into the hands of game developers. By exposing the physical hardware adapters directly to the application, DirectX allows developers to mana" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-explicit-multi-adapter-explained">DirectX 12 Explicit
+Multi-Adapter Explained</h1>
+<p>DirectX 12's Explicit Multi-Adapter API shifts multi-GPU management
+from closed, driver-level abstraction directly into the hands of game
+developers. By exposing the physical hardware adapters directly to the
+application, DirectX allows developers to manage memory allocation, work
+scheduling, and inter-adapter synchronization independently. This
+architectural shift enables fine-grained control over how rendering
+tasks are partitioned across multiple identical or disparate graphics
+cards, improving efficiency and eliminating the synchronization
+bottlenecks inherent in older multi-GPU systems.</p>
+<h3 id="the-shift-from-implicit-to-explicit">The Shift from Implicit to
+Explicit</h3>
+<p>Prior to DirectX 12, multi-GPU configurations like NVIDIA SLI or AMD
+CrossFire relied on implicit support through hardware drivers. The
+operating system and driver presented the hardware as a single virtual
+GPU, commonly forcing Alternate Frame Rendering (AFR), where GPUs took
+turns rendering full frames. While simple for developers, AFR introduced
+latency, frame pacing issues, and poor scaling.</p>
+<p>DirectX 12 changes this by treating each physical GPU as an
+independent adapter (<code>ID3D12Device</code>). The developer decides
+what each GPU does, how resources are duplicated or transferred, and how
+frame pacing is maintained.</p>
+<h3 id="execution-modes-linked-vs-unlinked-adapters">Execution Modes:
+Linked vs. Unlinked Adapters</h3>
+<p>The API categorizes multi-GPU configurations into two main
+configurations:</p>
+<ul>
+<li><strong>Linked Multi-Adapter (LMA):</strong> Designed for systems
+running multiple identical or near-identical GPUs that share a
+specialized physical connection or unified driver infrastructure. In
+this mode, the API exposes a single device instance containing multiple
+"nodes." The GPUs share an identical driver context, allowing them to
+mirror resources automatically or access memory across cards with
+minimal overhead. Developers use node masks to dispatch commands to
+specific GPUs while treating memory heaps as largely unified.</li>
+<li><strong>Unlinked Multi-Adapter (UMA):</strong> Designed to harness
+heterogeneous hardware, such as pairing a discrete GPU with a CPU's
+integrated graphics or combining GPUs from different manufacturers. Each
+GPU is initialized as a completely separate <code>ID3D12Device</code>
+with independent memory budgets, command queues, and execution
+pipelines.</li>
+</ul>
+<h3 id="data-sharing-via-cross-adapter-resources">Data Sharing via
+Cross-Adapter Resources</h3>
+<p>Because discrete GPUs reside on separate PCIe buses with dedicated
+VRAM, moving data between them requires explicit coordination. DirectX
+12 facilitates this through cross-adapter heaps and shared textures.</p>
+<p>To share data, a developer creates a resource on the secondary GPU
+within a cross-adapter-capable heap (typically stored in system memory
+via the PCIe bus). The primary GPU then writes or reads from this shared
+buffer. To maintain data integrity across asynchronous engines, DirectX
+uses shared fences (<code>ID3D12Fence</code>). A GPU signals the fence
+upon finishing its computational work, allowing the target GPU to wait
+until the resource is ready before reading or displaying it.</p>
+<h3 id="workload-partitioning-strategies">Workload Partitioning
+Strategies</h3>
+<p>Explicit Multi-Adapter enables rendering architectures beyond
+standard alternate frame rendering:</p>
+<ul>
+<li><strong>Split-Frame Rendering (SFR):</strong> Dividing a single
+frame spatially, where each GPU renders a specific horizontal or
+vertical portion of the screen simultaneously.</li>
+<li><strong>Asymmetric Compute Offloading:</strong> Assigning the
+primary discrete card to heavy geometry and rasterization workloads,
+while the secondary or integrated GPU handles asynchronous compute tasks
+such as ambient occlusion, particle physics, audio processing, or user
+interface composition.</li>
+<li><strong>Predictive Pipeline Rendering:</strong> Offloading pre-pass
+data, such as shadow map generation or depth buffers, to a secondary
+adapter one frame ahead of the main render pass.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-12-explicit-multi-adapter-explained';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

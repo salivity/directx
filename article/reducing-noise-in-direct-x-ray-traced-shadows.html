@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reducing Noise in DirectX Ray-Traced Shadows - directx</title>
+    <meta name="description" content="Real-time ray-traced shadows generated via DirectX Raytracing (DXR) often suffer from severe Monte Carlo noise due to strict per-frame ray budget limits. Reservoir-based Spatiotemporal Importance Resampling (ReSTIR) minimizes this noise by recycling shado">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/reducing-noise-in-direct-x-ray-traced-shadows">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Reducing Noise in DirectX Ray-Traced Shadows - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/reducing-noise-in-direct-x-ray-traced-shadows" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Real-time ray-traced shadows generated via DirectX Raytracing (DXR) often suffer from severe Monte Carlo noise due to strict per-frame ray budget limits. Reservoir-based Spatiotemporal Importance Resampling (ReSTIR) minimizes this noise by recycling shado" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="reducing-noise-in-directx-ray-traced-shadows">Reducing Noise in
+DirectX Ray-Traced Shadows</h1>
+<p>Real-time ray-traced shadows generated via DirectX Raytracing (DXR)
+often suffer from severe Monte Carlo noise due to strict per-frame ray
+budget limits. Reservoir-based Spatiotemporal Importance Resampling
+(ReSTIR) minimizes this noise by recycling shadow ray candidates across
+neighboring pixels and previous frames. By combining Resampled
+Importance Sampling (RIS) with lightweight reservoir data structures,
+DXR pipelines can evaluate hundreds of candidate light samples per pixel
+while only tracing one or two actual shadow rays, dramatically reducing
+penumbra noise and convergence time.</p>
+<h3 id="the-challenge-of-low-sample-ray-tracing">The Challenge of
+Low-Sample Ray Tracing</h3>
+<p>In DirectX Raytracing, casting multiple shadow rays per pixel to
+resolve soft shadows from area lights is computationally prohibitive for
+high-frame-rate rendering. Tracing only one or two rays per pixel (1–2
+SPP) yields high-variance, stippled noise in soft shadow penumbras.
+Traditional spatial-only denoisers often blur geometry edges or
+over-smooth contact shadows when attempting to filter this variance.
+ReSTIR addresses this at the sampling stage rather than relying purely
+on post-process filtering.</p>
+<h3
+id="understanding-reservoirs-and-resampled-importance-sampling">Understanding
+Reservoirs and Resampled Importance Sampling</h3>
+<p>A reservoir is a compact, fixed-size data structure that holds:</p>
+<ul>
+<li>A selected light sample (candidate ray direction/target light
+source)</li>
+<li>The sum of weights of all candidate samples considered so far (<span
+class="math inline">\(w_{sum}\)</span>)</li>
+<li>The total count of processed candidates (<span
+class="math inline">\(M\)</span>)</li>
+<li>The final resampling weight (<span
+class="math inline">\(W\)</span>)</li>
+</ul>
+<p>Using Resampled Importance Sampling, an initial candidate ray is
+generated. Instead of committing to tracing all potential samples
+against the scene geometry, candidates are mathematically combined into
+the reservoir using their unshadowed contribution as an importance
+metric. This allows a pixel to effectively evaluate a large distribution
+of samples using minimal memory and processing overhead.</p>
+<h3 id="temporal-reservoir-reuse">Temporal Reservoir Reuse</h3>
+<p>Temporal reuse minimizes noise across successive frames by
+capitalizing on frame-to-frame coherence:</p>
+<ol type="1">
+<li><strong>Reprojection:</strong> Using motion vectors and depth
+buffers generated by the G-buffer pass in DirectX, the engine projects
+the current pixel back to its corresponding location in the previous
+frame.</li>
+<li><strong>History Combination:</strong> The current frame's reservoir
+is combined with the reprojected previous frame's reservoir.</li>
+<li><strong>Weight Normalization:</strong> The combined reservoir merges
+their weights (<span class="math inline">\(w_{sum}\)</span>) and sample
+counts (<span class="math inline">\(M\)</span>). To prevent historical
+samples from dominating dynamic scene changes or disocclusions, <span
+class="math inline">\(M\)</span> is typically clamped to a fixed
+threshold (e.g., 20–30 frames).</li>
+</ol>
+<p>This process compounds the effective sample count over time, turning
+high-frequency temporal flickering in penumbras into a stable,
+converging soft shadow.</p>
+<h3 id="spatial-reservoir-reuse">Spatial Reservoir Reuse</h3>
+<p>Temporal reuse alone cannot resolve noise in newly disoccluded
+regions or fast-moving shadow edges. Spatial reuse solves this by
+sharing reservoirs between neighboring pixels within the same frame:</p>
+<ol type="1">
+<li><strong>Neighbor Gathering:</strong> A compute shader gathers
+reservoirs from randomly chosen pixels within a defined screen-space
+radius.</li>
+<li><strong>Geometric Validation:</strong> To prevent shadow bleeding
+across depth discontinuities, cross-bilateral weights are applied.
+Samples are rejected or down-weighted if the neighbor's world-space
+normal or linear depth diverges significantly from the current
+pixel.</li>
+<li><strong>Stream Merging:</strong> Valid neighbor reservoirs are
+statistically merged into the current pixel's reservoir.</li>
+</ol>
+<p>This step acts as an intelligent, visibility-aware filter in sample
+space rather than color space, rapidly smoothing noise without blurring
+sharp contact shadow edges.</p>
+<h3 id="execution-within-the-directx-pipeline">Execution Within the
+DirectX Pipeline</h3>
+<p>In a modern DirectX 12 rendering engine, spatial and temporal
+reservoir reuse is integrated through structured buffers (UAVs) and
+compute shaders flanking the DXR dispatch:</p>
+<ul>
+<li><strong>Generation Pass:</strong> A DXR ray generation shader or
+compute pass evaluates initial candidate lights and writes them into a
+temporal reservoir buffer.</li>
+<li><strong>Temporal Pass:</strong> A compute shader reads the previous
+frame's reservoir UAV and blends it with the current generation
+output.</li>
+<li><strong>Trace Pass:</strong> A lightweight DXR
+<code>TraceRay()</code> call evaluates visibility only for the single
+best candidate retained in the reservoir.</li>
+<li><strong>Spatial Pass:</strong> One or more compute shader dispatches
+perform spatial gathering across the visibility-tested reservoirs.</li>
+</ul>
+<p>By moving the noise reduction into the sampling and visibility
+selection phase, spatial and temporal reservoir reuse achieves clean,
+physically plausible area light shadows with single-ray budgets in
+modern real-time rendering.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/reducing-noise-in-direct-x-ray-traced-shadows';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

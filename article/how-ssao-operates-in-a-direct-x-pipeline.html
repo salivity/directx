@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How SSAO Operates in a DirectX Pipeline - directx</title>
+    <meta name="description" content="Screen-Space Ambient Occlusion (SSAO) is a popular real-time rendering technique designed to approximate the soft contact shadows that occur when ambient light is blocked by nearby geometry. In a DirectX post-processing pipeline, SSAO operates entirely on">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-ssao-operates-in-a-direct-x-pipeline">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How SSAO Operates in a DirectX Pipeline - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-ssao-operates-in-a-direct-x-pipeline" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Screen-Space Ambient Occlusion (SSAO) is a popular real-time rendering technique designed to approximate the soft contact shadows that occur when ambient light is blocked by nearby geometry. In a DirectX post-processing pipeline, SSAO operates entirely on" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-ssao-operates-in-a-directx-pipeline">How SSAO Operates in a
+DirectX Pipeline</h1>
+<p>Screen-Space Ambient Occlusion (SSAO) is a popular real-time
+rendering technique designed to approximate the soft contact shadows
+that occur when ambient light is blocked by nearby geometry. In a
+DirectX post-processing pipeline, SSAO operates entirely on 2D
+screen-space buffers—primarily the depth buffer and surface normal
+textures—generated during the initial geometry pass. By evaluating depth
+disparities around reconstructed 3D points, a DirectX pixel or compute
+shader calculates an occlusion factor per pixel, filters the resulting
+noise, and multiplies the value into the final rendered image to
+dramatically enhance scene depth.</p>
+<h3 id="1-resource-inputs-and-g-buffer-setup">1. Resource Inputs and
+G-Buffer Setup</h3>
+<p>Before the SSAO pass executes, the DirectX rendering pipeline must
+render the scene's geometry into intermediate render targets (G-buffers)
+or depth-stencil views. The primary inputs bound to the SSAO shader as
+Shader Resource Views (SRVs) are:</p>
+<ul>
+<li><strong>Depth Texture:</strong> Stores the non-linear screen-space
+depth values (<span class="math inline">\(z\)</span>-values) of the
+visible surfaces.</li>
+<li><strong>Normal Buffer:</strong> Contains view-space surface normal
+vectors. If normals are not rendered to a texture, they can
+alternatively be reconstructed from the depth buffer using partial
+derivatives (<code>ddx</code> and <code>ddy</code>) inside the
+shader.</li>
+<li><strong>Noise Texture or Rotation Matrix:</strong> A small
+(typically <span class="math inline">\(4\times4\)</span>) tiling texture
+containing randomized tangent-space rotation vectors used to perturb
+sample directions and prevent visible banding patterns.</li>
+</ul>
+<h3 id="2-view-space-position-reconstruction">2. View-Space Position
+Reconstruction</h3>
+<p>Because the depth buffer stores non-linear depth values in normalized
+device coordinates (NDC), the SSAO shader must first reconstruct the
+surface's 3D position in view space. The shader samples the depth
+texture at the current screen pixel coordinate <span
+class="math inline">\((u, v)\)</span>, converts the coordinate into NDC
+space <span class="math inline">\([-1, 1]\)</span>, and multiplies it by
+the inverse projection matrix:</p>
+<p><span class="math display">\[\text{ViewPosition} =
+\text{Unproject}(\text{UV}, \text{Depth})\]</span></p>
+<p>This view-space coordinate forms the origin for the local occlusion
+queries.</p>
+<h3 id="3-sampling-the-kernel">3. Sampling the Kernel</h3>
+<p>To determine how occluded a surface point is, the shader samples a
+hemisphere oriented along the surface's normal vector.</p>
+<ol type="1">
+<li><strong>Hemisphere Generation:</strong> A set of pre-calculated
+sample points (usually 16 to 64 samples) distributed within a unit
+hemisphere is uploaded to the GPU via a Constant Buffer
+(<code>cbuffer</code>).</li>
+<li><strong>Kernel Alignment:</strong> The shader samples the normal
+buffer to retrieve the surface normal and samples the noise texture to
+retrieve a random rotation vector. Using the Gram-Schmidt process, the
+shader builds an orthonormal basis (tangent, bitangent, normal) to align
+and randomly rotate the sample hemisphere to the surface.</li>
+<li><strong>Position Evaluation:</strong> Each sample offset in the
+kernel is added to the reconstructed view-space position, scaled by an
+artist-defined occlusion radius.</li>
+</ol>
+<h3 id="4-depth-comparison-and-occlusion-accumulation">4. Depth
+Comparison and Occlusion Accumulation</h3>
+<p>For every sample point generated within the hemisphere:</p>
+<ol type="1">
+<li><strong>Projection:</strong> The 3D sample point is projected back
+onto the screen using the camera's projection matrix, yielding a 2D
+texture coordinate <span class="math inline">\((u, v)\)</span> and a
+sample view depth.</li>
+<li><strong>Depth Lookup:</strong> The shader samples the depth buffer
+at these projected coordinates to find the actual surface depth at that
+screen location.</li>
+<li><strong>Occlusion Test:</strong> If the actual geometry depth is
+closer to the camera than the generated sample point's depth, that
+sample is occluded.</li>
+<li><strong>Range Check:</strong> A falloff function based on the
+distance between the origin and the sampled geometry prevents distant
+background geometry from falsely occluding foreground objects (a common
+artifact known as "haloing").</li>
+</ol>
+<p>The occlusion results of all samples are summed and normalized,
+producing a grayscale value where <span
+class="math inline">\(1.0\)</span> represents fully unoccluded areas and
+<span class="math inline">\(0.0\)</span> indicates total occlusion.</p>
+<h3 id="5-edge-preserving-bilateral-blur">5. Edge-Preserving Bilateral
+Blur</h3>
+<p>Because performance constraints limit the hemisphere to a low sample
+count, the raw SSAO output contains high-frequency noise from the
+randomized kernel rotation. To resolve this, the DirectX pipeline passes
+the raw SSAO texture through an edge-preserving bilateral blur shader
+(often implemented via separable horizontal and vertical compute shader
+passes).</p>
+<p>The bilateral blur averages neighboring occlusion values while
+comparing their depths and normals. If the depth or normal difference
+between adjacent pixels exceeds a threshold, the blur weight drops to
+zero. This smooths out noise across flat surfaces while maintaining
+sharp contact shadow edges along geometry silhouettes.</p>
+<h3 id="6-pipeline-integration">6. Pipeline Integration</h3>
+<p>The blurred SSAO texture is finally passed to the scene composition
+stage. In a deferred rendering pipeline, it is bound as an SRV to the
+lighting pass, where the occlusion factor is multiplied directly with
+the ambient and indirect lighting terms. In a forward rendering
+pipeline, it is typically applied as a full-screen multiplicative blend
+pass over the rendered color target before subsequent post-processing
+effects, such as tone mapping, bloom, and color grading, are
+executed.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-ssao-operates-in-a-direct-x-pipeline';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

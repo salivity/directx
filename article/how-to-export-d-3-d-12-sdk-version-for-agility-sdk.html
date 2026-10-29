@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Export D3D12SDKVersion for Agility SDK - directx</title>
+    <meta name="description" content="The Microsoft DirectX 12 Agility SDK allows developers to adopt modern graphics features without requiring end users to update their Windows operating system. Central to this architecture is D3D12SDKVersion, an exported symbol that communicates the requir">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-to-export-d-3-d-12-sdk-version-for-agility-sdk">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Export D3D12SDKVersion for Agility SDK - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-to-export-d-3-d-12-sdk-version-for-agility-sdk" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The Microsoft DirectX 12 Agility SDK allows developers to adopt modern graphics features without requiring end users to update their Windows operating system. Central to this architecture is D3D12SDKVersion, an exported symbol that communicates the requir" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-export-d3d12sdkversion-for-agility-sdk">How to Export
+D3D12SDKVersion for Agility SDK</h1>
+<p>The Microsoft DirectX 12 Agility SDK allows developers to adopt
+modern graphics features without requiring end users to update their
+Windows operating system. Central to this architecture is
+<code>D3D12SDKVersion</code>, an exported symbol that communicates the
+required SDK release number to the Windows DirectX runtime. This article
+explains what <code>D3D12SDKVersion</code> is, how the DirectX runtime
+detects it, and how to properly declare and export it alongside
+<code>D3D12SDKPath</code> in C/C++ game code.</p>
+<h3 id="understanding-d3d12sdkversion">Understanding
+D3D12SDKVersion</h3>
+<p>Historically, new DirectX 12 features were tied directly to specific
+Windows OS updates through the system-provided <code>d3d12.dll</code>.
+The Agility SDK decouples the D3D12 runtime from the OS by distributing
+updated runtimes (<code>D3D12Core.dll</code>) directly alongside the
+game executable.</p>
+<p><code>D3D12SDKVersion</code> is an unsigned integer variable exported
+by the game's primary executable (<code>.exe</code>). When the game
+calls <code>D3D12CreateDevice</code>, the OS-level loader inspects the
+executable's export table. If <code>D3D12SDKVersion</code> is present,
+the runtime compares this value against the inbox system runtime. If the
+requested version is newer than the inbox version and supported by the
+platform, the operating system redirects D3D12 API calls to the local
+Agility SDK runtime binaries distributed with the application.</p>
+<h3 id="exporting-d3d12sdkversion-in-game-code">Exporting
+D3D12SDKVersion in Game Code</h3>
+<p>To enable the Agility SDK, you must export two variables from your
+main executable: <code>D3D12SDKVersion</code> and
+<code>D3D12SDKPath</code>.</p>
+<p>Both variables must be exported with C-linkage to prevent C++ name
+mangling, ensuring the loader can locate them by their exact symbol
+names.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#include </span><span class="im">&lt;windows.h&gt;</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#include </span><span class="im">&lt;d3d12.h&gt;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Export the Agility SDK version and relative path to the runtime binaries</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="at">extern</span> <span class="st">&quot;C&quot;</span> <span class="op">{</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="ex">__declspec(dllexport) extern const UINT D3D12SDKVersion = 614; // Example SDK version</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="ex">__declspec(dllexport) extern const char* D3D12SDKPath = &quot;.\\D3D12\\&quot;;</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="best-practices-for-implementation">Best Practices for
+Implementation</h3>
+<ul>
+<li><p><strong>Use Header Constants:</strong> Rather than hardcoding the
+version integer, use the <code>D3D12_SDK_VERSION</code> macro defined in
+the <code>d3d12.h</code> header provided by your installed Agility SDK
+NuGet package:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="at">extern</span> <span class="st">&quot;C&quot;</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="ex">__declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="ex">__declspec(dllexport) extern const char* D3D12SDKPath = &quot;.\\D3D12\\&quot;;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Executable Scope:</strong> These symbols must be exported
+from the main executable process (<code>.exe</code>), not from dynamic
+libraries (<code>.dll</code>). If your rendering engine is packaged as a
+DLL, the hosting <code>.exe</code> must still define and export these
+variables.</p></li>
+<li><p><strong>Path Resolution:</strong> The <code>D3D12SDKPath</code>
+specifies the folder relative to the executable containing the
+architecture-specific <code>D3D12Core.dll</code> and other SDK
+components. Ensure your build pipeline copies the correct binaries
+(e.g., <code>x64</code> or <code>ARM64</code>) to this designated
+directory.</p></li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-to-export-d-3-d-12-sdk-version-for-agility-sdk';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

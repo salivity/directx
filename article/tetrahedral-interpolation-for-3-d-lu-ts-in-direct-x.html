@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetrahedral Interpolation for 3D LUTs in DirectX - directx</title>
+    <meta name="description" content="Tetrahedral interpolation significantly enhances color accuracy when sampling 3D Lookup Tables (LUTs) in DirectX by eliminating the geometric distortion and hue shifting inherent to hardware-native trilinear filtering. While standard DirectX texture units">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/tetrahedral-interpolation-for-3-d-lu-ts-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Tetrahedral Interpolation for 3D LUTs in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/tetrahedral-interpolation-for-3-d-lu-ts-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Tetrahedral interpolation significantly enhances color accuracy when sampling 3D Lookup Tables (LUTs) in DirectX by eliminating the geometric distortion and hue shifting inherent to hardware-native trilinear filtering. While standard DirectX texture units" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="tetrahedral-interpolation-for-3d-luts-in-directx">Tetrahedral
+Interpolation for 3D LUTs in DirectX</h1>
+<p>Tetrahedral interpolation significantly enhances color accuracy when
+sampling 3D Lookup Tables (LUTs) in DirectX by eliminating the geometric
+distortion and hue shifting inherent to hardware-native trilinear
+filtering. While standard DirectX texture units natively accelerate
+trilinear interpolation, this cubic approach struggles with steep color
+transforms and can degrade saturation along the neutral axis.
+Tetrahedral interpolation divides each cubic cell of a 3D LUT into six
+non-overlapping tetrahedra sharing the main diagonal, ensuring smoother
+gradients, superior chromatic fidelity, and precise neutral tones
+without requiring higher-resolution LUT textures.</p>
+<h3 id="the-limitations-of-trilinear-interpolation">The Limitations of
+Trilinear Interpolation</h3>
+<p>In DirectX, standard 3D texture sampling utilizes trilinear
+interpolation executed directly on GPU texture units. When resolving an
+input RGB coordinate, the hardware samples the eight surrounding lattice
+points of a cube, performing linear blends along the X, Y, and Z axes
+sequentially.</p>
+<p>This cubic approach assumes linear relationships across all axes
+simultaneously. However, color spaces—especially non-linear transforms
+like film emulations, tone mappers, and high-contrast color
+grades—rarely follow orthogonal boundaries. Trilinear interpolation
+introduces non-linear cross-terms (<span class="math inline">\(r \times
+g \times b\)</span>), which cause the following artifacts:</p>
+<ul>
+<li><strong>Desaturation in Saturated Transitions:</strong> Midpoints
+inside the sampled cube can become artificially darker or
+desaturated.</li>
+<li><strong>Hue Drifts:</strong> High-contrast color transformations
+often shift hue unexpectedly because the interpolation path deviates
+from the actual transform manifold.</li>
+<li><strong>Neutral Axis Degradation:</strong> Pure grays (<span
+class="math inline">\(R=G=B\)</span>) can drift into unwanted color
+casts if the LUT contains aggressive color grading nearby.</li>
+</ul>
+<h3 id="mechanics-of-tetrahedral-interpolation">Mechanics of Tetrahedral
+Interpolation</h3>
+<p>Tetrahedral interpolation approaches the same discrete cubic lattice
+differently. Instead of evaluating all eight vertices, it subdivides the
+cube into six tetrahedra (simplices) that all share the central diagonal
+running from <span class="math inline">\((0,0,0)\)</span> to <span
+class="math inline">\((1,1,1)\)</span>—the achromatic or neutral
+axis.</p>
+<p>The process functions through three main steps:</p>
+<ol type="1">
+<li><strong>Cell and Fractional Coordinate Calculation:</strong> The
+incoming floating-point RGB coordinate is mapped into the discrete grid
+of the LUT, yielding the base integer coordinate and the fractional
+offsets <span class="math inline">\((\Delta r, \Delta g, \Delta b) \in
+[0, 1)\)</span>.</li>
+<li><strong>Tetrahedron Identification:</strong> The algorithm compares
+the magnitudes of the fractional values to determine which of the six
+tetrahedra contains the sample point:
+<ul>
+<li><span class="math inline">\(\Delta r \ge \Delta g \ge \Delta
+b\)</span></li>
+<li><span class="math inline">\(\Delta r \ge \Delta b &gt; \Delta
+g\)</span></li>
+<li><span class="math inline">\(\Delta g \ge \Delta r \ge \Delta
+b\)</span></li>
+<li><span class="math inline">\(\Delta g \ge \Delta b &gt; \Delta
+r\)</span></li>
+<li><span class="math inline">\(\Delta b \ge \Delta r \ge \Delta
+g\)</span></li>
+<li><span class="math inline">\(\Delta b \ge \Delta g &gt; \Delta
+r\)</span></li>
+</ul></li>
+<li><strong>Barycentric Interpolation:</strong> Once the specific
+tetrahedron is identified, the color is computed as a weighted sum of
+only four vertices (the simplex) rather than eight. The weights
+correspond directly to the sorted fractional values.</li>
+</ol>
+<h3 id="why-tetrahedral-sampling-improves-color-fidelity">Why
+Tetrahedral Sampling Improves Color Fidelity</h3>
+<h4 id="preservation-of-the-neutral-axis">Preservation of the Neutral
+Axis</h4>
+<p>Because every one of the six tetrahedra shares the main diagonal of
+the cube, the path between black, gray, and white remains continuous and
+piecewise linear. Grayscale inputs are strictly interpolated using
+vertices that lie on or directly adjacent to the neutral line,
+preventing ambient color leakage into pure grays.</p>
+<h4 id="elimination-of-non-linear-cross-talk">Elimination of Non-Linear
+Cross-Talk</h4>
+<p>Trilinear interpolation generates polynomial terms that bow the
+interpolated color outward or inward relative to the true color surface.
+Tetrahedral interpolation uses true barycentric coordinates, creating
+flat, planar triangular transitions between points. This avoids
+artificial shifts in hue and preserves the original volume and
+saturation of the color transform.</p>
+<h4 id="reduced-mach-banding-on-small-luts">Reduced Mach Banding on
+Small LUTs</h4>
+<p>Production pipelines frequently use <span
+class="math inline">\(32\times32\times32\)</span> or <span
+class="math inline">\(64\times64\times64\)</span> 3D LUTs to minimize
+VRAM usage. At these sizes, steep color shifts processed via trilinear
+filtering produce visible contouring (Mach banding). Tetrahedral
+filtering produces significantly smoother visual gradients across color
+boundaries, effectively delivering the visual fidelity of a much denser
+LUT without the associated memory overhead.</p>
+<h3 id="implementation-in-directx-and-hlsl">Implementation in DirectX
+and HLSL</h3>
+<p>DirectX hardware samplers do not possess native fixed-function
+support for tetrahedral interpolation. As a result, it must be
+implemented directly in High-Level Shader Language (HLSL) via pixel or
+compute shaders using manual point fetches
+(<code>Texture3D.Load</code>).</p>
+<pre class="hlsl"><code>float3 SampleLUT_Tetrahedral(Texture3D&lt;float4&gt; lut, float3 uvw, int lutSize)
+{
+    float3 coord = uvw * (lutSize - 1.0f);
+    int3 baseIndex = int3(floor(coord));
+    float3 f = frac(coord);
+
+    // Fetch the common bounds
+    float3 c000 = lut.Load(int4(baseIndex, 0)).rgb;
+    float3 c111 = lut.Load(int4(baseIndex + int3(1, 1, 1), 0)).rgb;
+
+    float3 color;
+
+    if (f.r &gt;= f.g &amp;&amp; f.g &gt;= f.b)
+    {
+        float3 c100 = lut.Load(int4(baseIndex + int3(1, 0, 0), 0)).rgb;
+        float3 c110 = lut.Load(int4(baseIndex + int3(1, 1, 0), 0)).rgb;
+        color = (1.0f - f.r) * c000 + (f.r - f.g) * c100 + (f.g - f.b) * c110 + f.b * c111;
+    }
+    else if (f.r &gt;= f.b &amp;&amp; f.b &gt; f.g)
+    {
+        float3 c100 = lut.Load(int4(baseIndex + int3(1, 0, 0), 0)).rgb;
+        float3 c101 = lut.Load(int4(baseIndex + int3(1, 0, 1), 0)).rgb;
+        color = (1.0f - f.r) * c000 + (f.r - f.b) * c100 + (f.b - f.g) * c101 + f.g * c111;
+    }
+    else if (f.g &gt;= f.r &amp;&amp; f.r &gt;= f.b)
+    {
+        float3 c010 = lut.Load(int4(baseIndex + int3(0, 1, 0), 0)).rgb;
+        float3 c110 = lut.Load(int4(baseIndex + int3(1, 1, 0), 0)).rgb;
+        color = (1.0f - f.g) * c000 + (f.g - f.r) * c010 + (f.r - f.b) * c110 + f.b * c111;
+    }
+    else if (f.g &gt;= f.b &amp;&amp; f.b &gt; f.r)
+    {
+        float3 c010 = lut.Load(int4(baseIndex + int3(0, 1, 0), 0)).rgb;
+        float3 c011 = lut.Load(int4(baseIndex + int3(0, 1, 1), 0)).rgb;
+        color = (1.0f - f.g) * c000 + (f.g - f.b) * c010 + (f.b - f.r) * c011 + f.r * c111;
+    }
+    else if (f.b &gt;= f.r &amp;&amp; f.r &gt;= f.g)
+    {
+        float3 c001 = lut.Load(int4(baseIndex + int3(0, 0, 1), 0)).rgb;
+        float3 c101 = lut.Load(int4(baseIndex + int3(1, 0, 1), 0)).rgb;
+        color = (1.0f - f.b) * c000 + (f.b - f.r) * c001 + (f.r - f.g) * c101 + f.g * c111;
+    }
+    else // f.b &gt;= f.g &amp;&amp; f.g &gt; f.r
+    {
+        float3 c001 = lut.Load(int4(baseIndex + int3(0, 0, 1), 0)).rgb;
+        float3 c011 = lut.Load(int4(baseIndex + int3(0, 1, 1), 0)).rgb;
+        color = (1.0f - f.b) * c000 + (f.b - f.g) * c001 + (f.g - f.r) * c011 + f.r * c111;
+    }
+
+    return color;
+}</code></pre>
+<p>Although this shader code incurs higher ALU cost and branch
+divergence compared to a single hardware <code>Sample()</code> call, it
+fetches only 4 texture nodes instead of the 8 required for a complete
+manual trilinear blend. In color-critical post-processing pipelines—such
+as HDR tonemapping, broadcast mastering, and visual effects grading—the
+trade-off reliably ensures reference-grade color precision.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/tetrahedral-interpolation-for-3-d-lu-ts-in-direct-x';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DXGI_SWAP_EFFECT_DISCARD vs FLIP_DISCARD Explained - directx</title>
+    <meta name="description" content="In DirectX Graphics Infrastructure (DXGI), DXGISWAPEFFECTDISCARD and DXGISWAPEFFECTFLIPDISCARD determine how back-buffer presentation is handled by the graphics subsystem. While both options instruct the runtime to discard the contents of the back buffer">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dxgi-swap-effect-discard-vs-flip-discard-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DXGI_SWAP_EFFECT_DISCARD vs FLIP_DISCARD Explained - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dxgi-swap-effect-discard-vs-flip-discard-explained" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX Graphics Infrastructure (DXGI), DXGISWAPEFFECTDISCARD and DXGISWAPEFFECTFLIPDISCARD determine how back-buffer presentation is handled by the graphics subsystem. While both options instruct the runtime to discard the contents of the back buffer" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="dxgi_swap_effect_discard-vs-flip_discard-explained">DXGI_SWAP_EFFECT_DISCARD
+vs FLIP_DISCARD Explained</h1>
+<p>In DirectX Graphics Infrastructure (DXGI),
+<code>DXGI_SWAP_EFFECT_DISCARD</code> and
+<code>DXGI_SWAP_EFFECT_FLIP_DISCARD</code> determine how back-buffer
+presentation is handled by the graphics subsystem. While both options
+instruct the runtime to discard the contents of the back buffer after
+presenting a frame, they use fundamentally different presentation models
+under the hood. <code>DXGI_SWAP_EFFECT_DISCARD</code> relies on the
+legacy bit-block transfer (BitBlt) model that copies buffer data,
+whereas <code>DXGI_SWAP_EFFECT_FLIP_DISCARD</code> utilizes the modern
+flip model, swapping surface pointers directly with the Desktop Window
+Manager (DWM) to significantly reduce latency, lower memory overhead,
+and support modern display features.</p>
+<h3 id="presentation-mechanism">Presentation Mechanism</h3>
+<p>The core technical difference lies in how image data transitions from
+the rendering pipeline to the display:</p>
+<ul>
+<li><strong>DXGI_SWAP_EFFECT_DISCARD (BitBlt Model):</strong> The
+runtime copies pixel data from the back buffer to the front buffer (or
+redirection surface managed by the DWM in windowed mode). Because the
+pixels must be physically copied across memory surfaces, it introduces
+redundant memory bandwidth consumption and rendering latency.</li>
+<li><strong>DXGI_SWAP_EFFECT_FLIP_DISCARD (Flip Model):</strong> Instead
+of copying pixel data, the application shares its back-buffer surfaces
+directly with the DWM. Presenting a frame simply switches the internal
+pointer to the newly rendered buffer. Once the DWM finishes displaying
+the buffer, it is returned to the application to be reused, eliminating
+unnecessary copy operations.</li>
+</ul>
+<h3 id="performance-and-latency">Performance and Latency</h3>
+<p><code>DXGI_SWAP_EFFECT_FLIP_DISCARD</code> provides substantial
+performance gains over the legacy discard effect. In windowed and
+borderless full-screen modes, the flip model bypasses the extra DWM
+redirection copy step via a mechanism known as "Independent Flip" (or
+True Immediate Independent Flip). This allows windowed applications to
+achieve performance and input latency parity with traditional exclusive
+full-screen mode without locking out the operating system's desktop
+composition.</p>
+<h3 id="hardware-and-modern-feature-support">Hardware and Modern Feature
+Support</h3>
+<p>The flip model is required to access contemporary graphics
+innovations:</p>
+<ul>
+<li><strong>Variable Refresh Rate (VRR):</strong> Features like G-SYNC,
+FreeSync, and screen tearing toggles (using
+<code>DXGI_PRESENT_ALLOW_TEARING</code>) in windowed applications
+require flip-model swap chains.</li>
+<li><strong>HDR (High Dynamic Range):</strong> Outputting
+wide-color-gamut and high-dynamic-range content properly requires DXGI
+flip presentation paths.</li>
+<li><strong>DirectX Version Support:</strong> DirectX 12 strictly
+enforces the use of modern flip swap effects;
+<code>DXGI_SWAP_EFFECT_DISCARD</code> is invalid in DX12. DirectX 11
+applications can use either, but Microsoft strongly recommends
+transitioning to the flip model.</li>
+</ul>
+<h3 id="buffer-requirements-and-compatibility">Buffer Requirements and
+Compatibility</h3>
+<p>Implementing these two models requires slightly different swap chain
+configurations:</p>
+<ul>
+<li><strong>Buffer Count:</strong> <code>DXGI_SWAP_EFFECT_DISCARD</code>
+functions with a single back buffer (a total of one back buffer plus the
+front buffer). In contrast, <code>DXGI_SWAP_EFFECT_FLIP_DISCARD</code>
+requires at least two back buffers (<code>BufferCount</code> set to 2 or
+greater) because the presentation engine holds onto one buffer while
+displaying it, requiring an additional buffer for concurrent
+rendering.</li>
+<li><strong>Operating System Support:</strong>
+<code>DXGI_SWAP_EFFECT_DISCARD</code> is universally compatible with
+legacy platforms down to Windows Vista and Windows 7.
+<code>DXGI_SWAP_EFFECT_FLIP_DISCARD</code> was introduced in DXGI 1.4
+and requires Windows 10 or later (or Windows 8.1 using
+<code>DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL</code>).</li>
+</ul>
+<p>Unless targeting legacy Windows platforms before Windows 10,
+developers should always choose
+<code>DXGI_SWAP_EFFECT_FLIP_DISCARD</code> for optimal frame pacing,
+lower latency, and compatibility with modern display hardware.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/dxgi-swap-effect-discard-vs-flip-discard-explained';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

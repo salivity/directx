@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DX12 Sampler Feedback: Streaming Texture Tiles - directx</title>
+    <meta name="description" content="DirectX 12 utilizes a hardware-accelerated feature called Sampler Feedback to eliminate guesswork in texture streaming by tracking exact texel and mipmap access in real time. Instead of relying on crude CPU-side distance heuristics, the GPU records the pr">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dx-12-sampler-feedback-streaming-texture-tiles">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DX12 Sampler Feedback: Streaming Texture Tiles - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dx-12-sampler-feedback-streaming-texture-tiles" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 utilizes a hardware-accelerated feature called Sampler Feedback to eliminate guesswork in texture streaming by tracking exact texel and mipmap access in real time. Instead of relying on crude CPU-side distance heuristics, the GPU records the pr" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="dx12-sampler-feedback-streaming-texture-tiles">DX12 Sampler
+Feedback: Streaming Texture Tiles</h1>
+<p>DirectX 12 utilizes a hardware-accelerated feature called Sampler
+Feedback to eliminate guesswork in texture streaming by tracking exact
+texel and mipmap access in real time. Instead of relying on crude
+CPU-side distance heuristics, the GPU records the precise sub-regions
+(tiles) and mip levels sampled during rendering into a specialized
+resource known as a feedback map. The asset streaming engine
+subsequently reads this map, identifies non-resident or missing tiles,
+and orchestrates asynchronous I/O operations to load and bind only the
+strictly required data to reserved (tiled) resources.</p>
+<h3 id="the-underlying-problem-tiled-resources">The Underlying Problem:
+Tiled Resources</h3>
+<p>DirectX 12 implements virtual texturing using Tiled Resources
+(Reserved Resources). In this paradigm, large textures are partitioned
+into uniform, 64KB tiles of memory. Rather than loading an entire 4K or
+8K texture into VRAM, the engine creates a virtual address space for the
+texture and only maps physical memory pages to the tiles currently
+visible to the camera. Traditionally, deciding which tiles to map relied
+on CPU-side screen-space projections and bounding box calculations,
+which frequently led to either over-streaming (wasting VRAM and
+bandwidth) or under-streaming (causing visible pop-in).</p>
+<h3 id="how-the-gpu-generates-the-feedback-map">How the GPU Generates
+the Feedback Map</h3>
+<p>Sampler Feedback solves this by offloading tracking directly to the
+GPU rasterization pipeline.</p>
+<ol type="1">
+<li><strong>Resource Pairing</strong>: A feedback map is allocated as a
+paired resource to a target texture. It uses a lower spatial resolution
+than the texture it tracks, determined by an engine-defined downsampling
+factor (the mip region dimension).</li>
+<li><strong>Shader Sampling</strong>: During the pixel or compute shader
+pass, shaders use dedicated HLSL intrinsics—such as
+<code>WriteSamplerFeedback</code> or
+<code>WriteSamplerFeedbackLevel</code>—instead of standard sampling
+functions.</li>
+<li><strong>Hardware Logging</strong>: As the GPU evaluates texture
+filtering (like anisotropic or trilinear), the hardware automatically
+computes the required level of detail (LOD). Instead of discarding this
+LOD metric after filtering, the GPU writes the highest-detail mip level
+accessed for that region directly into the corresponding entry of the
+feedback map.</li>
+</ol>
+<p>Feedback maps are typically configured as "MinMip" maps. In this
+configuration, each entry stores the minimum mip level index (where 0 is
+the highest detail) accessed across all draws during that frame or
+pass.</p>
+<h3 id="reading-and-interpreting-the-map">Reading and Interpreting the
+Map</h3>
+<p>Once the rendering pass finishes, the feedback map contains an exact
+footprint of all visible texture data:</p>
+<ol type="1">
+<li><strong>Resolution and Readback</strong>: The engine transitions the
+feedback map and resolves its internal, GPU-vendor-specific layout into
+a standardized layout using the
+<code>ID3D12GraphicsCommandList1::ResolveSubresourceRegion</code>
+API.</li>
+<li><strong>Analysis</strong>: The resolved feedback data can either be
+read back to the CPU via a readback heap or processed entirely on the
+GPU via compute shaders. The engine inspects each entry, translating the
+stored mip level index back to the underlying 64KB tile grid.</li>
+</ol>
+<h3 id="driving-the-asset-streaming-engine">Driving the Asset Streaming
+Engine</h3>
+<p>The streaming engine compares the feedback map’s requests against its
+current internal residency database:</p>
+<ul>
+<li><strong>Delta Calculation</strong>: The engine checks the requested
+tiles against the physical pages currently mapped to the virtual
+texture. If a feedback entry requests mip 1, but only mip 3 is resident,
+the missing intermediate tiles are flagged as load candidates.</li>
+<li><strong>Prioritization and I/O</strong>: The engine prioritizes the
+flagged tiles based on visual impact (e.g., proximity to camera, screen
+area coverage) and issues asynchronous file read requests, commonly
+through DirectStorage.</li>
+<li><strong>Updating Tile Mappings</strong>: As the raw 64KB blocks
+stream from disk into memory heaps, the engine issues
+<code>ID3D12CommandQueue::UpdateTileMappings</code>. This call maps the
+newly allocated physical pages to the virtual coordinate space of the
+tiled resource, seamlessly bringing the higher-detail mips into
+residency for the next frame.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/dx-12-sampler-feedback-streaming-texture-tiles';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

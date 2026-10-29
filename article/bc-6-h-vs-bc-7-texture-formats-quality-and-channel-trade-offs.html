@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BC6H vs BC7 Texture Formats: Quality and Channel Trade-offs - directx</title>
+    <meta name="description" content="DirectX Block Compression formats BC6H and BC7 both compress textures to a memory footprint of 8 bits per pixel (16 bytes per 4x4 block), but they target fundamentally different data types. BC6H is built specifically for High Dynamic Range (HDR) content s">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/bc-6-h-vs-bc-7-texture-formats-quality-and-channel-trade-offs">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="BC6H vs BC7 Texture Formats: Quality and Channel Trade-offs - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/bc-6-h-vs-bc-7-texture-formats-quality-and-channel-trade-offs" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX Block Compression formats BC6H and BC7 both compress textures to a memory footprint of 8 bits per pixel (16 bytes per 4x4 block), but they target fundamentally different data types. BC6H is built specifically for High Dynamic Range (HDR) content s" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="bc6h-vs-bc7-texture-formats-quality-and-channel-trade-offs">BC6H
+vs BC7 Texture Formats: Quality and Channel Trade-offs</h1>
+<p>DirectX Block Compression formats BC6H and BC7 both compress textures
+to a memory footprint of 8 bits per pixel (16 bytes per 4x4 block), but
+they target fundamentally different data types. BC6H is built
+specifically for High Dynamic Range (HDR) content supporting 16-bit
+floating-point color channels without alpha support. In contrast, BC7 is
+designed for high-fidelity Standard Dynamic Range (SDR) 8-bit color
+channels with optional, high-precision alpha support. Choosing between
+them depends strictly on whether your pipeline prioritizes dynamic range
+or alpha channel integration.</p>
+<h3 id="channel-support-and-data-formats">Channel Support and Data
+Formats</h3>
+<p>The primary functional divergence between BC6H and BC7 lies in
+channel capability:</p>
+<ul>
+<li><strong>BC6H (RGB only):</strong> BC6H supports only three channels:
+Red, Green, and Blue. It does not support an alpha channel. The format
+operates on 16-bit floating-point (FP16/half-float) values per channel.
+It is exposed in DirectX through two variants:
+<code>DXGI_FORMAT_BC6H_UF16</code> (unsigned, values <span
+class="math inline">\(\ge 0.0\)</span>) and
+<code>DXGI_FORMAT_BC6H_SF16</code> (signed, allowing negative color
+values).</li>
+<li><strong>BC7 (RGB or RGBA):</strong> BC7 supports either RGB or RGBA
+configurations with up to 8 bits of precision per channel. It operates
+on 8-bit unsigned normalized integers
+(<code>DXGI_FORMAT_BC7_UNORM</code> and
+<code>DXGI_FORMAT_BC7_UNORM_SRGB</code>). BC7 provides multiple internal
+modes that balance bit allocation between RGB color and alpha, enabling
+dedicated alpha precision or combined color-alpha interpolation.</li>
+</ul>
+<p>If an asset requires an alpha channel, BC6H cannot be used directly.
+Packing an alpha channel alongside BC6H data requires splitting the
+texture into a separate monochrome texture or utilizing a secondary
+compressed format.</p>
+<h3 id="dynamic-range-and-precision-trade-offs">Dynamic Range and
+Precision Trade-offs</h3>
+<p>Dynamic range dictates the visual fidelity of these two formats:</p>
+<ul>
+<li><strong>BC6H for HDR:</strong> BC6H preserves values significantly
+higher than <span class="math inline">\(1.0\)</span>, which is essential
+for physically based rendering. It captures extreme contrast ratios
+without clamping, preventing color banding and clipping in bright
+highlights. However, compressing wide floating-point ranges into 16-byte
+blocks can introduce luminance error or color shifting if adjacent
+texels in a 4x4 block have drastically different magnitudes.</li>
+<li><strong>BC7 for SDR:</strong> BC7 strictly clamps data to the range
+of <span class="math inline">\([0.0, 1.0]\)</span>. It cannot represent
+values above standard white. Within that SDR range, however, BC7
+allocates bits efficiently using up to three color partitions per block
+and dual-plane modes (allowing color and alpha to be interpolated
+independently). This results in virtually artifact-free reproduction of
+standard 8-bit textures, drastically outperforming legacy formats like
+BC1 and BC3.</li>
+</ul>
+<h3 id="compression-quality-and-artifact-profile">Compression Quality
+and Artifact Profile</h3>
+<p>Because both formats use identical storage ratios (1 byte per pixel),
+their compression artifacts manifest differently based on data
+complexity:</p>
+<ul>
+<li><strong>BC6H Artifacts:</strong> Quantization noise in BC6H
+typically appears as hue shifting or blocky luminance gradients in
+regions with extreme dynamic range variations, such as a sharp
+transition from a dark shadow to a high-intensity light source. Because
+endpoints are stored in floating-point space, subtle low-light details
+can sometimes lose precision if a high-intensity texel shares the same
+4x4 block.</li>
+<li><strong>BC7 Artifacts:</strong> BC7 artifacts typically appear as
+mild block edge boundaries or minor color bleeding in dense, noisy
+textures. However, because BC7 features eight distinct encoding modes,
+the compressor can dynamically pick the best mode per block—such as
+reserving extra bits for smooth alpha gradients or optimizing for
+complex color variation across partition boundaries.</li>
+</ul>
+<h3 id="summary-of-use-cases">Summary of Use Cases</h3>
+<ul>
+<li><strong>Use BC6H for:</strong> Environment skyboxes, HDR lightmaps,
+radiance cubemaps, emissive textures that require bloom intensities
+exceeding 1.0, and any floating-point mathematical data lacking
+alpha.</li>
+<li><strong>Use BC7 for:</strong> Albedo/diffuse maps with or without
+transparency, packed PBR material maps (roughness, metalness, ambient
+occlusion), UI textures, and standard SDR normal maps where quality
+surpasses BC5.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/bc-6-h-vs-bc-7-texture-formats-quality-and-channel-trade-offs';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

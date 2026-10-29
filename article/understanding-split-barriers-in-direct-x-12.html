@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding Split Barriers in DirectX 12 - directx</title>
+    <meta name="description" content="In DirectX 12, split barriers optimize GPU synchronization by dividing a standard resource state transition into two distinct phases: a beginning and an end. Instead of halting execution while waiting for memory caches to flush and pipeline stages to clea">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/understanding-split-barriers-in-direct-x-12">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Understanding Split Barriers in DirectX 12 - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/understanding-split-barriers-in-direct-x-12" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, split barriers optimize GPU synchronization by dividing a standard resource state transition into two distinct phases: a beginning and an end. Instead of halting execution while waiting for memory caches to flush and pipeline stages to clea" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="understanding-split-barriers-in-directx-12">Understanding Split
+Barriers in DirectX 12</h1>
+<p>In DirectX 12, split barriers optimize GPU synchronization by
+dividing a standard resource state transition into two distinct phases:
+a beginning and an end. Instead of halting execution while waiting for
+memory caches to flush and pipeline stages to clear, split barriers
+allow the GPU to overlap unrelated workloads with the transition
+overhead. This article explains the mechanism behind split barriers, why
+they eliminate costly GPU pipeline bubbles, and how to effectively
+utilize them in graphics engine architectures.</p>
+<h2 id="the-cost-of-traditional-barriers">The Cost of Traditional
+Barriers</h2>
+<p>To understand split barriers, consider the standard resource barrier
+in DirectX 12. A typical transition barrier
+(<code>D3D12_RESOURCE_BARRIER_TYPE_TRANSITION</code>) acts as a blocking
+operation:</p>
+<ol type="1">
+<li>The GPU finishes writing to a resource (e.g., a render target).</li>
+<li>The pipeline stalls while caches are flushed, memory is
+synchronized, and compression states (such as depth or render target
+compression) are resolved.</li>
+<li>Subsequent operations that read the resource (e.g., a shader
+resource view in a compute or pixel shader) wait until the entire
+transition completes.</li>
+</ol>
+<p>This sequence frequently generates "pipeline bubbles"—periods where
+GPU compute units sit idle waiting for memory synchronization tasks to
+finalize.</p>
+<h2 id="how-split-barriers-work">How Split Barriers Work</h2>
+<p>A split barrier breaks the transition process into two explicit API
+calls using flags:</p>
+<ul>
+<li><strong><code>D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY</code></strong>:
+Signals to the GPU driver that the resource is done being modified in
+its source state and that any necessary background processing (such as
+decompression or cache flushing) can commence.</li>
+<li><strong><code>D3D12_RESOURCE_BARRIER_FLAG_END_ONLY</code></strong>:
+Placed immediately before the resource is read by a dependent operation,
+signaling that the resource must now be fully transitioned to the target
+state.</li>
+</ul>
+<p>Between the begin and end calls, the application can issue
+independent draw calls, compute dispatches, or state changes that do not
+rely on the transitioning resource.</p>
+<pre class="text"><code>Traditional Barrier:
+[Work A] -&gt; [Stall: Flush &amp; Transition] -&gt; [Work B (depends on A)]
+
+Split Barrier:
+[Work A] 
+-&gt; [Barrier BEGIN] 
+-&gt; [Independent Work C] (GPU flushes &amp; transitions A in parallel) 
+-&gt; [Barrier END] 
+-&gt; [Work B (depends on A)]</code></pre>
+<h2 id="primary-purposes-and-benefits">Primary Purposes and
+Benefits</h2>
+<h3 id="1-latency-hiding">1. Latency Hiding</h3>
+<p>The fundamental purpose of a split barrier is latency hiding. Heavy
+state transitions—such as converting an MSAA render target or a
+high-resolution depth buffer into a shader-readable texture—involve
+hardware-level decompression algorithms and significant cache eviction.
+By placing the "begin" barrier immediately after the writing pass and
+delaying the "end" barrier until right before the reading pass, this
+latency runs concurrently with other rendering tasks.</p>
+<h3 id="2-eliminating-execution-bubbles">2. Eliminating Execution
+Bubbles</h3>
+<p>Modern GPUs achieve high performance through massive parallelism.
+When a command processor encounters a monolithic barrier, it must drain
+execution pipes before proceeding. Split barriers provide the driver
+with a broader execution window, allowing it to schedule wave launches
+and memory transactions more fluidly, keeping arithmetic logic units
+(ALUs) saturated.</p>
+<h3 id="3-asynchronous-cache-management">3. Asynchronous Cache
+Management</h3>
+<p>Hardware vendors implement cache management differently. Split
+barriers give the GPU hardware scheduler maximum flexibility to perform
+partial or opportunistic cache invalidation across multiple clock
+cycles, rather than forcing an abrupt, full-system pipeline flush.</p>
+<h2 id="best-practices-for-using-split-barriers">Best Practices for
+Using Split Barriers</h2>
+<ul>
+<li><strong>Maximize the Distance</strong>: A split barrier provides no
+performance benefit if the <code>BEGIN_ONLY</code> and
+<code>END_ONLY</code> flags are submitted back-to-back. Space them out
+by inserting independent rendering passes between them.</li>
+<li><strong>Target Expensive Transitions</strong>: Use split barriers
+primarily for operations that trigger decompression or heavy cache
+manipulation, such as transitioning depth buffers
+(<code>D3D12_RESOURCE_STATE_DEPTH_WRITE</code> to
+<code>D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE</code>) or render
+targets to copy sources.</li>
+<li><strong>Avoid Over-Splitting Lightweight States</strong>:
+Transitioning buffers between states that only require minor flag
+adjustments or simple cache invalidations (like constant buffers or
+uniform read states) rarely benefits from split barriers and may
+introduce unnecessary driver overhead.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/understanding-split-barriers-in-direct-x-12';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

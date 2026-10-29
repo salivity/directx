@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GroupMemoryBarrierWithGroupSync Performance Overhead - directx</title>
+    <meta name="description" content="In DirectX High-Level Shader Language (HLSL), GroupMemoryBarrierWithGroupSync coordinates execution and data integrity across all threads within a thread group. While indispensable for algorithms that rely on groupshared memory, this intrinsic introduces">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/group-memory-barrier-with-group-sync-performance-overhead">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="GroupMemoryBarrierWithGroupSync Performance Overhead - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/group-memory-barrier-with-group-sync-performance-overhead" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX High-Level Shader Language (HLSL), GroupMemoryBarrierWithGroupSync coordinates execution and data integrity across all threads within a thread group. While indispensable for algorithms that rely on groupshared memory, this intrinsic introduces" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="groupmemorybarrierwithgroupsync-performance-overhead">GroupMemoryBarrierWithGroupSync
+Performance Overhead</h1>
+<p>In DirectX High-Level Shader Language (HLSL),
+<code>GroupMemoryBarrierWithGroupSync</code> coordinates execution and
+data integrity across all threads within a thread group. While
+indispensable for algorithms that rely on <code>groupshared</code>
+memory, this intrinsic introduces notable performance overhead,
+primarily manifesting as execution stalls, pipeline flushes, register
+pressure, and reduced GPU occupancy. Understanding the exact mechanical
+costs of this synchronization primitive is essential for optimizing
+compute shaders.</p>
+<h3 id="what-the-intrinsic-does">What the Intrinsic Does</h3>
+<p><code>GroupMemoryBarrierWithGroupSync</code> combines two distinct
+operations into a single instruction:</p>
+<ol type="1">
+<li><strong>Memory Barrier (<code>GroupMemoryBarrier</code>):</strong>
+Ensures that all outstanding reads and writes to
+<code>groupshared</code> memory issued by the calling thread are
+completed and made visible to all other threads in the group.</li>
+<li><strong>Execution Barrier (<code>GroupSync</code>):</strong> Halts
+the execution of the calling thread until every thread in the entire
+thread group reaches this exact synchronization point.</li>
+</ol>
+<p>Because it ties hardware execution scheduling directly to memory
+visibility, it enforces strict ordering constraints on GPU hardware that
+is fundamentally designed for asynchronous, parallel execution.</p>
+<h3 id="primary-performance-overheads">Primary Performance
+Overheads</h3>
+<h4 id="1-execution-stalls-and-straggler-waiting">1. Execution Stalls
+and Straggler Waiting</h4>
+<p>GPUs schedule work in fixed-size bundles of threads known as
+wavefronts (AMD) or warps (NVIDIA), typically 32 or 64 threads wide. A
+thread group usually spans multiple waves. When
+<code>GroupMemoryBarrierWithGroupSync</code> is executed, faster waves
+cannot advance until the slowest wave in the group arrives at the
+barrier. Any variance in execution time caused by branch divergence,
+uncoalesced memory access, or cache misses will stall all other threads
+in the group, leading to idle compute cycles.</p>
+<h4 id="2-instruction-pipeline-flushes-and-memory-serialization">2.
+Instruction Pipeline Flushes and Memory Serialization</h4>
+<p>To guarantee that writes to <code>groupshared</code> memory (LDS on
+AMD, Shared Memory on NVIDIA) are committed and globally visible to the
+thread group, the GPU memory controller must drain and retire in-flight
+memory operations. This serialization stalls the local instruction
+pipeline, breaking instruction-level parallelism (ILP) and preventing
+the hardware scheduler from issuing subsequent compute instructions
+until memory consistency is established.</p>
+<h4 id="3-reduced-hardware-occupancy">3. Reduced Hardware Occupancy</h4>
+<p>Synchronization barriers place heavy constraints on the thread group
+as a single unit of execution. When threads spend cycles waiting at a
+barrier, the compute unit attempts to hide this latency by switching to
+another ready wavefront. However, if the shader also consumes large
+amounts of <code>groupshared</code> memory or general-purpose registers
+(VGPRs), the number of concurrent thread groups that can fit on a
+Streaming Multiprocessor (SM) or Compute Unit (CU) decreases. With fewer
+active waves available to mask latency, the synchronization stall
+directly degrades total throughput.</p>
+<h4 id="4-amplified-control-flow-divergence">4. Amplified Control Flow
+Divergence</h4>
+<p>If <code>GroupMemoryBarrierWithGroupSync</code> is placed inside
+conditionally executed code, all threads in the thread group must
+evaluate the condition identically. When the barrier is reached after a
+divergent branch, the synchronization forces the hardware to wait for
+both paths of the divergence to fully resolve, compounding the penalty
+of the branch divergence itself.</p>
+<h3 id="optimization-and-mitigation">Optimization and Mitigation</h3>
+<ul>
+<li><strong>Prefer Wave Intrinsics:</strong> Where possible, replace
+<code>groupshared</code> data sharing with wave-level operations (e.g.,
+<code>WaveActiveSum</code>, <code>WaveReadLaneAt</code>). Wave
+intrinsics execute lockstep across 32 or 64 threads and do not require
+execution or memory barriers.</li>
+<li><strong>Minimize Barrier Frequency:</strong> Group memory read and
+write operations so that synchronization occurs as infrequently as
+possible, rather than synchronizing after every small transaction.</li>
+<li><strong>Tune Thread Group Sizes:</strong> Align group sizes with
+native wave dimensions (e.g., 64, 128, or 256 threads). Sizing a group
+too large (e.g., 1024 threads) dramatically increases the probability
+that a single stalled wave will halt the entire group.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/group-memory-barrier-with-group-sync-performance-overhead';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

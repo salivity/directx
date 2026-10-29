@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DX12 Static Samplers: How to Save Sampler Heap Space - directx</title>
+    <meta name="description" content="In DirectX 12, static samplers allow developers to define texture sampling states directly within the root signature rather than allocating them through descriptor heaps. This article explores how static samplers function, why DirectX 12 imposes strict li">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dx-12-static-samplers-how-to-save-sampler-heap-space">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DX12 Static Samplers: How to Save Sampler Heap Space - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dx-12-static-samplers-how-to-save-sampler-heap-space" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, static samplers allow developers to define texture sampling states directly within the root signature rather than allocating them through descriptor heaps. This article explores how static samplers function, why DirectX 12 imposes strict li" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="dx12-static-samplers-how-to-save-sampler-heap-space">DX12 Static
+Samplers: How to Save Sampler Heap Space</h1>
+<p>In DirectX 12, static samplers allow developers to define texture
+sampling states directly within the root signature rather than
+allocating them through descriptor heaps. This article explores how
+static samplers function, why DirectX 12 imposes strict limits on
+sampler descriptor heaps, and how moving immutable sampling states into
+the root signature conserves critical heap space while optimizing
+rendering performance.</p>
+<h3 id="the-constraint-of-the-sampler-descriptor-heap">The Constraint of
+the Sampler Descriptor Heap</h3>
+<p>In DirectX 12, descriptor heaps for shader-visible resources are
+split into two primary categories: standard resource heaps (for Constant
+Buffer Views, Shader Resource Views, and Unordered Access Views) and
+sampler descriptor heaps. While standard resource descriptor heaps can
+accommodate over one million descriptors on modern hardware, the sampler
+descriptor heap (<code>D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER</code>) is
+constrained by hardware architectures to a maximum of only 2,048
+descriptors simultaneously visible to the GPU.</p>
+<p>Because descriptors cannot easily be swapped mid-pipeline without
+incurring pipeline stalls or managing ring buffers, this 2,048 limit
+must cover all concurrent sampling states required across all active
+materials, passes, and shader stages.</p>
+<h3 id="how-dynamic-samplers-consume-space">How Dynamic Samplers Consume
+Space</h3>
+<p>When using dynamic samplers, each sampling configuration (such as
+linear filtering with repeat addressing or anisotropic filtering with
+clamp addressing) requires an individual descriptor allocated in the
+sampler descriptor heap. The application must:</p>
+<ol type="1">
+<li>Allocate a slot in the sampler descriptor heap via
+<code>CreateSampler</code>.</li>
+<li>Bind the descriptor heap to the command list using
+<code>SetDescriptorHeaps</code>.</li>
+<li>Reference the sampler using descriptor tables defined in the root
+signature.</li>
+</ol>
+<p>If hundreds of materials or post-processing passes manage their own
+dynamic sampler descriptors, this limited 2,048-slot heap quickly
+experiences pressure, fragmentation, and overhead from frequent CPU-side
+descriptor table management.</p>
+<h3 id="how-static-samplers-save-heap-space">How Static Samplers Save
+Heap Space</h3>
+<p>Static samplers eliminate the need to reserve entries in the sampler
+descriptor heap entirely. Instead of fetching descriptors from a
+GPU-visible heap at runtime, static samplers are declared directly in
+the root signature definition using the
+<code>D3D12_STATIC_SAMPLER_DESC</code> structure.</p>
+<h4 id="zero-descriptor-heap-allocation">Zero Descriptor Heap
+Allocation</h4>
+<p>Because static samplers are compiled directly into the root
+signature, they consume zero slots from the sampler descriptor heap. The
+application does not need to allocate, manage, or bind descriptors in
+<code>D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER</code> for any sampler defined
+statically. This leaves the entire 2,048-descriptor budget available for
+specialized use cases that genuinely require runtime modifications.</p>
+<h4 id="direct-hardware-register-mapping">Direct Hardware Register
+Mapping</h4>
+<p>When a static sampler is defined, the graphics driver can bake the
+sampler configuration directly into the Pipeline State Object (PSO) or
+internal GPU sampler registers. The GPU hardware can access these
+predefined filter modes, border colors, and address modes immediately,
+bypassing the descriptor table indirection step.</p>
+<h4 id="root-signature-capacity">Root Signature Capacity</h4>
+<p>A single root signature supports up to 2,032 static samplers. While
+root signature memory is limited (a total size of 64 DWORDs), static
+samplers do not count against this 64-DWORD limit. DirectX 12 treats
+static samplers as separate configuration metadata, enabling developers
+to declare a complete array of common sampling permutations (such as
+point, bilinear, trilinear, and anisotropic variations combined with
+clamp, wrap, and mirror addressing) without using any root signature
+parameter slots or descriptor heap space.</p>
+<h3 id="practical-implementation-strategy">Practical Implementation
+Strategy</h3>
+<p>To maximize heap efficiency:</p>
+<ul>
+<li><strong>Use Static Samplers for Common Patterns:</strong> Identify
+standard filtering permutations used globally across shaders (e.g.,
+linear clamp, point clamp, anisotropic wrap) and define them globally in
+the root signature assigned to register spaces reserved for engine-wide
+utilities (such as <code>s0</code> through <code>s5</code>).</li>
+<li><strong>Reserve Dynamic Samplers for Dynamic Logic:</strong> Only
+allocate descriptors in the sampler descriptor heap when sampler states
+must change dynamically at runtime based on variables that cannot be
+known during pipeline creation, such as real-time adjustments to dynamic
+border colors or procedural LOD biases.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/dx-12-static-samplers-how-to-save-sampler-heap-space';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectX VRS Tier 1 and Tier 2 Optimize GPU Performance - directx</title>
+    <meta name="description" content="DirectX Variable Rate Shading (VRS) is a modern rendering feature that boosts GPU performance by dynamically altering the pixel shading rate across different areas of a rendered frame. Instead of executing the pixel shader once for every single pixel on s">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-x-vrs-tier-1-and-tier-2-optimize-gpu-performance">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectX VRS Tier 1 and Tier 2 Optimize GPU Performance - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-x-vrs-tier-1-and-tier-2-optimize-gpu-performance" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX Variable Rate Shading (VRS) is a modern rendering feature that boosts GPU performance by dynamically altering the pixel shading rate across different areas of a rendered frame. Instead of executing the pixel shader once for every single pixel on s" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directx-vrs-tier-1-and-tier-2-optimize-gpu-performance">How
+DirectX VRS Tier 1 and Tier 2 Optimize GPU Performance</h1>
+<p>DirectX Variable Rate Shading (VRS) is a modern rendering feature
+that boosts GPU performance by dynamically altering the pixel shading
+rate across different areas of a rendered frame. Instead of executing
+the pixel shader once for every single pixel on screen, VRS allows
+groups of adjacent pixels to share a single shader invocation,
+significantly reducing GPU workload without visibly degrading visual
+fidelity. This article details the core mechanics of VRS, breaks down
+the technical differences between Tier 1 and Tier 2 implementations, and
+explains how both tiers optimize rendering efficiency.</p>
+<h3 id="understanding-variable-rate-shading">Understanding Variable Rate
+Shading</h3>
+<p>In traditional rendering, a GPU runs pixel shader calculations at a
+1:1 ratio for every pixel on screen. While this ensures consistent
+precision, it creates unnecessary computational overhead in scenes where
+fine detail is obscured by high-speed motion, depth-of-field effects,
+heavy shadows, or low-contrast textures.</p>
+<p>VRS solves this inefficiency by decoupling the rasterization
+resolution from the shading resolution. The GPU can group pixels into
+blocks—such as 1x2, 2x1, 2x2, 2x4, 4x2, or 4x4—and evaluate the pixel
+shader once for the entire block. The computed color value is then
+applied across all pixels within that block, drastically cutting the
+number of shader evaluations required to draw the frame.</p>
+<h3 id="directx-vrs-tier-1-per-draw-call-optimization">DirectX VRS Tier
+1: Per-Draw Call Optimization</h3>
+<p>DirectX VRS Tier 1 provides broad, coarse-grained control over
+shading rates on a per-draw-call basis.</p>
+<ul>
+<li><strong>Mechanism:</strong> In Tier 1, developers specify the
+shading rate globally for an entire draw call. Every primitive rendered
+within that single call shares the same shading frequency.</li>
+<li><strong>Optimization Strategy:</strong> Tier 1 is primarily used to
+optimize passes and geometry where detail is uniformly unimportant.
+Developers can aggressively lower the shading rate (e.g., 2x2 or 4x4)
+for distant background objects, heavily blurred transparent particle
+systems (like smoke, fog, or dust), or depth pre-passes.</li>
+<li><strong>Limitations:</strong> Tier 1 cannot vary the shading rate
+within a single draw call. If an object is partially in shadow and
+partially under bright direct light, or if it spans from the foreground
+to the far background, developers must choose between shading the entire
+object at full quality or accepting potential visual degradation across
+the entire mesh.</li>
+</ul>
+<h3
+id="directx-vrs-tier-2-granular-and-screen-space-optimization">DirectX
+VRS Tier 2: Granular and Screen-Space Optimization</h3>
+<p>DirectX VRS Tier 2 builds upon Tier 1 by introducing fine-grained
+spatial control, allowing shading rates to vary dynamically within the
+same draw call.</p>
+<ul>
+<li><strong>Screen-Space Shading Rate Images:</strong> Tier 2 allows
+developers to supply a screen-space texture (a "shading rate image")
+where each texel dictates the shading rate for an underlying tile of
+screen pixels (typically 8x8 or 16x16 pixels). This enables games to
+analyze previous frames, motion vectors, luminance, or depth buffers to
+generate a per-tile shading map that selectively lowers precision in
+dark or fast-moving screen regions while preserving sharp edges.</li>
+<li><strong>Per-Primitive Shading Rates:</strong> In addition to
+screen-space masking, Tier 2 allows the vertex or geometry shader to
+assign specific shading rates to individual triangles before
+rasterization.</li>
+<li><strong>Combiners:</strong> Tier 2 introduces combiner operations
+(such as Min, Max, Passthrough, or Override) that automatically resolve
+conflicts when a per-draw-call rate, a per-primitive rate, and a
+screen-space shading rate image intersect. For example, a combiner can
+ensure the GPU always chooses the highest quality (Min rate) to prevent
+visual artifacts on high-contrast edges.</li>
+</ul>
+<h3 id="performance-impact-tier-1-vs-tier-2">Performance Impact: Tier 1
+vs. Tier 2</h3>
+<p>The key difference in performance optimization between the two tiers
+lies in precision and flexibility:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Feature</th>
+<th style="text-align: left;">Tier 1</th>
+<th style="text-align: left;">Tier 2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Granularity</strong></td>
+<td style="text-align: left;">Per-draw call</td>
+<td style="text-align: left;">Per-draw call, per-primitive, and
+per-screen-space tile</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Edge Preservation</strong></td>
+<td style="text-align: left;">Low (affects entire geometry)</td>
+<td style="text-align: left;">High (masks preserve silhouette and
+high-frequency edges)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Implementation
+Complexity</strong></td>
+<td style="text-align: left;">Low</td>
+<td style="text-align: left;">Moderate to High</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Performance Upside</strong></td>
+<td style="text-align: left;">Moderate (best for specific
+passes/materials)</td>
+<td style="text-align: left;">High (optimizes broad screen real estate
+dynamically)</td>
+</tr>
+</tbody>
+</table>
+<p>By reducing the sheer number of pixel shader invocations required per
+frame, DirectX VRS Tier 1 and Tier 2 alleviate memory bandwidth
+bottlenecks, reduce GPU thermal draw, and free up computational
+headroom. This allows game engines to maintain higher framerates, target
+higher display resolutions, or reallocate compute resources toward
+advanced visual effects like ray tracing.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-direct-x-vrs-tier-1-and-tier-2-optimize-gpu-performance';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

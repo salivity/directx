@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectX 11 and DirectCompute Changed GPU Computing - directx</title>
+    <meta name="description" content="When Microsoft launched DirectX 11 in 2009, it fundamentally transformed graphics hardware by introducing DirectCompute, an Application Programming Interface (API) that enabled general-purpose computing on graphics processing units (GPGPU). DirectCompute">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-x-11-and-direct-compute-changed-gpu-computing">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectX 11 and DirectCompute Changed GPU Computing - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-x-11-and-direct-compute-changed-gpu-computing" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="When Microsoft launched DirectX 11 in 2009, it fundamentally transformed graphics hardware by introducing DirectCompute, an Application Programming Interface (API) that enabled general-purpose computing on graphics processing units (GPGPU). DirectCompute" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directx-11-and-directcompute-changed-gpu-computing">How
+DirectX 11 and DirectCompute Changed GPU Computing</h1>
+<p>When Microsoft launched DirectX 11 in 2009, it fundamentally
+transformed graphics hardware by introducing DirectCompute, an
+Application Programming Interface (API) that enabled general-purpose
+computing on graphics processing units (GPGPU). DirectCompute broke
+graphics processors out of their traditional rendering-only roles by
+providing developers with a standardized, vendor-neutral platform to
+execute parallel computing tasks directly on the GPU. This integration
+accelerated real-time simulation, post-processing effects, and
+computational workloads, laying the architectural groundwork for modern
+game engines and compute-centric graphics pipelines.</p>
+<p>Prior to DirectX 11, leveraging a GPU for non-rendering tasks was
+difficult. Developers who wanted to harness the parallel processing
+power of graphics chips had to either use vendor-specific frameworks
+like NVIDIA CUDA or disguise mathematical calculations as graphical
+instructions by encoding data into texture coordinates and rendering
+off-screen quads via pixel shaders. This process was inefficient,
+complicated to debug, and strictly separated from standard rendering
+pipelines.</p>
+<p>DirectX 11 resolved these limitations by adding the Compute Shader
+stage to the core DirectX pipeline. Unlike vertex or pixel shaders,
+which require geometric primitives to trigger execution, Compute Shaders
+operate independently of the graphics pipeline. Developers could
+dispatch flexible, user-defined thread groups capable of processing
+massive parallel datasets without the overhead of rasterization, depth
+buffers, or blending hardware.</p>
+<p>A defining feature of DirectCompute was the introduction of Unordered
+Access Views (UAVs) and thread-group shared memory. UAVs allowed threads
+to perform random-access reads and writes across memory buffers,
+eliminating the strict input-output flow of legacy shader models.
+Meanwhile, shared memory allowed threads within the same group to
+exchange intermediate data locally at high bandwidth rather than reading
+from slower global video memory, greatly speeding up algorithms like
+Fast Fourier Transforms and parallel reductions.</p>
+<p>Crucially, DirectCompute integrated directly into the wider DirectX
+runtime. Compute operations could share buffers and textures natively
+with traditional graphics stages without the performance-costly round
+trips between system memory (RAM) and video memory (VRAM). A developer
+could simulate physical movement or calculate lighting data inside a
+compute shader and immediately pass that data to a pixel shader to draw
+the final frame.</p>
+<p>This seamless data interchange quickly established DirectCompute as a
+staple in game development. Game engines used it to offload complex
+physics calculations—such as cloth simulation, dynamic fluids, and
+particle systems containing hundreds of thousands of particles—from the
+CPU to the GPU. It also enabled high-performance image-space algorithms,
+including screen-space ambient occlusion (SSAO), advanced depth of
+field, high-dynamic-range (HDR) tone mapping, and modern anti-aliasing
+techniques.</p>
+<p>DirectCompute positioned compute capabilities as a core element of
+mainstream graphics development. By democratizing GPGPU techniques
+across multiple hardware vendors through a single API, DirectX 11
+redefined the role of graphics hardware, establishing the parallel
+compute techniques that dominate modern rendering in DirectX 12 and
+Vulkan today.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-direct-x-11-and-direct-compute-changed-gpu-computing';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

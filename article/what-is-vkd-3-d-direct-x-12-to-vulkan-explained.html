@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What is VKD3D: DirectX 12 to Vulkan Explained - directx</title>
+    <meta name="description" content="VKD3D is an open-source 3D graphics translation layer that maps Microsoft DirectX 12 (D3D12) API calls to Khronos Group&#39;s Vulkan API. Primarily developed to enable Windows-exclusive games to run on Linux and Unix-like operating systems, it serves as a cri">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/what-is-vkd-3-d-direct-x-12-to-vulkan-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="What is VKD3D: DirectX 12 to Vulkan Explained - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/what-is-vkd-3-d-direct-x-12-to-vulkan-explained" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="VKD3D is an open-source 3D graphics translation layer that maps Microsoft DirectX 12 (D3D12) API calls to Khronos Group&#39;s Vulkan API. Primarily developed to enable Windows-exclusive games to run on Linux and Unix-like operating systems, it serves as a cri" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="what-is-vkd3d-directx-12-to-vulkan-explained">What is VKD3D:
+DirectX 12 to Vulkan Explained</h1>
+<p>VKD3D is an open-source 3D graphics translation layer that maps
+Microsoft DirectX 12 (D3D12) API calls to Khronos Group's Vulkan API.
+Primarily developed to enable Windows-exclusive games to run on Linux
+and Unix-like operating systems, it serves as a critical component in
+compatibility suites like Wine and Valve's Proton for the Steam Deck.
+This article breaks down what VKD3D is, why it exists, and the technical
+mechanisms it uses to translate DirectX 12 commands, shaders, and memory
+structures into native Vulkan calls.</p>
+<h2 id="understanding-vkd3d">Understanding VKD3D</h2>
+<p>VKD3D was originally initiated by the Wine project as a dedicated
+translation layer for Direct3D 12. Because modern DirectX 12 games do
+not natively support Linux, a translation mechanism is required to
+interpret graphic calls in real time.</p>
+<p>Today, the project exists in two primary branches:</p>
+<ol type="1">
+<li><strong>Upstream VKD3D:</strong> Maintained by the Wine project,
+focusing on standard conformance and general compatibility for
+Wine.</li>
+<li><strong>VKD3D-Proton:</strong> A performance-oriented fork funded by
+Valve, tailored specifically for running modern AAA DirectX 12 games
+smoothly via Proton on Linux.</li>
+</ol>
+<h2 id="architectural-alignment-directx-12-and-vulkan">Architectural
+Alignment: DirectX 12 and Vulkan</h2>
+<p>Translating older APIs (like DirectX 9 or 11) to older paradigms
+(like OpenGL) historically introduced massive CPU overhead. VKD3D avoids
+much of this penalty because DirectX 12 and Vulkan share a similar
+architectural philosophy:</p>
+<ul>
+<li>Both are low-level, explicit APIs that give developers direct
+control over the GPU.</li>
+<li>Both rely on pre-compiled Pipeline State Objects (PSOs) instead of
+dynamic state machines.</li>
+<li>Both require manual memory allocation, synchronization, and explicit
+command buffer recording.</li>
+</ul>
+<p>Because their design patterns align closely, VKD3D functions
+primarily as a conceptual mapping layer rather than an emulated runtime
+environment.</p>
+<h2 id="how-vkd3d-implements-directx-12-over-vulkan">How VKD3D
+Implements DirectX 12 over Vulkan</h2>
+<p>VKD3D translates several core systems from Direct3D 12 into their
+Vulkan equivalents:</p>
+<h3 id="1-shader-translation-via-vkd3d-shader">1. Shader Translation via
+<code>vkd3d-shader</code></h3>
+<p>DirectX 12 applications compile High-Level Shader Language (HLSL)
+into intermediate bytecodes: DirectX Bytecode (DXBC) or the newer
+LLVM-based DirectX Intermediate Language (DXIL). Vulkan GPUs, however,
+execute SPIR-V.</p>
+<p>VKD3D includes a dedicated module called <code>vkd3d-shader</code>
+that parses incoming DXBC or DXIL payloads and recompiles them into
+valid SPIR-V on the fly. This module also handles differences in
+resource binding models, control flow semantics, and hardware-specific
+intrinsic instructions between the two APIs.</p>
+<h3 id="2-command-submission-and-queues">2. Command Submission and
+Queues</h3>
+<p>DirectX 12 records rendering commands into
+<code>ID3D12GraphicsCommandList</code> objects, which are then submitted
+to an <code>ID3D12CommandQueue</code>.</p>
+<p>VKD3D maps these components directly to Vulkan equivalents:</p>
+<ul>
+<li><code>ID3D12CommandAllocator</code> maps to
+<code>VkCommandPool</code>.</li>
+<li><code>ID3D12GraphicsCommandList</code> maps to
+<code>VkCommandBuffer</code>.</li>
+<li><code>ID3D12CommandQueue</code> maps to <code>VkQueue</code>.</li>
+</ul>
+<p>When the game calls execution methods, VKD3D finalizes the underlying
+<code>VkCommandBuffer</code> and submits it to the appropriate
+<code>VkQueue</code> using <code>vkQueueSubmit</code>.</p>
+<h3 id="3-descriptor-heaps-and-resource-binding">3. Descriptor Heaps and
+Resource Binding</h3>
+<p>Resource binding represents one of the largest structural differences
+between the two APIs:</p>
+<ul>
+<li><strong>DirectX 12</strong> uses descriptor heaps, descriptor
+tables, and root signatures to point the GPU to textures, buffers, and
+samplers.</li>
+<li><strong>Vulkan</strong> uses descriptor sets, descriptor set
+layouts, and pipeline layouts.</li>
+</ul>
+<p>VKD3D bridges this gap by translating root signatures into
+<code>VkPipelineLayout</code> objects. It then utilizes Vulkan
+extensions—such as <code>VK_EXT_descriptor_indexing</code> and
+<code>VK_EXT_mutable_descriptor_type</code>—to replicate the dynamic,
+unsized array behavior native to DirectX 12 descriptor heaps.</p>
+<h3 id="4-memory-management-and-resource-states">4. Memory Management
+and Resource States</h3>
+<p>Both APIs require applications to manage GPU VRAM manually. VKD3D
+maps DirectX 12 committed, placed, and reserved resources onto
+<code>VkDeviceMemory</code> allocations and <code>VkBuffer</code> or
+<code>VkImage</code> objects.</p>
+<p>To handle resource transitions (such as transitioning an image from a
+render target to a shader resource), VKD3D translates
+<code>ID3D12CommandList::ResourceBarrier</code> calls into
+<code>VkPipelineStageFlags</code> and <code>VkImageMemoryBarrier</code>
+commands, ensuring accurate synchronization and cache flushing between
+GPU tasks.</p>
+<h3 id="5-synchronization-primitives">5. Synchronization Primitives</h3>
+<p>DirectX 12 relies heavily on <code>ID3D12Fence</code> objects to
+synchronize tasks between the CPU and GPU, as well as between different
+GPU queues.</p>
+<p>VKD3D implements these fences using Vulkan timeline semaphores
+(<code>VK_KHR_timeline_semaphore</code>). Because timeline semaphores
+allow monotonically increasing 64-bit integer values to signal
+completion across queues and the host, they provide an exact functional
+match for DirectX 12 fences without high CPU overhead.</p>
+<h2 id="performance-impact">Performance Impact</h2>
+<p>Because VKD3D maps modern explicit abstractions directly to modern
+explicit primitives, the translation overhead is minimal compared to
+legacy translation layers. When supported by modern Vulkan drivers,
+VKD3D allows DirectX 12 Windows games to run on Linux platforms with
+performance that frequently rivals native execution.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/what-is-vkd-3-d-direct-x-12-to-vulkan-explained';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

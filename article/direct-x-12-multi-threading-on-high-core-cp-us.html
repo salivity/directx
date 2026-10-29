@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Multi-Threading on High-Core CPUs - directx</title>
+    <meta name="description" content="DirectX 12 revolutionizes graphics programming by replacing the monolithic, single-threaded driver architecture of legacy APIs with an explicit, low-level model designed to distribute rendering workloads across modern multi-core processors. On high-core-c">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-multi-threading-on-high-core-cp-us">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Multi-Threading on High-Core CPUs - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-multi-threading-on-high-core-cp-us" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 revolutionizes graphics programming by replacing the monolithic, single-threaded driver architecture of legacy APIs with an explicit, low-level model designed to distribute rendering workloads across modern multi-core processors. On high-core-c" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-multi-threading-on-high-core-cpus">DirectX 12
+Multi-Threading on High-Core CPUs</h1>
+<p>DirectX 12 revolutionizes graphics programming by replacing the
+monolithic, single-threaded driver architecture of legacy APIs with an
+explicit, low-level model designed to distribute rendering workloads
+across modern multi-core processors. On high-core-count workstation
+CPUs—such as AMD Ryzen Threadripper and Intel Xeon platforms—DirectX 12
+achieves massive scalability by decoupling command recording from
+command execution. This architecture allows dozens of worker threads to
+independently generate GPU command streams without locking shared driver
+states, transforming CPU-side command generation from a notorious
+bottleneck into a parallelized compute task.</p>
+<h3 id="the-architecture-command-lists-allocators-and-queues">The
+Architecture: Command Lists, Allocators, and Queues</h3>
+<p>The foundation of multi-threaded command recording in DirectX 12
+rests on three distinct abstractions: command allocators
+(<code>ID3D12CommandAllocator</code>), command lists
+(<code>ID3D12GraphicsCommandList</code>), and command queues
+(<code>ID3D12CommandQueue</code>).</p>
+<p>Legacy APIs like DirectX 11 relied on a single immediate context that
+handled state validation, memory tracking, and submission on a single
+CPU thread. In contrast, DirectX 12 splits these duties:</p>
+<ul>
+<li><strong>Command Allocators:</strong> These represent the underlying
+memory pool backing the recorded commands. Allocators are strictly
+single-threaded; an allocator can only be written to by one command list
+at any given moment. To parallelize recording, the engine instantiates a
+separate command allocator per worker thread (or per task).</li>
+<li><strong>Command Lists:</strong> These interfaces record the actual
+state changes and draw/dispatch calls into the memory provided by an
+allocator. Because command lists operate independently in user space,
+multiple command lists can record commands concurrently across multiple
+threads without synchronization overhead.</li>
+<li><strong>Command Queues:</strong> The centralized interface that
+communicates directly with the GPU. Once worker threads finish recording
+their respective command lists, the lists are closed and passed to the
+main rendering or submission thread, which bundles them into an array
+and submits them to the command queue via
+<code>ExecuteCommandLists</code>.</li>
+</ul>
+<p>By moving CPU-side validation, resource binding, and translation into
+user-mode code within individual command lists, DirectX 12 eliminates
+global driver locks, allowing each CPU core to run at peak
+throughput.</p>
+<h3 id="scaling-across-high-core-count-workstations">Scaling Across
+High-Core-Count Workstations</h3>
+<p>Scaling rendering commands across 32, 64, or 128 logical cores
+introduces distinct architectural challenges that standard consumer
+quad-core or 8-core CPUs do not encounter. Workstation architectures
+require specific strategies to prevent memory interconnect bottlenecks
+and scheduler starvation.</p>
+<h4 id="1-task-based-and-fiber-based-scheduling">1. Task-Based and
+Fiber-Based Scheduling</h4>
+<p>DirectX 12 engines running on workstation hardware rarely assign one
+static thread per core for rendering. Instead, they implement dynamic
+job-stealing or fiber-based task systems. The scene graph is broken into
+fine-grained rendering passes (e.g., depth pre-pass, shadow cascades,
+g-buffer generation, forward-plus lighting passes). Worker threads grab
+these bite-sized render jobs, allocate a local command list, record the
+commands, and return the completed command list to a collection
+buffer.</p>
+<h4 id="2-numa-awareness-and-cache-topology">2. NUMA Awareness and Cache
+Topology</h4>
+<p>High-core workstation CPUs are typically built on multi-die, chiplet
+architectures (such as AMD’s Core Complex Dies) or multi-socket
+configurations that exhibit Non-Uniform Memory Access (NUMA). If a
+thread running on Die A attempts to access a command allocator or
+descriptor heap situated on memory directly connected to Die B,
+cross-die interconnect traffic increases latency and degrades
+performance.</p>
+<p>To maximize throughput, high-end DirectX 12 engines structure their
+memory allocators with NUMA affinity. Worker threads allocate memory
+pools local to their specific CPU cluster, and resources are kept in the
+thread's local L2/L3 cache hierarchies.</p>
+<h4 id="3-descriptor-heap-partitioning">3. Descriptor Heap
+Partitioning</h4>
+<p>Binding resources in parallel requires careful management of
+descriptor heaps. Because descriptor heaps are GPU-visible arrays of
+resource views, writing to a single shared heap from 64 threads
+simultaneously would cause extreme cache contention or require
+coarse-grained mutexes. Workstation-optimized engines solve this by
+pre-allocating contiguous descriptor blocks to individual threads or
+assigning dedicated dynamic descriptor heaps per thread, allowing
+lock-free resource binding during parallel command recording.</p>
+<h4 id="4-precompiled-pipeline-state-objects-psos">4. Precompiled
+Pipeline State Objects (PSOs)</h4>
+<p>Under older APIs, the driver validated hardware pipeline state
+dynamically at the moment a draw call was executed, frequently causing
+runtime stalls. DirectX 12 requires all shader stages, blend states,
+rasterizer configurations, and input layouts to be bundled ahead of time
+into immutable Pipeline State Objects
+(<code>ID3D12PipelineState</code>). Because PSOs are pre-compiled and
+immutable, worker threads can switch pipeline states simultaneously
+across dozens of cores with zero thread-safety concerns and virtually
+zero CPU overhead.</p>
+<h3 id="mitigating-submission-and-ingestion-bottlenecks">Mitigating
+Submission and Ingestion Bottlenecks</h3>
+<p>While DirectX 12 allows command recording to scale nearly linearly
+with core counts, physical submission to the hardware remains
+fundamentally serialized. The GPU executes commands sequentially (or
+concurrently through limited asynchronous compute queues), and the
+single call to <code>ExecuteCommandLists</code> must process the
+recorded command lists in a coordinated manner.</p>
+<p>If individual command lists contain too few draw calls, the CPU-side
+overhead of managing thread synchronization, closing lists, and
+submitting them will outweigh the parallel recording benefits.
+Conversely, if command lists are too large, the GPU may sit idle waiting
+for the CPU to finish long recording cycles. High-core workstations
+achieve balance by tuning the granularity of render passes—often
+dynamically sizing command list workloads based on available hardware
+threads—ensuring that the CPU records just far enough ahead of the GPU
+pipeline to maintain full hardware saturation without wasting memory
+bandwidth.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-12-multi-threading-on-high-core-cp-us';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

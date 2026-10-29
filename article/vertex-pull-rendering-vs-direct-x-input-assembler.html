@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vertex Pull Rendering vs DirectX Input Assembler - directx</title>
+    <meta name="description" content="Vertex pull rendering, often referred to as programmable vertex pulling, is a modern rendering technique where the GPU&#39;s programmable shader stages manually fetch vertex data from memory buffers, entirely bypassing the fixed-function Input Assembler (IA)">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/vertex-pull-rendering-vs-direct-x-input-assembler">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Vertex Pull Rendering vs DirectX Input Assembler - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/vertex-pull-rendering-vs-direct-x-input-assembler" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Vertex pull rendering, often referred to as programmable vertex pulling, is a modern rendering technique where the GPU&#39;s programmable shader stages manually fetch vertex data from memory buffers, entirely bypassing the fixed-function Input Assembler (IA)" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="vertex-pull-rendering-vs-directx-input-assembler">Vertex Pull
+Rendering vs DirectX Input Assembler</h1>
+<p>Vertex pull rendering, often referred to as programmable vertex
+pulling, is a modern rendering technique where the GPU's programmable
+shader stages manually fetch vertex data from memory buffers, entirely
+bypassing the fixed-function Input Assembler (IA) stage. This article
+explores how vertex pulling operates, details the architectural
+limitations of conventional DirectX input layouts, and explains how
+manual data fetching streamlines pipeline state management, improves
+memory efficiency, and integrates with modern bindless rendering
+architectures.</p>
+<h3 id="the-conventional-input-assembler-in-directx">The Conventional
+Input Assembler in DirectX</h3>
+<p>In traditional DirectX pipelines (DirectX 11 and classic DirectX 12),
+the Input Assembler is the first stage of the graphics pipeline. It
+relies on explicit vertex buffers, index buffers, and input layouts
+defined via <code>D3D12_INPUT_LAYOUT_DESC</code> or
+<code>D3D11_INPUT_ELEMENT_DESC</code>.</p>
+<p>Developers define the memory layout of each vertex attribute (such as
+position, normal, UV coordinates, and tangent) using predefined formats
+like <code>DXGI_FORMAT_R32G32B32_FLOAT</code>. The hardware's
+fixed-function logic then reads these declarations, traverses the bound
+vertex buffers according to their defined strides and offsets, unpacks
+the data into standard registers, and passes the populated attributes
+directly into the vertex shader’s input parameters.</p>
+<h3 id="limitations-of-the-traditional-approach">Limitations of the
+Traditional Approach</h3>
+<p>While the Input Assembler simplifies pipeline setup for basic use
+cases, it introduces several bottlenecks in high-performance
+rendering:</p>
+<ul>
+<li><strong>Pipeline State Object (PSO) Bloat:</strong> In DirectX 12,
+the input layout is baked directly into the PSO. If two meshes share the
+same shader logic but use slightly different vertex arrangements (for
+example, 16-bit floats instead of 32-bit floats for UVs), separate PSOs
+must be compiled and maintained.</li>
+<li><strong>Rigid Data Formats:</strong> The fixed-function hardware
+supports only standard <code>DXGI_FORMAT</code> types. Custom data
+compression schemes, variable-bit-width packing, or procedural
+attributes cannot be decoded at the IA stage.</li>
+<li><strong>Overfetching in Specialized Passes:</strong> Meshes often
+share a single interleaved vertex buffer containing positions, normals,
+and texture coordinates. During a depth-only prepass or shadow map
+generation, the hardware still has to stream or skip across
+non-positional data, wasting memory bandwidth unless separate
+position-only streams are maintained.</li>
+<li><strong>Impediment to Bindless Rendering:</strong> Modern rendering
+engines leverage bindless descriptor heaps to access thousands of
+resources through integer handles. The Input Assembler requires explicit
+binding of vertex buffer views to specific slots, breaking the
+uniformity of fully bindless designs.</li>
+</ul>
+<h3 id="what-is-vertex-pull-rendering">What is Vertex Pull
+Rendering?</h3>
+<p>Vertex pull rendering bypasses the Input Assembler by setting the
+input layout in the PSO to <code>nullptr</code> (or empty) and passing
+only primitive topology information (such as a triangle list) to the
+draw call. The draw call invokes the vertex shader purely with
+system-generated values, primarily <code>SV_VertexID</code> and
+<code>SV_InstanceID</code>.</p>
+<p>Inside the vertex shader, vertex attributes are fetched
+programmatically from memory resources—typically
+<code>ByteAddressBuffer</code> (raw buffer) or
+<code>StructuredBuffer</code>—using the vertex ID as an index:</p>
+<pre class="hlsl"><code>ByteAddressBuffer VertexPositions : register(t0);
+ByteAddressBuffer VertexAttributes : register(t1);
+
+struct VSOutput
+{
+    float4 Position : SV_Position;
+    float2 UV : TEXCOORD0;
+};
+
+VSOutput MainVS(uint vertexID : SV_VertexID)
+{
+    VSOutput output;
+    
+    // Explicitly load a 12-byte float3 position
+    uint address = vertexID * 12;
+    float3 pos = asfloat(VertexPositions.Load3(address));
+    
+    // Transform position
+    output.Position = mul(float4(pos, 1.0f), WorldViewProjection);
+    
+    // Fetch and unpack UV coordinates on demand
+    uint uvAddress = vertexID * 4; // 16-bit half precision packed into 32 bits
+    uint packedUV = VertexAttributes.Load(uvAddress);
+    output.UV = UnpackHalf2x16(packedUV);
+    
+    return output;
+}</code></pre>
+<h3 id="how-vertex-pulling-replaces-the-input-assembler">How Vertex
+Pulling Replaces the Input Assembler</h3>
+<p>Vertex pulling shifts the responsibility of address calculation,
+memory fetching, and format conversion from dedicated silicon to the
+general-purpose compute units of the GPU.</p>
+<h4 id="1-decoupling-geometry-from-pipeline-states">1. Decoupling
+Geometry from Pipeline States</h4>
+<p>Because the vertex shader consumes raw buffers rather than an
+explicit layout declaration, the PSO does not need to know the structure
+of the vertex data. A single PSO can draw any mesh, regardless of how
+its attributes are laid out in memory, significantly reducing PSO
+compilation overhead and runtime state switches.</p>
+<h4 id="2-fine-grained-attribute-stream-separation">2. Fine-Grained
+Attribute Stream Separation</h4>
+<p>Vertex pulling makes it simple to separate geometry into distinct
+attribute streams (Structure of Arrays). Vertex positions can be stored
+in one continuous buffer, while normals, tangents, and material
+coordinates reside in others. For depth passes or shadow rendering, the
+shader loads only from the position buffer, maximizing cache line
+utilization and memory bandwidth without requiring artists or asset
+pipelines to generate duplicate meshes.</p>
+<h4 id="3-custom-compression-and-bit-packing">3. Custom Compression and
+Bit-Packing</h4>
+<p>Without the constraint of <code>DXGI_FORMAT</code> definitions,
+developers can implement custom encoding formats. Normals can be
+compressed into octahedral encodings (<code>oct32</code> or
+<code>oct16</code>), positions can be quantized relative to mesh
+bounding boxes using integer math, and weights can be stored in
+bit-packed fields. Shaders execute the unpacking logic via fast ALU
+operations, which are often cheaper than the memory bandwidth required
+to fetch uncompressed data.</p>
+<h4 id="4-seamless-integration-with-bindless-architectures">4. Seamless
+Integration with Bindless Architectures</h4>
+<p>In DirectX 12 using Shader Model 6.6 dynamic resources, buffers do
+not need to be bound to root parameters individually. The shader can
+receive an integer index pointing to the buffer in the global
+<code>ResourceDescriptorHeap</code>. This allows a draw call to
+dynamically select its geometry buffers at runtime, paving the way for
+GPU-driven rendering techniques where compute shaders build draw
+arguments and perform geometry culling entirely on the GPU.</p>
+<h3 id="hardware-realities-and-considerations">Hardware Realities and
+Considerations</h3>
+<p>On modern GPU architectures (such as AMD GCN/RDNA and NVIDIA Kepler
+through Ada Lovelace), the physical Input Assembler is often already
+implemented using internal vertex-fetch shaders. Consequently,
+transitioning to manual vertex pulling incurs minimal to no overhead in
+terms of execution mechanics.</p>
+<p>However, manual vertex pulling requires developers to manage cache
+alignment deliberately. To ensure optimal performance, fetches should be
+aligned to 4-byte or 16-byte boundaries to maximize throughput on GPU
+memory controllers. In addition, when relying on indexed draws,
+developers must manually pull the index from an index buffer before
+fetching the corresponding vertex data, matching the behavior that
+fixed-function hardware historically managed automatically.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/vertex-pull-rendering-vs-direct-x-input-assembler';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>
