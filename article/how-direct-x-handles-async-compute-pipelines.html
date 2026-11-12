@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectX Handles Async Compute Pipelines - directx</title>
+    <meta name="description" content="DirectX 12 handles asynchronous compute by exposing distinct hardware command queues that allow compute workloads to execute concurrently alongside the main graphics rendering pipeline. By decoupling compute tasks from the rasterization-heavy direct queue">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-x-handles-async-compute-pipelines">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectX Handles Async Compute Pipelines - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-x-handles-async-compute-pipelines" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 handles asynchronous compute by exposing distinct hardware command queues that allow compute workloads to execute concurrently alongside the main graphics rendering pipeline. By decoupling compute tasks from the rasterization-heavy direct queue" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directx-handles-async-compute-pipelines">How DirectX Handles
+Async Compute Pipelines</h1>
+<p>DirectX 12 handles asynchronous compute by exposing distinct hardware
+command queues that allow compute workloads to execute concurrently
+alongside the main graphics rendering pipeline. By decoupling compute
+tasks from the rasterization-heavy direct queue, the API enables the GPU
+to schedule and run independent tasks—such as physics, culling, and
+post-processing—during idle hardware phases, significantly maximizing
+compute unit saturation and overall frame throughput.</p>
+<h3 id="multi-queue-architecture">Multi-Queue Architecture</h3>
+<p>The foundation of asynchronous compute in DirectX 12 lies in the
+separation of command queues via <code>ID3D12CommandQueue</code>. Rather
+than funneling all commands through a single serialization pipe, DirectX
+exposes three primary queue types:</p>
+<ul>
+<li><strong>DIRECT Queues:</strong> Capable of executing all types of
+commands, including rasterization (draw calls), compute shaders, and
+memory copies. This is the primary queue for traditional rendering.</li>
+<li><strong>COMPUTE Queues:</strong> Restricted to compute shaders and
+memory copy operations. They bypass the fixed-function graphics pipeline
+entirely.</li>
+<li><strong>COPY Queues:</strong> Dedicated strictly to DMA transfer
+engines for uploading or reading back data, entirely independent of
+execution units.</li>
+</ul>
+<p>When a developer submits an asynchronous compute task, it is recorded
+into a command list targeted at a <code>COMPUTE</code> queue, while
+standard rendering continues on the <code>DIRECT</code> queue.</p>
+<h3 id="hardware-level-concurrency-and-bubbles">Hardware-Level
+Concurrency and "Bubbles"</h3>
+<p>Graphics rendering often encounters bottlenecks caused by
+fixed-function stages, such as primitive assembly, rasterization, or ROP
+(render target output) blend operations. During these stages, the GPU’s
+programmable execution cores (Streaming Multiprocessors or Compute
+Units) can become underutilized, creating execution "bubbles."</p>
+<p>Because the DirectX runtime and the underlying GPU hardware scheduler
+manage queues independently, the hardware scheduler can interleave
+compute waves (warps/wavefronts) into these idle compute units while the
+<code>DIRECT</code> queue handles fixed-function tasks. As long as the
+two workloads do not saturate the same hardware bottlenecks—such as
+memory bandwidth or cache hierarchy—both tasks make progress
+simultaneously without context-switching overhead.</p>
+<h3 id="synchronization-with-fences">Synchronization with Fences</h3>
+<p>Parallel execution creates potential data hazards where one pipeline
+might attempt to read a resource that another is still writing. DirectX
+12 handles this cross-queue synchronization via <code>ID3D12Fence</code>
+objects.</p>
+<p>Fences operate directly on the GPU timeline without requiring CPU
+intervention:</p>
+<ol type="1">
+<li><strong>Signal:</strong> A queue calls
+<code>CommandQueue::Signal(Fence, Value)</code> to record that a
+specific workload has completed.</li>
+<li><strong>Wait:</strong> Another queue calls
+<code>CommandQueue::Wait(Fence, Value)</code> to stall its execution
+until the specified fence value is reached.</li>
+</ol>
+<p>For example, an async compute queue might compute screen-space
+ambient occlusion (SSAO). The compute queue signals a fence once the
+calculation finishes. The direct queue waits on that fence before
+reading the resulting SSAO texture in the final lighting pass, ensuring
+safe, ordered memory access without stalling the CPU.</p>
+<h3 id="resource-transitions-and-aliasing">Resource Transitions and
+Aliasing</h3>
+<p>Sharing resources between concurrent queues requires explicit state
+management. DirectX 12 requires subresources to be placed into
+appropriate <code>D3D12_RESOURCE_STATES</code> before use. When
+transferring ownership or visibility of a resource between a direct
+queue and a compute queue, applications must issue matching resource
+barriers on both queues to resolve hazards and flush GPU caches,
+guaranteeing cache coherency across different hardware engines.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-direct-x-handles-async-compute-pipelines';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

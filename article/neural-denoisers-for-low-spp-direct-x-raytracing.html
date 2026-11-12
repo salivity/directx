@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Denoisers for Low SPP DirectX Raytracing - directx</title>
+    <meta name="description" content="Real-time DirectX Raytracing (DXR) offers physically accurate lighting, but hardware limits dictate that modern game engines can only cast one or two rays per pixel per frame. This low sample-per-pixel (spp) budget produces heavily undersampled, noisy ima">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/neural-denoisers-for-low-spp-direct-x-raytracing">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Neural Denoisers for Low SPP DirectX Raytracing - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/neural-denoisers-for-low-spp-direct-x-raytracing" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Real-time DirectX Raytracing (DXR) offers physically accurate lighting, but hardware limits dictate that modern game engines can only cast one or two rays per pixel per frame. This low sample-per-pixel (spp) budget produces heavily undersampled, noisy ima" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="neural-denoisers-for-low-spp-directx-raytracing">Neural
+Denoisers for Low SPP DirectX Raytracing</h1>
+<p>Real-time DirectX Raytracing (DXR) offers physically accurate
+lighting, but hardware limits dictate that modern game engines can only
+cast one or two rays per pixel per frame. This low sample-per-pixel
+(spp) budget produces heavily undersampled, noisy images that are
+unplayable without post-processing. A neural denoiser bridges this gap
+by leveraging trained deep-learning models to reconstruct clean,
+temporally stable, and high-fidelity frames from noisy radiance data and
+engine-provided geometric guide buffers in real time.</p>
+<h2 id="the-challenge-of-low-spp-raytracing">The Challenge of Low-SPP
+Raytracing</h2>
+<p>DirectX Raytracing calculates effects like glossy reflections,
+ambient occlusion, global illumination, and soft shadows by tracing ray
+paths across a scene. Offline renderers cast hundreds or thousands of
+samples per pixel to produce clean imagery. In real-time rendering
+targeting 60 frames per second or higher, developers are restricted to
+extremely sparse sampling—often just 1 spp.</p>
+<p>At 1 spp, the raw output from DXR is not a complete image, but a
+stochastic, high-frequency "salt-and-pepper" noise pattern. Standard
+spatial blur filters fail to clean this up effectively, as they either
+blur away fine geometric details or preserve noise along sharp
+edges.</p>
+<h2 id="how-a-neural-denoiser-operates">How a Neural Denoiser
+Operates</h2>
+<p>Neural denoisers replace or augment traditional heuristic filters
+(such as bilateral, cross-bilateral, or temporal anti-aliasing filters)
+with specialized deep learning models, typically based on convolutional
+neural networks (CNNs), recurrent neural networks (RNNs), or autoencoder
+architectures.</p>
+<p>Instead of evaluating pixels in isolation, the neural network
+analyzes multiple inputs simultaneously:</p>
+<ul>
+<li><strong>Noisy Radiance Buffers:</strong> The raw, un-denoised color
+and lighting data generated by DXR passes.</li>
+<li><strong>G-Buffer Auxiliary Data:</strong> High-precision geometric
+information, including surface normals, depth (Z-buffer), and albedo
+(base color).</li>
+<li><strong>Motion Vectors:</strong> Pixel movement data between the
+current and previous frames to facilitate temporal tracking.</li>
+</ul>
+<p>Trained on millions of ground-truth frames rendered with thousands of
+samples, the network learns the statistical patterns of how light
+interacts with geometry. It accurately distinguishes between
+high-frequency noise and intentional high-frequency scene details, such
+as hair, textured surfaces, and shadow borders.</p>
+<h2 id="core-roles-of-the-neural-denoiser">Core Roles of the Neural
+Denoiser</h2>
+<h3 id="1-feature-aware-noise-suppression">1. Feature-Aware Noise
+Suppression</h3>
+<p>Traditional filters often mistake lighting noise for surface texture,
+or vice versa. Neural denoisers use auxiliary G-buffer data to infer
+where geometric boundaries exist. This allows the system to smooth out
+noise within a surface while preserving crisp edges, normal map
+variations, and geometry silhouettes without washing them out.</p>
+<h3 id="2-temporal-accumulation-and-ghosting-mitigation">2. Temporal
+Accumulation and Ghosting Mitigation</h3>
+<p>Ray tracing noise fluctuates aggressively from frame to frame. Neural
+denoisers accumulate radiance over time, using motion vectors to
+reproject pixels from historical frames into the current view. While
+standard temporal filters struggle with rapid movements and
+disocclusions—often resulting in smearing, boiling artifacts, or
+"ghosting" trails behind moving objects—neural networks are trained to
+recognize when historical data is invalid, discarding stale information
+instantly.</p>
+<h3 id="3-reconstruction-of-complex-light-transport">3. Reconstruction
+of Complex Light Transport</h3>
+<p>Certain lighting effects, such as specular reflections on curved
+surfaces or indirect diffuse bounces, create complex, non-linear noise
+patterns that classical mathematics cannot easily generalize. Neural
+denoisers excel at pattern recognition, intelligently predicting and
+filling in missing lighting values to reproduce authentic surface gloss,
+light bleed, and contact shadows from partial data.</p>
+<h2 id="enabling-real-time-path-tracing">Enabling Real-Time Path
+Tracing</h2>
+<p>By shifting the workload from brute-force ray calculation to
+dedicated AI accelerators (such as Tensor Cores), neural denoising makes
+real-time ray tracing commercially viable. It reduces the computational
+cost of DXR by orders of magnitude, turning raw 1-spp outputs into final
+frames that rival the fidelity of offline path-traced renders.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/neural-denoisers-for-low-spp-direct-x-raytracing';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Subsurface Scattering with DirectX Compute - directx</title>
+    <meta name="description" content="Subsurface scattering (SSS) is a critical lighting phenomenon that simulates how light penetrates translucent materials, scatters internally, and exits at different surface points. This article breaks down the physical fundamentals of subsurface scatterin">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/fast-subsurface-scattering-with-direct-x-compute">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Fast Subsurface Scattering with DirectX Compute - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/fast-subsurface-scattering-with-direct-x-compute" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Subsurface scattering (SSS) is a critical lighting phenomenon that simulates how light penetrates translucent materials, scatters internally, and exits at different surface points. This article breaks down the physical fundamentals of subsurface scatterin" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="fast-subsurface-scattering-with-directx-compute">Fast Subsurface
+Scattering with DirectX Compute</h1>
+<p>Subsurface scattering (SSS) is a critical lighting phenomenon that
+simulates how light penetrates translucent materials, scatters
+internally, and exits at different surface points. This article breaks
+down the physical fundamentals of subsurface scattering, explains why
+brute-force evaluation is prohibitive in real-time rendering, and
+outlines an efficient implementation strategy using DirectX compute
+shaders. By leveraging screen-space approximations, separable diffusion
+kernels, and optimized compute passes, developers can achieve
+high-fidelity rendering of skin, wax, and marble at real-time frame
+rates.</p>
+<h3 id="understanding-subsurface-scattering">Understanding Subsurface
+Scattering</h3>
+<p>Standard surface rendering uses a Bidirectional Reflectance
+Distribution Function (BRDF), which assumes that light enters and exits
+a surface at the exact same point. While this approximation works well
+for opaque materials like metals or plastics, it fails completely for
+translucent materials such as human skin, jade, foliage, and
+liquids.</p>
+<p>Subsurface scattering requires a Bidirectional Scattering-Surface
+Reflectance Distribution Function (BSSRDF). The BSSRDF models light
+entering at point <span class="math inline">\(x_i\)</span>, undergoing
+multiple scattering events within the medium, and exiting at a distinct
+location <span class="math inline">\(x_o\)</span>. Without SSS, objects
+like human faces appear hard, dry, and plastic-like because the light
+does not soften across shadow boundaries or produce the subtle warm
+glows characteristic of internal diffusion.</p>
+<h3 id="the-real-time-challenge-screen-space-sss">The Real-Time
+Challenge: Screen-Space SSS</h3>
+<p>Full volumetric simulation using path tracing accurately resolves the
+BSSRDF by tracing millions of random light paths through a volume.
+However, this is too computationally expensive for real-time
+graphics.</p>
+<p>To overcome this, modern real-time engines utilize Screen-Space
+Subsurface Scattering (SSSS). This technique approximates subsurface
+scattering as a post-processing filter applied to the screen-space
+diffuse lighting buffer. The core realization is that the diffusion
+profile—the spatial distribution of scattered light—can be modeled
+mathematically using a sum of Gaussians or a normalized diffusion
+profile.</p>
+<h3 id="structuring-the-directx-compute-pipeline">Structuring the
+DirectX Compute Pipeline</h3>
+<p>Compute shaders in DirectX (Direct3D 11 and Direct3D 12) provide the
+ideal framework for SSSS because they grant fine-grained control over
+thread scheduling, texture sampling, and fast on-chip memory access via
+<code>groupshared</code> memory.</p>
+<p>An efficient compute-based SSS pipeline is structured into three
+primary stages:</p>
+<h4 id="1-lighting-separation">1. Lighting Separation</h4>
+<p>Before scattering, the scene must be rendered with specular and
+diffuse lighting separated:</p>
+<ul>
+<li><strong>Specular Component:</strong> Specular reflection occurs
+strictly at the surface interface (Fresnel reflection) and must not be
+blurred.</li>
+<li><strong>Diffuse Component:</strong> Diffuse light penetrates the
+material and is written to a dedicated offscreen render target to be
+scattered.</li>
+<li><strong>Linear Depth &amp; Normals:</strong> Rendered to a G-Buffer
+to guide the bilateral filtering and prevent bleeding across geometric
+edges.</li>
+</ul>
+<h4 id="2-separable-blur-via-two-compute-passes">2. Separable Blur via
+Two Compute Passes</h4>
+<p>A 2D radial blur kernel is computationally expensive, requiring <span
+class="math inline">\(O(N^2)\)</span> texture reads per pixel. Because
+diffusion profiles can be decomposed into a sum of separable 1D
+Gaussians, the 2D filter can be split into two 1D passes:</p>
+<ul>
+<li><strong>Pass A (Horizontal Compute Pass):</strong> Reads the diffuse
+buffer, computes horizontal scattering, and writes to an intermediate
+texture.</li>
+<li><strong>Pass B (Vertical Compute Pass):</strong> Reads the
+intermediate texture, computes vertical scattering, and writes the final
+scattered diffuse result.</li>
+</ul>
+<p>This reduces complexity from <span
+class="math inline">\(O(N^2)\)</span> to <span
+class="math inline">\(O(2N)\)</span> samples per pixel.</p>
+<h4 id="3-depth-aware-bilateral-filtering">3. Depth-Aware (Bilateral)
+Filtering</h4>
+<p>To ensure that light does not bleed across disocclusions or between
+disconnected objects, the compute shader must evaluate depth differences
+between the center pixel and surrounding sample points:</p>
+<pre class="hlsl"><code>float depthDifference = abs(centerLinearDepth - sampleLinearDepth);
+float depthWeight = saturate(1.0 - (depthDifference * depthSensitivity));</code></pre>
+<p>The computed <code>depthWeight</code> scales the diffusion kernel
+weight for that sample, discarding samples that belong to the background
+or separate surfaces.</p>
+<h3 id="directx-compute-optimization-techniques">DirectX Compute
+Optimization Techniques</h3>
+<p>To maximize throughput across compute passes on modern graphics
+hardware, several critical optimizations should be integrated:</p>
+<h4 id="utilizing-groupshared-memory">Utilizing <code>groupshared</code>
+Memory</h4>
+<p>Rather than having every thread issue high-latency texture reads to
+global VRAM, threads within a compute thread group can cooperatively
+load a tile of pixels—including a border region (apron) to accommodate
+the filter radius—into <code>groupshared</code> memory.</p>
+<p>Once the <code>GroupMemoryBarrierWithGroupSync()</code> instruction
+is executed, all subsequent filter taps are read directly from fast
+on-chip shared memory, drastically reducing memory bandwidth
+pressure.</p>
+<h4 id="wave-intrinsics-directx-12--sm60">Wave Intrinsics (DirectX 12 /
+SM6.0+)</h4>
+<p>If target hardware supports Shader Model 6.0 or higher, lane-swapping
+intrinsics like <code>WaveReadLaneAt</code> can be used to share data
+across threads within a SIMD wave without routing through
+<code>groupshared</code> memory. This eliminates barrier synchronization
+stalls and optimizes register allocation.</p>
+<h4
+id="half-resolution-execution-with-bilateral-upsampling">Half-Resolution
+Execution with Bilateral Upsampling</h4>
+<p>Because SSS functions as a low-pass filter, the horizontal and
+vertical compute passes can be executed at half resolution (<span
+class="math inline">\(1/4\)</span> the total pixel count). After the
+vertical scattering pass completes, a bilateral upsampling compute pass
+reconstructs the full-resolution image using high-resolution linear
+depth and normal buffers to preserve crisp geometric silhouettes.</p>
+<h4 id="material-masking-and-early-exits">Material Masking and Early
+Exits</h4>
+<p>Not all pixels on the screen require subsurface scattering. In
+Direct3D 12, developers can generate an indirect dispatch buffer
+containing only the tiles or dispatch counts that contain SSS-flagged
+materials. Alternatively, the compute shader can sample a material ID
+buffer at the tile or wave level to immediately early-exit threads
+covering non-scattering geometry.</p>
+<h3 id="final-recombination">Final Recombination</h3>
+<p>Once the horizontal and vertical compute passes finish scattering the
+diffuse light, a final recombine pass blends the scattered diffuse
+color, the untouched specular reflections, ambient occlusion, and
+emissive elements. The result is a physically plausible, soft material
+appearance calculated in less than a single millisecond of GPU frame
+time.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/fast-subsurface-scattering-with-direct-x-compute';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DXGI ALLOW_TEARING vs V-Sync Input Latency - directx</title>
+    <meta name="description" content="Choosing between DXGISWAPCHAINFLAGALLOWTEARING and standard Vertical Synchronization (V-Sync) in DirectX fundamentally shapes how frames are queued, presented, and displayed, directly impacting input latency. Enabling V-Sync forces frame delivery to align">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dxgi-allow-tearing-vs-v-sync-input-latency">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DXGI ALLOW_TEARING vs V-Sync Input Latency - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dxgi-allow-tearing-vs-v-sync-input-latency" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Choosing between DXGISWAPCHAINFLAGALLOWTEARING and standard Vertical Synchronization (V-Sync) in DirectX fundamentally shapes how frames are queued, presented, and displayed, directly impacting input latency. Enabling V-Sync forces frame delivery to align" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="dxgi-allow_tearing-vs-v-sync-input-latency">DXGI ALLOW_TEARING
+vs V-Sync Input Latency</h1>
+<p>Choosing between <code>DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING</code> and
+standard Vertical Synchronization (V-Sync) in DirectX fundamentally
+shapes how frames are queued, presented, and displayed, directly
+impacting input latency. Enabling V-Sync forces frame delivery to align
+strictly with the monitor's vertical refresh cycle, ensuring tear-free
+images at the cost of back-pressure and input delay. Conversely,
+utilizing <code>DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING</code> enables
+immediate scanout and unlocks Variable Refresh Rate (VRR) support in
+modern flip-model presentation, reducing input latency to the lowest
+possible threshold by decoupling rendering from the display's refresh
+interval.</p>
+<h2 id="the-mechanics-of-v-sync-latency">The Mechanics of V-Sync
+Latency</h2>
+<p>When an application uses standard V-Sync (configured via
+<code>IDXGISwapChain::Present</code> with a <code>SyncInterval</code>
+greater than 0), the DirectX Graphics Infrastructure (DXGI) and the
+Desktop Window Manager (DWM) hold rendered frames until the display
+begins its vertical blanking interval (VBlank).</p>
+<p>This synchronization mechanism introduces latency through several
+factors:</p>
+<ul>
+<li><strong>Presentation Alignment Delay:</strong> If a frame finishes
+rendering immediately after a VBlank interval starts, it must wait in
+the swap chain buffer for the entire duration of the next refresh cycle
+(up to 16.67ms at 60 Hz or 6.94ms at 144 Hz) before scanout begins.</li>
+<li><strong>Buffer Queue Back-Pressure:</strong> To prevent frame drops,
+V-Sync pipelines typically maintain two or three back buffers. When the
+GPU renders faster than the display's refresh rate, the rendering thread
+blocks until a buffer becomes available. This back-pressure causes user
+inputs to be sampled multiple frames before those inputs are visually
+reflected on screen, introducing 1 to 3 frames of end-to-end input
+lag.</li>
+<li><strong>Framerate Drops and Cadence Stutter:</strong> When rendering
+performance falls below the monitor's native refresh rate, V-Sync drops
+presentation to integer fractions of the refresh rate (e.g., 60 Hz drops
+to 30 Hz), doubling frame delivery latency and creating noticeable
+judder.</li>
+</ul>
+<h2 id="the-mechanics-of-dxgi_swap_chain_flag_allow_tearing">The
+Mechanics of DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING</h2>
+<p>The <code>DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING</code> flag was
+introduced to modern flip-model swap chains
+(<code>DXGI_SWAP_EFFECT_FLIP_DISCARD</code> and
+<code>DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL</code>) to eliminate
+synchronization delays in borderless and windowed modes. When used in
+conjunction with <code>SyncInterval = 0</code> and the
+<code>DXGI_PRESENT_ALLOW_TEARING</code> flag during presentation, the
+runtime bypasses the standard VBlank wait state.</p>
+<p>The latency implications include:</p>
+<ul>
+<li><strong>Immediate Frame Delivery:</strong> The display hardware or
+the compositor begins scanning out the most recently completed frame
+immediately. If a new frame finishes rendering mid-scanout, the display
+transitions to the new frame instantly. This eliminates the wait time
+for the next VBlank, ensuring that the visual state reflects the latest
+possible user input.</li>
+<li><strong>Elimination of Pipeline Back-Pressure:</strong> Because
+completed buffers are swapped without waiting for display timing, the
+CPU and GPU can render unconstrained. The application samples input
+closer to display time, minimizing the delay between a hardware event
+(such as a mouse click) and its presentation on screen.</li>
+<li><strong>Variable Refresh Rate (VRR) Operation:</strong> On displays
+equipped with G-Sync, FreeSync, or HDMI 2.1 VRR,
+<code>DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING</code> is required to allow the
+monitor to dynamically synchronize its refresh cycles to the
+application's frame rate. Within the display's VRR range, this
+configuration provides tear-free visuals alongside the low-latency
+characteristics of an unsynchronized pipeline.</li>
+</ul>
+<h2 id="direct-latency-comparison">Direct Latency Comparison</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Characteristic</th>
+<th style="text-align: left;">V-Sync
+(<code>SyncInterval &gt;= 1</code>)</th>
+<th style="text-align: left;">Allow Tearing
+(<code>SyncInterval = 0</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Minimum Display
+Latency</strong></td>
+<td style="text-align: left;">Full duration until next VBlank
+interval</td>
+<td style="text-align: left;">Near-zero wait; immediate scanout</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Buffer Queue State</strong></td>
+<td style="text-align: left;">Prone to queuing up to max swap chain
+buffers</td>
+<td style="text-align: left;">Minimal queueing; drops unread
+intermediate frames</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Behavior When FPS &gt; Refresh
+Rate</strong></td>
+<td style="text-align: left;">Frame rate capped; maximum queue
+latency</td>
+<td style="text-align: left;">Unlimited frame rate; lowest possible
+input latency; visual tearing</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Behavior When FPS &lt; Refresh
+Rate</strong></td>
+<td style="text-align: left;">Framerate snaps to divisors; latency
+spikes</td>
+<td style="text-align: left;">Framerate fluctuates naturally; minimal
+latency penalty</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>VRR Compatibility</strong></td>
+<td style="text-align: left;">Forces fixed-rate behavior if FPS exceeds
+max refresh</td>
+<td style="text-align: left;">Required to properly activate VRR without
+compositor intervention</td>
+</tr>
+</tbody>
+</table>
+<h2 id="implementation-considerations">Implementation
+Considerations</h2>
+<p>To achieve minimum presentation latency without stability issues,
+specific conditions must be met:</p>
+<ol type="1">
+<li><strong>Operating System and Driver Support:</strong>
+<code>DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING</code> requires Windows 10 or
+later and compatible display drivers. Applications must query support
+using <code>IDXGIFactory5::CheckFeatureSupport</code> with
+<code>DXGI_FEATURE_PRESENT_ALLOW_TEARING</code>.</li>
+<li><strong>Windowed vs. Exclusive Modes:</strong> In legacy exclusive
+fullscreen modes, disabling V-Sync implicitly allowed tearing. Under
+modern flip modes, <code>DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING</code> is
+essential to achieve equivalent low-latency performance in borderless
+windowed configurations without incurring DWM composition latency.</li>
+<li><strong>Present Flag Matching:</strong> The swap chain must be
+created with <code>DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING</code>, and
+individual present calls must pass
+<code>DXGI_PRESENT_ALLOW_TEARING</code> with a <code>SyncInterval</code>
+of 0. Attempting to present with tearing on an incompatible swap chain
+or configuration will cause the call to fail with
+<code>DXGI_ERROR_INVALID_CALL</code>.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/dxgi-allow-tearing-vs-v-sync-input-latency';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

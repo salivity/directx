@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Rasterizer Order Views Solve DirectX Blending Conflicts - directx</title>
+    <meta name="description" content="Rasterizer Order Views (ROVs) are a specialized hardware feature introduced in DirectX 11.3 and DirectX 12 that eliminate out-of-order execution hazards during custom pixel blending operations. Modern graphics hardware executes thousands of pixel shader t">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-rasterizer-order-views-solve-direct-x-blending-conflicts">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Rasterizer Order Views Solve DirectX Blending Conflicts - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-rasterizer-order-views-solve-direct-x-blending-conflicts" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Rasterizer Order Views (ROVs) are a specialized hardware feature introduced in DirectX 11.3 and DirectX 12 that eliminate out-of-order execution hazards during custom pixel blending operations. Modern graphics hardware executes thousands of pixel shader t" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-rasterizer-order-views-solve-directx-blending-conflicts">How
+Rasterizer Order Views Solve DirectX Blending Conflicts</h1>
+<p>Rasterizer Order Views (ROVs) are a specialized hardware feature
+introduced in DirectX 11.3 and DirectX 12 that eliminate out-of-order
+execution hazards during custom pixel blending operations. Modern
+graphics hardware executes thousands of pixel shader threads
+concurrently, which normally causes race conditions when multiple
+overlapping fragments read and write to the same memory location
+simultaneously via standard Unordered Access Views (UAVs). ROVs prevent
+these conflicts by enforcing deterministic, serialized read-modify-write
+cycles per pixel location based on primitive submission order, enabling
+accurate programmatic blending, Order-Independent Transparency (OIT),
+and custom rasterization algorithms without relying on fixed-function
+blend hardware.</p>
+<h3 id="the-concurrency-problem-with-standard-uavs">The Concurrency
+Problem with Standard UAVs</h3>
+<p>Traditional GPU pipelines rely on fixed-function blending units to
+combine overlapping fragments in the order they were submitted by the
+CPU. However, when developers require custom blending mathematics not
+supported by fixed-function hardware, they turn to programmable pixel
+shaders using Unordered Access Views (UAVs) to read existing pixel
+values, compute custom formulas, and write the results back.</p>
+<p>Because GPUs are massively parallel processors, pixel shader threads
+do not finish in a guaranteed chronological sequence. Multiple
+primitives covering the exact same <span class="math inline">\((x,
+y)\)</span> screen coordinates generate shader invocations that run
+concurrently across different execution units. If two fragments target
+the same pixel:</p>
+<ol type="1">
+<li>Fragment A reads the background color.</li>
+<li>Fragment B reads the background color before Fragment A has finished
+writing its updated value.</li>
+<li>Both fragments compute their results independently using the same
+stale source data.</li>
+<li>The last fragment to finish overwrites the other, causing a race
+condition (read-after-write hazard).</li>
+</ol>
+<p>This out-of-order execution produces visible visual artifacts,
+missing layers, and non-deterministic rendering anomalies.</p>
+<h3 id="how-rasterizer-order-views-guarantee-order">How Rasterizer Order
+Views Guarantee Order</h3>
+<p>Rasterizer Order Views solve this dilemma by providing
+synchronization directly within the memory access subsystem of the GPU.
+Exposed in HLSL through types like
+<code>RasterizerOrderedTexture2D</code>,
+<code>RasterizerOrderedBuffer</code>, and
+<code>RasterizerOrderedStructuredBuffer</code>, ROVs function
+identically to standard UAVs with one crucial behavioral difference:
+hardware-enforced ordering.</p>
+<h4 id="primitive-submission-tracking">Primitive Submission
+Tracking</h4>
+<p>The rasterizer stage in DirectX assigns an internal sequence order to
+every primitive (triangle, line, or point) based on the order it was
+issued by the application API. Even though the rasterizer dispatches
+fragments to shader cores in parallel, the primitive's sequence identity
+is retained.</p>
+<h4 id="spatial-hazard-interlocks">Spatial Hazard Interlocks</h4>
+<p>When a pixel shader attempts to access an ROV resource, the hardware
+checks the memory address corresponding to the current fragment’s pixel
+coordinate and sample index. If a preceding primitive that overlaps that
+exact coordinate is still executing its shader routine, the GPU pauses
+(interlocks) the newer shader invocation.</p>
+<p>The later shader invocation is held in a waiting state until the
+older primitive completes all memory operations associated with that
+pixel address. Once the prior fragment finishes writing, the waiting
+fragment is allowed to read the newly updated value, perform its
+calculations, and write its output.</p>
+<h4 id="localized-serialization">Localized Serialization</h4>
+<p>ROVs do not stall the entire GPU pipeline; serialization occurs
+strictly on a per-pixel basis:</p>
+<ul>
+<li>If Primitive 1 and Primitive 2 hit pixel <span
+class="math inline">\((100, 200)\)</span>, Primitive 2 waits for
+Primitive 1.</li>
+<li>If Primitive 3 hits pixel <span class="math inline">\((500,
+400)\)</span> at the same time, it executes concurrently at full speed
+because there is no coordinate conflict.</li>
+</ul>
+<p>By isolating the synchronization lock to overlapping memory
+locations, ROVs maintain high overall GPU throughput while completely
+preventing read-modify-write collisions.</p>
+<h3 id="key-use-cases">Key Use Cases</h3>
+<ul>
+<li><strong>Order-Independent Transparency (OIT):</strong> ROVs
+eliminate the need for memory-intensive per-pixel linked lists or
+multi-pass depth peeling by enabling on-the-fly, correctly sorted alpha
+blending directly in the shader.</li>
+<li><strong>Custom Blend Modes:</strong> Developers can implement
+advanced blend modes—such as Photoshop-style non-linear color operations
+or custom HDR tonemapping curves—that the GPU's fixed-function hardware
+cannot natively compute.</li>
+<li><strong>Volume Rendering and Voxelization:</strong> Applications can
+accumulate volumetric density or construct voxel grids deterministically
+without risking memory corruption from simultaneous writes.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-rasterizer-order-views-solve-direct-x-blending-conflicts';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

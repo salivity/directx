@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conservative Depth Output in DirectX Shaders - directx</title>
+    <meta name="description" content="Conservative depth output is a rendering feature introduced in DirectX 11 (Shader Model 5.0) that allows pixel shaders to modify fragment depth values while still retaining the performance benefits of early depth testing (Early-Z). By default, writing cus">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/conservative-depth-output-in-direct-x-shaders">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Conservative Depth Output in DirectX Shaders - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/conservative-depth-output-in-direct-x-shaders" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Conservative depth output is a rendering feature introduced in DirectX 11 (Shader Model 5.0) that allows pixel shaders to modify fragment depth values while still retaining the performance benefits of early depth testing (Early-Z). By default, writing cus" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="conservative-depth-output-in-directx-shaders">Conservative Depth
+Output in DirectX Shaders</h1>
+<p>Conservative depth output is a rendering feature introduced in
+DirectX 11 (Shader Model 5.0) that allows pixel shaders to modify
+fragment depth values while still retaining the performance benefits of
+early depth testing (Early-Z). By default, writing custom depth values
+in a pixel shader forces the graphics processing unit (GPU) to disable
+Early-Z, potentially wasting significant fill-rate and processing time
+on fully occluded pixels. Conservative depth provides a hardware hint
+guaranteeing that the generated depth will not exceed certain boundaries
+relative to the rasterized depth, allowing the GPU to selectively keep
+Early-Z rejection enabled.</p>
+<h3 id="the-conflict-between-depth-writes-and-early-z">The Conflict
+Between Depth Writes and Early-Z</h3>
+<p>Under normal rendering conditions, the GPU executes the depth-stencil
+test <em>before</em> executing the pixel shader—a pipeline optimization
+known as Early-Z (or Early Depth-Stencil). If a fragment fails the depth
+comparison against the current depth buffer value, it is immediately
+discarded, avoiding the expensive computational cost of running the
+pixel shader.</p>
+<p>However, if a pixel shader outputs to the <code>SV_Depth</code>
+semantic, the hardware cannot determine the final depth of the fragment
+at the rasterization stage. Consequently, the GPU must disable Early-Z
+and revert to Late-Z testing:</p>
+<ol type="1">
+<li>The pixel shader runs unconditionally for every rasterized
+fragment.</li>
+<li>The pixel shader calculates and outputs the final depth value.</li>
+<li>The depth test occurs <em>after</em> execution, discarding any
+occluded fragments only after their shading work has already been
+wasted.</li>
+</ol>
+<p>In scenes with heavy overdraw, complex lighting, or procedural depth
+modifications (such as raymarched decals, relief mapping, or impostors),
+disabling Early-Z can introduce massive performance bottlenecks.</p>
+<h3 id="conservative-depth-semantics-in-hlsl">Conservative Depth
+Semantics in HLSL</h3>
+<p>DirectX addresses this limitation through conservative depth output
+semantics. Instead of using the generic <code>SV_Depth</code>,
+High-Level Shader Language (HLSL) provides specialized semantics that
+declare an invariant relationship between the interpolated rasterizer
+depth (<span class="math inline">\(z_{\text{raster}}\)</span>) and the
+depth calculated in the shader (<span
+class="math inline">\(z_{\text{shader}}\)</span>):</p>
+<ul>
+<li><strong><code>SV_DepthGreaterEqual</code></strong>: Guarantees that
+<span class="math inline">\(z_{\text{shader}} \ge
+z_{\text{raster}}\)</span>. The shader promises that the calculated
+depth will only stay the same or move further away from the camera.</li>
+<li><strong><code>SV_DepthLessEqual</code></strong>: Guarantees that
+<span class="math inline">\(z_{\text{shader}} \le
+z_{\text{raster}}\)</span>. The shader promises that the calculated
+depth will only stay the same or move closer to the camera.</li>
+</ul>
+<h3 id="optimization-mechanism-partial-early-z">Optimization Mechanism:
+Partial Early-Z</h3>
+<p>When a conservative depth semantic is declared, the GPU's
+fixed-function rasterizer and hierarchical depth (Hi-Z) hardware can
+make early depth decisions based on the declared constraint.</p>
+<p>Consider a standard reversed-Z configuration, where the near plane is
+<span class="math inline">\(1.0\)</span> and the far plane is <span
+class="math inline">\(0.0\)</span>, using a <code>GREATER_EQUAL</code>
+depth comparison function:</p>
+<ul>
+<li>If the shader uses <strong><code>SV_DepthLessEqual</code></strong>,
+it guarantees that the pixel's depth can only become smaller (further
+away from the camera).</li>
+<li>If the rasterized depth (<span
+class="math inline">\(z_{\text{raster}}\)</span>) already fails the
+depth test against the existing value in the depth buffer, it is
+mathematically impossible for the final shader-generated depth (<span
+class="math inline">\(z_{\text{shader}}\)</span>) to pass, because it
+can only be smaller than or equal to <span
+class="math inline">\(z_{\text{raster}}\)</span>.</li>
+<li>The GPU can safely reject the fragment <strong>prior to running the
+pixel shader</strong>.</li>
+</ul>
+<p>While conservative depth does not allow for <em>early depth buffer
+writes</em> (since the exact value is still unknown until the shader
+executes), it reliably preserves <strong>early depth rejection</strong>.
+Fragments that are definitively behind existing geometry are discarded
+immediately, saving shader execution cycles and memory bandwidth.</p>
+<h3 id="implementation-example">Implementation Example</h3>
+<p>To implement conservative depth in HLSL, replace the standard
+<code>SV_Depth</code> output with the appropriate semantic in the output
+structure:</p>
+<pre class="hlsl"><code>struct PixelOutput
+{
+    float4 Color : SV_Target;
+    float Depth  : SV_DepthGreaterEqual;
+};
+
+PixelOutput PSMain(PixelInput input)
+{
+    PixelOutput output;
+    
+    // Perform procedural depth offset (must only push depth deeper)
+    float modifiedDepth = input.Position.z + CalculateDepthOffset(input.UV);
+    
+    output.Color = CalculateLighting(input);
+    output.Depth = modifiedDepth;
+    
+    return output;
+}</code></pre>
+<p>If the shader violates the declared invariant at runtime (for
+example, outputting a value less than <span
+class="math inline">\(z_{\text{raster}}\)</span> while using
+<code>SV_DepthGreaterEqual</code>), the result is undefined, usually
+leading to visual artifacts or clipping.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/conservative-depth-output-in-direct-x-shaders';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

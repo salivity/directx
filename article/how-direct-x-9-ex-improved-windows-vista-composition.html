@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectX 9Ex Improved Windows Vista Composition - directx</title>
+    <meta name="description" content="The release of Windows Vista marked a fundamental shift in desktop rendering with the debut of the Desktop Window Manager (DWM) powered by DirectX 9Ex. Prior to Vista, desktop graphics relied heavily on the CPU and GDI, leading to visual artifacts and tea">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-x-9-ex-improved-windows-vista-composition">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectX 9Ex Improved Windows Vista Composition - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-x-9-ex-improved-windows-vista-composition" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The release of Windows Vista marked a fundamental shift in desktop rendering with the debut of the Desktop Window Manager (DWM) powered by DirectX 9Ex. Prior to Vista, desktop graphics relied heavily on the CPU and GDI, leading to visual artifacts and tea" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directx-9ex-improved-windows-vista-composition">How DirectX
+9Ex Improved Windows Vista Composition</h1>
+<p>The release of Windows Vista marked a fundamental shift in desktop
+rendering with the debut of the Desktop Window Manager (DWM) powered by
+DirectX 9Ex. Prior to Vista, desktop graphics relied heavily on the CPU
+and GDI, leading to visual artifacts and tearing. DirectX 9Ex—an
+extension of DirectX 9.0c designed specifically for the Windows Display
+Driver Model (WDDM)—introduced native shared surfaces, virtualized video
+memory, and robust device-loss recovery. These advancements allowed
+Windows Vista to offload desktop composition to the GPU, enabling smooth
+real-time effects like Aero Glass and eliminating traditional window
+redraw problems.</p>
+<h3
+id="hardware-accelerated-desktop-window-manager">Hardware-Accelerated
+Desktop Window Manager</h3>
+<p>In previous versions of Windows, applications rendered directly to
+the display buffer using GDI or direct drawing. If a window hung or was
+dragged across the screen, it left behind an infamous "trail" artifact
+because the underlying applications were forced to redraw their vacated
+spaces.</p>
+<p>DirectX 9Ex altered this architecture by redirecting each
+application’s window rendering to an off-screen surface stored in video
+memory. DWM then acts as a compositor, treating each window as a
+3D-textured plane and combining them onto the final screen output. This
+decoupled application rendering from desktop display, ensuring windows
+never lagged or failed to repaint.</p>
+<h3 id="cross-process-shared-surfaces">Cross-Process Shared
+Surfaces</h3>
+<p>A central limitation of standard DirectX 9 was that resources created
+by one process could not be read directly by another without copying
+data back to system memory (RAM).</p>
+<p>DirectX 9Ex resolved this by introducing cross-process surface
+sharing. An application—such as Windows Media Player or a web
+browser—could render its content into a shared DirectX 9Ex surface. DWM
+could then directly read this GPU surface to composite the desktop
+without transferring frames back and forth through the CPU or system
+memory. This drastically lowered overhead and latency, making real-time
+thumbnail previews and transparent blur effects viable.</p>
+<h3 id="video-memory-virtualization-and-management">Video Memory
+Virtualization and Management</h3>
+<p>DirectX 9Ex worked in lockstep with the WDDM graphics driver model to
+introduce virtualized video memory. Older DirectX APIs treated video RAM
+as a rigid, finite resource; if memory ran out, allocations simply
+failed.</p>
+<p>DirectX 9Ex enabled the operating system to dynamically page video
+memory into system RAM and back to the GPU as needed. This allowed
+dozens of open windows to each maintain high-resolution off-screen
+buffers simultaneously without running out of graphics memory or
+crashing the compositor.</p>
+<h3 id="resilient-device-loss-handling">Resilient Device-Loss
+Handling</h3>
+<p>Under earlier versions of DirectX, events such as locking the
+workstation, pressing <code>Ctrl+Alt+Del</code>, or changing display
+resolutions caused a "device lost" state. When this occurred, standard
+DirectX 9 applications were forced to manually destroy and recreate all
+non-managed video memory resources, often leading to crashes or desktop
+freezes.</p>
+<p>DirectX 9Ex removed this limitation. It allowed resources to persist
+across state changes and introduced an automatic reallocation model. If
+the graphics driver crashed, the WDDM could restart the driver and DWM
+without forcing the user to reboot or losing their active application
+data.</p>
+<h3 id="tear-free-rendering-and-v-sync-enforcement">Tear-Free Rendering
+and V-Sync Enforcement</h3>
+<p>Because DirectX 9Ex centralized the presentation loop inside DWM, the
+operating system could enforce vertical synchronization (V-Sync)
+globally. By double-buffering the entire desktop composition and
+flipping frames in sync with the display refresh rate, DirectX 9Ex
+completely eliminated the horizontal screen tearing that plagued earlier
+versions of Windows during video playback and desktop navigation.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-direct-x-9-ex-improved-windows-vista-composition';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SV_DispatchThreadID in DirectX Compute Shaders - directx</title>
+    <meta name="description" content="This article provides an overview of how SVDispatchThreadID operates within DirectX compute shaders to provide unique, global 3D coordinates across execution threads. In GPU compute pipelines, thousands of threads execute concurrently across distributed t">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/sv-dispatch-thread-id-in-direct-x-compute-shaders">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="SV_DispatchThreadID in DirectX Compute Shaders - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/sv-dispatch-thread-id-in-direct-x-compute-shaders" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of how SVDispatchThreadID operates within DirectX compute shaders to provide unique, global 3D coordinates across execution threads. In GPU compute pipelines, thousands of threads execute concurrently across distributed t" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="sv_dispatchthreadid-in-directx-compute-shaders">SV_DispatchThreadID
+in DirectX Compute Shaders</h1>
+<p>This article provides an overview of how
+<code>SV_DispatchThreadID</code> operates within DirectX compute shaders
+to provide unique, global 3D coordinates across execution threads. In
+GPU compute pipelines, thousands of threads execute concurrently across
+distributed thread groups. <code>SV_DispatchThreadID</code> acts as a
+built-in HLSL system-value semantic that automatically calculates each
+thread’s absolute spatial position across the entire dispatch grid,
+eliminating the need for manual coordinate reconstruction when
+processing 3D data such as volumes, voxels, and spatial simulations.</p>
+<h2 id="understanding-the-execution-hierarchy">Understanding the
+Execution Hierarchy</h2>
+<p>DirectX compute shaders organize execution into a two-level grid:</p>
+<ol type="1">
+<li><strong>Thread Groups (Dispatch Grid):</strong> Defined on the CPU
+via the <code>Dispatch(X, Y, Z)</code> API call, specifying the number
+of thread groups across three dimensions.</li>
+<li><strong>Threads within a Group:</strong> Defined in HLSL using the
+<code>[numthreads(X, Y, Z)]</code> attribute, specifying the dimensions
+of individual threads inside each group.</li>
+</ol>
+<p>Because of this nested structure, each thread has both a local
+position within its specific group and a global position across all
+launched groups.</p>
+<h2 id="the-mathematical-function-of-sv_dispatchthreadid">The
+Mathematical Function of SV_DispatchThreadID</h2>
+<p><code>SV_DispatchThreadID</code> provides a <code>uint3</code> vector
+containing the global coordinates <code>(x, y, z)</code> of the
+executing thread across the entire dispatch call.</p>
+<p>HLSL computes this value behind the scenes using the following vector
+formula:</p>
+<pre class="text"><code>SV_DispatchThreadID = (SV_GroupID * numthreads) + SV_GroupThreadID</code></pre>
+<p>Where:</p>
+<ul>
+<li><strong><code>SV_GroupID</code></strong>: The 3D index of the
+current thread group within the dispatch call.</li>
+<li><strong><code>numthreads</code></strong>: The static dimensions of
+the thread group specified in the shader attribute.</li>
+<li><strong><code>SV_GroupThreadID</code></strong>: The 3D index of the
+thread relative only to its local group.</li>
+</ul>
+<p>By applying this calculation across the X, Y, and Z axes
+simultaneously, DirectX gives every thread a distinct, non-overlapping
+coordinate within the global 3D domain.</p>
+<h2 id="direct-indexing-into-3d-resources">Direct Indexing into 3D
+Resources</h2>
+<p>The primary function of <code>SV_DispatchThreadID</code> in 3D
+compute tasks is providing a direct, 1:1 index for reading and writing
+to 3D spatial resources, such as volumetric textures
+(<code>RWTexture3D</code>) or 3D structured buffers.</p>
+<pre class="hlsl"><code>RWTexture3D&lt;float4&gt; OutputVolume : register(u0);
+
+cbuffer VolumeConstants : register(b0)
+{
+    uint3 VolumeDimensions;
+};
+
+[numthreads(8, 8, 8)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    // Prevent out-of-bounds writes when volume dimensions are not multiples of group size
+    if (id.x &gt;= VolumeDimensions.x || id.y &gt;= VolumeDimensions.y || id.z &gt;= VolumeDimensions.z)
+    {
+        return;
+    }
+
+    // Directly use the 3D coordinate
+    OutputVolume[id] = float4(id.x / (float)VolumeDimensions.x, 
+                              id.y / (float)VolumeDimensions.y, 
+                              id.z / (float)VolumeDimensions.z, 
+                              1.0f);
+}</code></pre>
+<h2 id="linearizing-3d-coordinates">Linearizing 3D Coordinates</h2>
+<p>When writing to a flat 1D buffer (such as a structured or
+byte-address buffer) representing a 3D grid,
+<code>SV_DispatchThreadID</code> provides the base components needed to
+calculate a linear index:</p>
+<pre class="hlsl"><code>uint linearIndex = id.x + 
+                   (id.y * VolumeDimensions.x) + 
+                   (id.z * VolumeDimensions.x * VolumeDimensions.y);</code></pre>
+<p>Using <code>SV_DispatchThreadID</code> ensures that hardware dispatch
+mechanics remain decoupled from memory access logic, providing a clean
+and efficient coordinate space for spatial GPU workloads.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/sv-dispatch-thread-id-in-direct-x-compute-shaders';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

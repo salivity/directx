@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shader Model 6.7 Texture and Integer Capabilities - directx</title>
+    <meta name="description" content="Shader Model 6.7 introduces substantial updates to the Microsoft DirectX ecosystem, giving graphics and compute engineers finer control over memory layout and arithmetic performance. By expanding texture addressing mechanics with dynamic offsets, raw gath">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/shader-model-6-7-texture-and-integer-capabilities">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Shader Model 6.7 Texture and Integer Capabilities - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/shader-model-6-7-texture-and-integer-capabilities" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Shader Model 6.7 introduces substantial updates to the Microsoft DirectX ecosystem, giving graphics and compute engineers finer control over memory layout and arithmetic performance. By expanding texture addressing mechanics with dynamic offsets, raw gath" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="shader-model-67-texture-and-integer-capabilities">Shader Model
+6.7 Texture and Integer Capabilities</h1>
+<p>Shader Model 6.7 introduces substantial updates to the Microsoft
+DirectX ecosystem, giving graphics and compute engineers finer control
+over memory layout and arithmetic performance. By expanding texture
+addressing mechanics with dynamic offsets, raw gathering, and writable
+multi-sample surfaces, and simultaneously introducing packed integer
+operations and expanded 64-bit math, Shader Model 6.7 significantly
+accelerates modern rendering algorithms, custom filtering pipelines, and
+on-GPU machine learning tasks.</p>
+<h3 id="enhanced-texture-addressing-features">Enhanced Texture
+Addressing Features</h3>
+<p>Prior to Shader Model 6.7, many texture sampling instructions
+required compile-time immediate offsets, restricting procedural
+adjustments and requiring branching or redundant sampling logic. Shader
+Model 6.7 overcomes these constraints with key updates to resource
+addressing:</p>
+<ul>
+<li><strong>Dynamic and Programmable Offsets:</strong> Developers can
+now use runtime-variable integer offsets within texture fetch and gather
+instructions. This removes the necessity of compile-time constants for
+offset parameters, streamlining procedural texture filtering,
+screen-space ambient occlusion (SSAO), and shadow mapping algorithms
+without adding instruction overhead.</li>
+<li><strong>Raw Gather Instructions:</strong> New raw gather intrinsics
+allow shaders to sample memory directly without standard hardware-level
+format conversions or color-space decoding. This capability is critical
+for custom compression algorithms, custom reconstruction filters, and
+reading packed G-buffer data where bit-exact representation must be
+preserved.</li>
+<li><strong>Writable MSAA Resources:</strong> Multi-Sample Anti-Aliasing
+(MSAA) textures can now be bound and written to directly as Unordered
+Access Views (UAVs). Shaders can read from, resolve, or write per-sample
+data dynamically within compute or pixel shaders, providing deep
+flexibility for custom anti-aliasing passes, deferred rendering
+resolves, and sub-pixel visibility buffers.</li>
+</ul>
+<h3 id="expanded-integer-capabilities">Expanded Integer
+Capabilities</h3>
+<p>Shader Model 6.7 broadens DirectX’s native math toolkit by adding
+native packed-integer manipulation and expanding support for 64-bit
+scalar operations. These updates specifically target compute-heavy
+applications such as physics, traversal logic, and neural network
+inference.</p>
+<ul>
+<li><strong>Packed Integer Dot Products:</strong> The addition of native
+packed dot product instructions—commonly referred to as DP4A and DP2A
+intrinsics—allows shaders to compute dot products of 8-bit or 16-bit
+integers and accumulate them into a 32-bit destination in a single
+cycle. This dramatically increases throughput for low-precision matrix
+multiplications used in machine-learning upscaling, denoising filters,
+and compact vector math.</li>
+<li><strong>Native Pack and Unpack Intrinsics:</strong> HLSL now
+provides standardized intrinsics to pack 32-bit values into 8-bit and
+16-bit representations, and vice versa. These functions include clamping
+and signed/unsigned variants, reducing the manual bit-shifting and
+masking logic previously required to compress vertex attributes or
+G-buffer channels.</li>
+<li><strong>Extended 64-Bit Integer Support:</strong> Shader Model 6.7
+expands arithmetic and bitwise capabilities across 64-bit unsigned and
+signed integers (<code>uint64_t</code> and <code>int64_t</code>). This
+includes support for extended bitfield extractions, insertions,
+count-leading-zeros, and expanded 64-bit atomic operations, enabling
+stable large-world coordinate handling, virtual memory management, and
+high-precision compute workloads without numerical overflow.</li>
+</ul>
+<h3 id="practical-impact-on-pipeline-design">Practical Impact on
+Pipeline Design</h3>
+<p>By merging dynamic texture coordinates with packed mathematical
+operations, Shader Model 6.7 eliminates common architectural bottlenecks
+in DirectX 12 applications. Developers can write more expressive,
+branch-free shader code, reduce register pressure by packing data into
+smaller formats, and implement sophisticated custom reconstruction
+filters directly on modern GPU hardware.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/shader-model-6-7-texture-and-integer-capabilities';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

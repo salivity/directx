@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Linked vs Unlinked Multi-Adapter - directx</title>
+    <meta name="description" content="DirectX 12 introduced explicit multi-adapter support, allowing developers to harness the combined power of multiple graphics processing units (GPUs) directly within their applications. The primary distinction between the two configurations lies in how the">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-linked-vs-unlinked-multi-adapter">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Linked vs Unlinked Multi-Adapter - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-linked-vs-unlinked-multi-adapter" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 introduced explicit multi-adapter support, allowing developers to harness the combined power of multiple graphics processing units (GPUs) directly within their applications. The primary distinction between the two configurations lies in how the" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-linked-vs-unlinked-multi-adapter">DirectX 12 Linked
+vs Unlinked Multi-Adapter</h1>
+<p>DirectX 12 introduced explicit multi-adapter support, allowing
+developers to harness the combined power of multiple graphics processing
+units (GPUs) directly within their applications. The primary distinction
+between the two configurations lies in how the system views and handles
+the hardware: <strong>linked multi-adapter mode</strong> binds identical
+GPUs together as a single logical unit to share resources over
+high-speed interconnects, whereas <strong>unlinked multi-adapter
+mode</strong> allows completely different, independent GPUs to work
+together through explicit developer control. Understanding these
+differences is essential for optimizing rendering pipelines across
+varied PC hardware.</p>
+<h3 id="linked-multi-adapter-mode">Linked Multi-Adapter Mode</h3>
+<p>In linked multi-adapter mode, the GPUs must be nearly identical
+hardware configurations, typically from the same vendor and architecture
+(such as systems historically using NVIDIA SLI or AMD CrossFire
+technologies).</p>
+<p>DirectX 12 exposes linked GPUs as a single <code>ID3D12Device</code>
+containing multiple "nodes." Because the hardware is symmetrical and
+linked, these nodes share resources much more intimately:</p>
+<ul>
+<li><strong>Unified Driver and Architecture:</strong> The GPUs utilize a
+single driver instance, enabling optimized hardware-level
+communication.</li>
+<li><strong>Shared Memory Pools:</strong> In linked mode, GPUs can
+mirror memory or directly access peer GPU memory over high-speed bridges
+(like NVLink) or PCIe buses with minimal latency.</li>
+<li><strong>Streamlined Control:</strong> Developers manage one device
+context while specifying which specific node executes a command list,
+simplifying synchronization compared to completely separate
+adapters.</li>
+<li><strong>Primary Use Case:</strong> Traditional multi-GPU performance
+scaling, such as Alternate Frame Rendering (AFR) or Split Frame
+Rendering (SFR), where raw graphics throughput is divided evenly across
+identical cards.</li>
+</ul>
+<h3 id="unlinked-multi-adapter-mode">Unlinked Multi-Adapter Mode</h3>
+<p>Unlinked multi-adapter mode treats every GPU in the system as an
+entirely independent entity. This mode works across heterogeneous
+configurations, meaning you can combine an integrated GPU (iGPU) with a
+dedicated GPU (dGPU), or even combine cards from different manufacturers
+(such as an AMD GPU paired with an NVIDIA GPU).</p>
+<p>Under the DirectX 12 API, each GPU is represented by its own separate
+<code>ID3D12Device</code>:</p>
+<ul>
+<li><strong>Hardware Independence:</strong> No bridges, matched
+architectures, or shared drivers are required.</li>
+<li><strong>Explicit Resource Transfer:</strong> Memory cannot be
+directly shared or mirrored automatically. The application must
+explicitly copy data from one GPU’s memory into shared system RAM, and
+then into the second GPU's memory.</li>
+<li><strong>High Synchronization Overhead:</strong> The developer is
+entirely responsible for coordinating workloads, managing fences across
+different devices, and preventing bottlenecks caused by system bus
+latency.</li>
+<li><strong>Primary Use Case:</strong> Task-based offloading. For
+example, a heavy 3D rendering workload can run on a dedicated graphics
+card while the integrated CPU graphics processes asynchronous compute
+tasks like physics, AI, ambient occlusion, or post-processing
+passes.</li>
+</ul>
+<h3 id="core-differences-at-a-glance">Core Differences at a Glance</h3>
+<ul>
+<li><strong>Hardware Compatibility:</strong> Linked mode demands matched
+hardware architectures from the same vendor. Unlinked mode accepts any
+combination of DirectX 12-capable GPUs.</li>
+<li><strong>API Representation:</strong> Linked mode provides one device
+with multiple internal nodes (<code>ID3D12Device</code> with node
+masks). Unlinked mode exposes separate, distinct devices for each
+adapter.</li>
+<li><strong>Memory Management:</strong> Linked setups can leverage
+peer-to-peer memory access and automatic mirroring. Unlinked setups
+require explicit memory staging and transfer over the PCIe bus via
+system memory.</li>
+<li><strong>Implementation Complexity:</strong> While both explicit
+multi-adapter modes require manual programming compared to legacy
+driver-managed solutions, unlinked mode is significantly more complex
+due to the need to balance asymmetric compute power and manage distinct
+device contexts.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-12-linked-vs-unlinked-multi-adapter';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

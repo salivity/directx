@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX Clamp and Border Texture Addressing Modes - directx</title>
+    <meta name="description" content="This article provides an overview of how the Microsoft DirectX API and modern graphics hardware process texture sampling beyond standard normalized coordinates using clamp and border addressing modes. It details the underlying mechanics of the sampler uni">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-clamp-and-border-texture-addressing-modes">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX Clamp and Border Texture Addressing Modes - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-clamp-and-border-texture-addressing-modes" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of how the Microsoft DirectX API and modern graphics hardware process texture sampling beyond standard normalized coordinates using clamp and border addressing modes. It details the underlying mechanics of the sampler uni" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-clamp-and-border-texture-addressing-modes">DirectX Clamp
+and Border Texture Addressing Modes</h1>
+<p>This article provides an overview of how the Microsoft DirectX API
+and modern graphics hardware process texture sampling beyond standard
+normalized coordinates using clamp and border addressing modes. It
+details the underlying mechanics of the sampler unit, explores how
+coordinates outside the standard range are evaluated during filtering,
+and explains the API configuration for both Direct3D 11 and Direct3D
+12.</p>
+<h3 id="texture-addressing-modes-in-directx">Texture Addressing Modes in
+DirectX</h3>
+<p>In DirectX (Direct3D 11 and Direct3D 12), texture coordinates <span
+class="math inline">\((u, v, w)\)</span> typically range from <span
+class="math inline">\(0.0\)</span> to <span
+class="math inline">\(1.0\)</span>, mapping directly across the
+dimensions of a texture resource. When a shader requests a sample using
+coordinates outside this normalized <span class="math inline">\([0.0,
+1.0]\)</span> range, the Texture Mapping Unit (TMU) relies on the
+addressing mode defined in the active sampler state
+(<code>D3D11_SAMPLER_DESC</code> or <code>D3D12_SAMPLER_DESC</code>) to
+determine what color data to return.</p>
+<p>DirectX exposes these behaviors through the
+<code>D3D12_TEXTURE_ADDRESS_MODE</code> (or
+<code>D3D11_TEXTURE_ADDRESS_MODE</code>) enumeration, where
+<code>CLAMP</code> and <code>BORDER</code> serve distinct visual and
+mathematical purposes.</p>
+<h3 id="clamp-mode-texture_address_mode_clamp">Clamp Mode
+(<code>TEXTURE_ADDRESS_MODE_CLAMP</code>)</h3>
+<p>Clamp mode restricts texture coordinates to the extreme edges of the
+<span class="math inline">\([0.0, 1.0]\)</span> range. Mathematically,
+the coordinate <span class="math inline">\(x\)</span> is evaluated
+as:</p>
+<p><span class="math display">\[x_{\text{clamped}} = \max(0.0, \min(x,
+1.0))\]</span></p>
+<h4 id="hardware-execution">Hardware Execution</h4>
+<p>When a coordinate less than <span class="math inline">\(0.0\)</span>
+is sampled, the hardware assigns it the coordinate of the first texel
+center along that axis (index <span class="math inline">\(0\)</span>).
+When a coordinate greater than <span class="math inline">\(1.0\)</span>
+is sampled, the hardware assigns it the coordinate of the final texel
+center along that axis (index <span class="math inline">\(N -
+1\)</span>, where <span class="math inline">\(N\)</span> is the
+dimension size).</p>
+<h4 id="filtering-behavior">Filtering Behavior</h4>
+<ul>
+<li><strong>Point Filtering:</strong> Any sample requested outside <span
+class="math inline">\([0.0, 1.0]\)</span> immediately resolves to the
+nearest valid border texel on that edge.</li>
+<li><strong>Linear Filtering:</strong> The sampling footprint clamps
+each coordinate independently before computing the weighted average. As
+a result, coordinates extending far beyond the edge do not interpolate
+toward zero or an empty space; they continually sample the edge texel
+column or row, creating a streaked, stretched appearance of the boundary
+pixels.</li>
+</ul>
+<p>Clamp mode is primarily used to eliminate sampling seams on skyboxes,
+UI elements, and sprite sheets where neighboring texture data must not
+bleed into the current primitive.</p>
+<h3 id="border-mode-texture_address_mode_border">Border Mode
+(<code>TEXTURE_ADDRESS_MODE_BORDER</code>)</h3>
+<p>Border mode specifies that any coordinate outside the range <span
+class="math inline">\([0.0, 1.0]\)</span> evaluates to an arbitrary,
+fixed color defined by the application.</p>
+<p>In the sampler state description, the developer defines an array of
+four floating-point values:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">float</span> BorderColor<span class="op">[</span><span class="dv">4</span><span class="op">];</span> <span class="co">// RGBA values</span></span></code></pre></div>
+<h4 id="hardware-execution-1">Hardware Execution</h4>
+<p>When a texture coordinate falls outside <span
+class="math inline">\([0.0, 1.0]\)</span>, the TMU substitutes the fetch
+result with the stored <code>BorderColor</code> constant rather than
+fetching from the texture memory.</p>
+<h4 id="filtering-behavior-1">Filtering Behavior</h4>
+<ul>
+<li><strong>Point Filtering:</strong> Coordinates within <span
+class="math inline">\([0.0, 1.0]\)</span> return the exact texel color,
+while coordinates outside return the exact
+<code>BorderColor</code>.</li>
+<li><strong>Linear Filtering:</strong> The TMU filters between the edge
+texels of the texture and the border color. Because bilinear and
+trilinear filters evaluate a footprint (typically spanning across
+adjacent texels), a sample located at <span
+class="math inline">\(1.0\)</span> along an axis with linear filtering
+enabled will blend half of the edge texel's color with half of the
+border color. Once the sampling footprint moves completely outside <span
+class="math inline">\([0.0, 1.0]\)</span>, the return value becomes
+<span class="math inline">\(100\%\)</span>
+<code>BorderColor</code>.</li>
+</ul>
+<p>Border mode is widely used in shadow mapping (where coordinates
+outside the light frustum must return a maximum depth value to avoid
+casting false shadows) and decal projection (to cleanly fade or clip
+geometry outside the projection bounds).</p>
+<h3 id="directx-api-differences-static-vs-dynamic-samplers">DirectX API
+Differences: Static vs. Dynamic Samplers</h3>
+<p>In Direct3D 11, arbitrary border colors are fully supported through
+<code>D3D11_SAMPLER_DESC::BorderColor</code>.</p>
+<p>In Direct3D 12, developers have two options:</p>
+<ol type="1">
+<li><strong>Descriptor Heap Samplers:</strong> Standard sampler
+descriptors support arbitrary RGBA border colors via
+<code>D3D12_SAMPLER_DESC</code>.</li>
+<li><strong>Root Signature Static Samplers:</strong> Direct3D 12
+introduces static samplers directly inside root signatures for
+performance optimization. Static samplers restrict the
+<code>BorderColor</code> parameter to an enumeration
+(<code>D3D12_STATIC_BORDER_COLOR</code>), supporting only predefined
+presets:
+<ul>
+<li><code>TRANSPARENT_BLACK</code> <span class="math inline">\((0, 0, 0,
+0)\)</span></li>
+<li><code>OPAQUE_BLACK</code> <span class="math inline">\((0, 0, 0,
+1)\)</span></li>
+<li><code>OPAQUE_WHITE</code> <span class="math inline">\((1, 1, 1,
+1)\)</span></li>
+</ul></li>
+</ol>
+<p>This restriction enables hardware to bake the border color directly
+into shader execution units without allocating dedicated descriptor
+storage.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-clamp-and-border-texture-addressing-modes';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compile-Time Defines in DirectX Shader Code Generation - directx</title>
+    <meta name="description" content="Compile-time defines in DirectX shaders allow developers to generate specialized, highly optimized GPU machine code from a single High-Level Shader Language (HLSL) codebase. By feeding preprocessor macros into the DirectX shader compiler at build time, in">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/compile-time-defines-in-direct-x-shader-code-generation">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Compile-Time Defines in DirectX Shader Code Generation - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/compile-time-defines-in-direct-x-shader-code-generation" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Compile-time defines in DirectX shaders allow developers to generate specialized, highly optimized GPU machine code from a single High-Level Shader Language (HLSL) codebase. By feeding preprocessor macros into the DirectX shader compiler at build time, in" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="compile-time-defines-in-directx-shader-code-generation">Compile-Time
+Defines in DirectX Shader Code Generation</h1>
+<p>Compile-time defines in DirectX shaders allow developers to generate
+specialized, highly optimized GPU machine code from a single High-Level
+Shader Language (HLSL) codebase. By feeding preprocessor macros into the
+DirectX shader compiler at build time, inactive code branches are
+stripped before intermediate representation generation, fundamentally
+altering instruction sequences, resource bindings, register allocation,
+and execution performance on the target hardware.</p>
+<h3 id="preprocessor-evaluation-and-ast-pruning">Preprocessor Evaluation
+and AST Pruning</h3>
+<p>When compiling HLSL using the legacy FXC (Effects Compiler) or the
+modern DXC (DirectX Compiler based on LLVM), compile-time defines can be
+supplied via source <code>#define</code> directives or passed
+programmatically through API structures such as
+<code>D3D_SHADER_MACRO</code>.</p>
+<p>The preprocessor evaluates conditional directives like
+<code>#if</code>, <code>#ifdef</code>, and <code>#elif</code> before the
+abstract syntax tree (AST) is generated. Any code block encapsulated
+within an unsatisfied preprocessor condition is discarded immediately.
+Because the compiler’s front-end never parses discarded blocks into the
+AST, those paths are excluded from semantic analysis, intermediate
+representation (DXBC or DXIL), and final hardware assembly.</p>
+<h3 id="dead-code-elimination-and-control-flow-flattening">Dead-Code
+Elimination and Control Flow Flattening</h3>
+<p>Dynamic branching on the GPU—evaluating an <code>if-else</code>
+condition at runtime using uniform variables or per-pixel data—can
+introduce branch divergence and instruction overhead. When compile-time
+defines resolve a condition prior to compilation, the compiler
+completely eliminates the branch instruction.</p>
+<p>Without conditional control flow instructions (<code>if</code>,
+<code>else</code>, <code>switch</code>), the compiler flattens execution
+into a linear instruction sequence. This dead-code elimination
+removes:</p>
+<ul>
+<li>Arithmetic instructions associated with inactive feature sets (e.g.,
+calculating specular highlights or subsurface scattering).</li>
+<li>Inactive texture sampling and memory load instructions.</li>
+<li>Dynamic branch instructions that could stall the GPU pipeline or
+cause execution divergence within a wavefront or warp.</li>
+</ul>
+<h3 id="register-allocation-and-gpu-occupancy">Register Allocation and
+GPU Occupancy</h3>
+<p>GPUs execute threads in parallel groups called warps (NVIDIA) or
+wavefronts (AMD). The number of active warps a GPU compute unit can
+maintain simultaneously—referred to as occupancy—is strictly bounded by
+the number of hardware registers each thread consumes.</p>
+<p>Compile-time defines directly alter register pressure:</p>
+<ul>
+<li><strong>Vector General-Purpose Registers (VGPRs):</strong> Removing
+code paths eliminates intermediate variables that would otherwise occupy
+VGPRs.</li>
+<li><strong>Scalar General-Purpose Registers (SGPRs):</strong> Removing
+dynamic uniform logic reduces scalar register consumption.</li>
+</ul>
+<p>By compiling out unused features via defines, the shader's peak
+register usage decreases. This lower footprint allows the hardware
+scheduler to allocate more simultaneous wavefronts per compute unit,
+improving latency hiding and overall throughput.</p>
+<h3 id="resource-reflection-and-binding-stripping">Resource Reflection
+and Binding Stripping</h3>
+<p>DirectX shaders declare resources such as constant buffers
+(<code>cbuffer</code>), StructuredBuffers, textures
+(<code>Texture2D</code>), and samplers (<code>SamplerState</code>). When
+compile-time defines eliminate the instructions that reference a
+specific resource, the compiler strips the unused resource from the
+final shader bytecode reflection data.</p>
+<p>This stripping changes the root signature requirements and descriptor
+table layouts:</p>
+<ul>
+<li>Unused texture slots and sampler bindings are omitted.</li>
+<li>Constant buffer definitions can be trimmed, preventing the need to
+upload unread constant data from the CPU.</li>
+<li>Pipeline State Objects (PSOs) operate with tighter resource
+bindings, reducing descriptor cache churn and memory bandwidth
+usage.</li>
+</ul>
+<h3 id="shader-permutation-architecture">Shader Permutation
+Architecture</h3>
+<p>The architectural consequence of using compile-time defines is the
+creation of a shader permutation matrix (often called an "uber-shader"
+pipeline). Rather than maintaining separate files for every combination
+of rendering features (e.g., normal mapping, shadow mapping, skinning,
+parallax occlusion), a single monolithic HLSL file is compiled dozens or
+thousands of times with different permutations of defines.</p>
+<p>Each permutation yields a distinct, minimal bytecode binary tailored
+to a specific material or rendering pass, ensuring zero runtime
+evaluation overhead for disabled features at the cost of increased
+compilation time and disk storage.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/compile-time-defines-in-direct-x-shader-code-generation';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

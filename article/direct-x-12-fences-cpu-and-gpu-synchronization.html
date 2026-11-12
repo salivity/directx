@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Fences: CPU and GPU Synchronization - directx</title>
+    <meta name="description" content="DirectX 12 fences are synchronization primitives designed to coordinate asynchronous operations between the host CPU and the graphics hardware, as well as between distinct GPU command queues. Because DirectX 12 is an explicit low-level API, it eliminates">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-fences-cpu-and-gpu-synchronization">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Fences: CPU and GPU Synchronization - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-fences-cpu-and-gpu-synchronization" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 12 fences are synchronization primitives designed to coordinate asynchronous operations between the host CPU and the graphics hardware, as well as between distinct GPU command queues. Because DirectX 12 is an explicit low-level API, it eliminates" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-fences-cpu-and-gpu-synchronization">DirectX 12
+Fences: CPU and GPU Synchronization</h1>
+<p>DirectX 12 fences are synchronization primitives designed to
+coordinate asynchronous operations between the host CPU and the graphics
+hardware, as well as between distinct GPU command queues. Because
+DirectX 12 is an explicit low-level API, it eliminates the automatic
+driver-level synchronization present in older APIs, requiring developers
+to manage the execution timeline manually. This article examines the
+core mechanisms provided by <code>ID3D12Fence</code>, explaining how
+signal, wait, event notification, and polling operations manage resource
+hazards and prevent race conditions.</p>
+<h3 id="the-anatomy-of-an-id3d12fence">The Anatomy of an
+ID3D12Fence</h3>
+<p>At its core, an <code>ID3D12Fence</code> encapsulates an atomically
+updated, monotonically increasing 64-bit unsigned integer value. This
+value represents a specific progress milestone along an execution
+timeline. Fences are typically initialized with a starting value (often
+zero), and as work progresses through the rendering pipeline, subsequent
+values denote the completion of specific sets of commands or frames.</p>
+<h3 id="gpu-side-signaling-id3d12commandqueuesignal">GPU-Side Signaling
+(<code>ID3D12CommandQueue::Signal</code>)</h3>
+<p>The primary mechanism for recording progress on the GPU is the
+<code>ID3D12CommandQueue::Signal</code> method. When called, this
+function appends a command directly into the GPU command queue. The GPU
+executes this instruction in sequence after all preceding commands in
+that specific queue have fully completed execution. Upon reaching this
+instruction, the GPU updates the fence's internal value to the specified
+target integer.</p>
+<h3 id="gpu-to-gpu-synchronization-id3d12commandqueuewait">GPU-to-GPU
+Synchronization (<code>ID3D12CommandQueue::Wait</code>)</h3>
+<p>DirectX 12 supports multiple distinct hardware queues, such as Direct
+(graphics), Compute, and Copy (transfer) queues. To coordinate
+dependencies across these disparate engines without CPU intervention,
+DirectX 12 provides <code>ID3D12CommandQueue::Wait</code>.</p>
+<p>When a queue encounters a <code>Wait</code> instruction, it halts the
+execution of any subsequent commands in that queue until the target
+fence reaches or exceeds the specified value. Because this stall occurs
+entirely on the GPU, the CPU remains free to continue recording commands
+or handling game logic.</p>
+<h3
+id="gpu-to-cpu-synchronization-via-events-seteventoncompletion">GPU-to-CPU
+Synchronization via Events (<code>SetEventOnCompletion</code>)</h3>
+<p>When the CPU must pause until the GPU completes a specific task—such
+as when recycling ring-buffer dynamic memory, resizing a swap chain, or
+managing frame latency—it uses event-based synchronization:</p>
+<ol type="1">
+<li>The CPU enqueues a GPU signal command with a target fence
+value.</li>
+<li>The CPU associates a standard Win32 event handle with that value via
+<code>ID3D12Fence::SetEventOnCompletion</code>.</li>
+<li>The CPU calls a blocking OS primitive, such as
+<code>WaitForSingleObject</code>, on the event handle.</li>
+<li>Once the GPU writes the specified value to the fence, it fires an
+interrupt that signals the Win32 event, immediately waking the sleeping
+CPU thread.</li>
+</ol>
+<h3
+id="non-blocking-cpu-polling-id3d12fencegetcompletedvalue">Non-Blocking
+CPU Polling (<code>ID3D12Fence::GetCompletedValue</code>)</h3>
+<p>In many rendering architectures, completely stalling the CPU is
+undesirable. DirectX 12 allows the CPU to query the current progress of
+the GPU without blocking by calling
+<code>ID3D12Fence::GetCompletedValue</code>.</p>
+<p>This method performs a thread-safe read of the current fence value
+recorded in shared memory. Developers leverage this for deferred
+resource destruction (garbage collection) and tracking available space
+in linear allocation buffers, freeing or re-allocating memory only after
+confirming that the GPU has advanced past the milestone where that
+memory was referenced.</p>
+<h3 id="cpu-to-gpu-signaling-id3d12fencesignal">CPU-to-GPU Signaling
+(<code>ID3D12Fence::Signal</code>)</h3>
+<p>While less common than GPU-side signaling, the CPU can directly
+update the value of a fence using the member function
+<code>ID3D12Fence::Signal</code>. This immediately changes the fence's
+current value from the host side. Any GPU queues that were stalled
+waiting on that fence value via <code>ID3D12CommandQueue::Wait</code>
+will unblock as soon as the memory write is visible, allowing
+coordinated handover of data prepared entirely on the CPU side.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-12-fences-cpu-and-gpu-synchronization';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

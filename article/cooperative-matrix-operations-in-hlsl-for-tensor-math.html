@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cooperative Matrix Operations in HLSL for Tensor Math - directx</title>
+    <meta name="description" content="Cooperative matrix operations in modern DirectX High Level Shading Language (HLSL) allow GPU threads within a wave to collaborate on loading, computing, and storing small matrix tiles directly on dedicated hardware accelerators. This article covers the fu">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/cooperative-matrix-operations-in-hlsl-for-tensor-math">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Cooperative Matrix Operations in HLSL for Tensor Math - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/cooperative-matrix-operations-in-hlsl-for-tensor-math" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Cooperative matrix operations in modern DirectX High Level Shading Language (HLSL) allow GPU threads within a wave to collaborate on loading, computing, and storing small matrix tiles directly on dedicated hardware accelerators. This article covers the fu" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="cooperative-matrix-operations-in-hlsl-for-tensor-math">Cooperative
+Matrix Operations in HLSL for Tensor Math</h1>
+<p>Cooperative matrix operations in modern DirectX High Level Shading
+Language (HLSL) allow GPU threads within a wave to collaborate on
+loading, computing, and storing small matrix tiles directly on dedicated
+hardware accelerators. This article covers the fundamental mechanics of
+cooperative matrices, how they interface with modern GPU architectures,
+and the specific ways they accelerate high-performance tensor
+mathematics for real-time graphics and machine learning workloads.</p>
+<h2 id="what-are-cooperative-matrix-operations">What Are Cooperative
+Matrix Operations?</h2>
+<p>Traditionally, HLSL execution models treat threads (lanes) inside a
+wave (or warp) as independent single-instruction, multiple-data (SIMT)
+workers. While each lane can execute scalar or vector math, standard
+SIMT structures are inefficient for dense matrix multiplication.</p>
+<p>Cooperative matrix extensions—introduced to align modern HLSL and
+DirectX 12 compute pipelines with Vulkan
+(<code>VK_KHR_cooperative_matrix</code>) and vendor-specific models
+(such as NVIDIA WMMA)—redefine how data is owned across a wave. Rather
+than a single thread owning an entire matrix or performing an isolated
+inner-product loop, a cooperative matrix partitions a 2D matrix tile
+across all threads in a wave.</p>
+<p>The primary object represents a logical tile (such as <span
+class="math inline">\(16 \times 16\)</span> or <span
+class="math inline">\(8 \times 8\)</span>), while the physical storage
+is distributed transparently across the wave's register file. HLSL
+provides dedicated intrinsic types and functions to manage these
+tiles:</p>
+<ul>
+<li><strong>Matrix Roles:</strong> Matrices are designated as
+multipliers (Matrix <span class="math inline">\(A\)</span> and Matrix
+<span class="math inline">\(B\)</span>) or accumulators (Matrix <span
+class="math inline">\(C\)</span> and Matrix <span
+class="math inline">\(D\)</span>).</li>
+<li><strong>Cooperative Load and Store:</strong> Built-in functions
+transfer blocks of memory between device memory or group-shared memory
+(LDS/Shared Memory) and the distributed wave registers.</li>
+<li><strong>Multiply-Accumulate (MMA):</strong> A single cooperative
+instruction performs the fused operation <span class="math inline">\(D =
+A \times B + C\)</span>.</li>
+</ul>
+<h2 id="how-cooperative-matrices-interface-with-hardware">How
+Cooperative Matrices Interface with Hardware</h2>
+<p>Modern GPU architectures—including NVIDIA RTX (Tensor Cores), AMD
+RDNA/CDNA (Matrix Cores), and Intel Arc (XMX engines)—feature dedicated
+fixed-function execution units tailored for matrix multiplication.</p>
+<p>Standard ALU pipelines execute one or two arithmetic operations per
+cycle per lane. In contrast, hardware tensor units ingest entire tiles
+simultaneously. Because these hardware units require input data arranged
+across the entire wave, cooperative matrix types in HLSL match the exact
+register layout expected by the physical tensor units. When an HLSL
+shader invokes a cooperative multiply-add operation, the wave issues
+instructions directly to the GPU's matrix units rather than utilizing
+general-purpose vector ALUs.</p>
+<h2 id="mechanisms-accelerating-tensor-mathematics">Mechanisms
+Accelerating Tensor Mathematics</h2>
+<p>Cooperative matrix operations significantly reduce execution
+bottlenecks for deep learning and dense linear algebra through several
+key mechanisms:</p>
+<h3 id="1-massive-compute-density">1. Massive Compute Density</h3>
+<p>Tensor math fundamentally relies on General Matrix Multiplications
+(GEMMs). By bypassing general ALUs and routing calculations to
+specialized matrix engines, a wave can execute hundreds or thousands of
+floating-point operations in a few clock cycles. This results in
+multi-fold improvements in Teraflops (TFLOPS) compared to standard
+vector or compute-shader loop implementations.</p>
+<h3 id="2-native-mixed-precision-execution">2. Native Mixed-Precision
+Execution</h3>
+<p>Tensor workloads typically achieve acceptable convergence and
+accuracy using lower-precision representations while requiring
+higher-precision accumulation. Cooperative matrix HLSL intrinsics
+provide native support for mixed-precision math:</p>
+<ul>
+<li>Inputs (<span class="math inline">\(A\)</span> and <span
+class="math inline">\(B\)</span>) can be provided in half-precision
+(FP16), Bfloat16 (BF16), or integer formats (INT8/INT4).</li>
+<li>Accumulators (<span class="math inline">\(C\)</span> and <span
+class="math inline">\(D\)</span>) compute and maintain sums in
+single-precision (FP32) or 32-bit integers to avoid numerical drift and
+overflow.</li>
+</ul>
+<p>This halves or quarters the bandwidth requirements for memory access
+while maintaining numerical stability.</p>
+<h3 id="3-memory-coalescing-and-latency-hiding">3. Memory Coalescing and
+Latency Hiding</h3>
+<p>When loading or storing cooperative matrices from global buffers or
+group-shared memory, the runtime maps memory addresses to optimal memory
+controller strides. Memory requests are coalesced automatically across
+the wave, maximizing cache line utilization and significantly lowering
+latency compared to manual per-thread memory addressing.</p>
+<h3 id="4-direct-in-engine-inference">4. Direct In-Engine Inference</h3>
+<p>Historically, integrating neural networks into a game engine required
+either external execution frameworks (such as DirectML or ONNX Runtime)
+or hand-tuned vendor compute shaders. Cooperative matrix support in HLSL
+allows developers to embed neural inferencing—such as neural radiance
+caching, custom super-resolution models, and AI-driven
+denoising—directly inside primary rendering compute shaders, eliminating
+context switching and memory duplication between disparate APIs.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/cooperative-matrix-operations-in-hlsl-for-tensor-math';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

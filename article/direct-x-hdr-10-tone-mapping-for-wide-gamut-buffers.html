@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX HDR10 Tone Mapping for Wide-Gamut Buffers - directx</title>
+    <meta name="description" content="This article provides an overview of how DirectX processes high-dynamic-range (HDR) imagery, detailing how wide-gamut, floating-point render buffers are translated into consumer-ready HDR10 signals. You will learn the mechanics behind color space transfor">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-hdr-10-tone-mapping-for-wide-gamut-buffers">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX HDR10 Tone Mapping for Wide-Gamut Buffers - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-hdr-10-tone-mapping-for-wide-gamut-buffers" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of how DirectX processes high-dynamic-range (HDR) imagery, detailing how wide-gamut, floating-point render buffers are translated into consumer-ready HDR10 signals. You will learn the mechanics behind color space transfor" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-hdr10-tone-mapping-for-wide-gamut-buffers">DirectX HDR10
+Tone Mapping for Wide-Gamut Buffers</h1>
+<p>This article provides an overview of how DirectX processes
+high-dynamic-range (HDR) imagery, detailing how wide-gamut,
+floating-point render buffers are translated into consumer-ready HDR10
+signals. You will learn the mechanics behind color space
+transformations, tone-mapping operators tailored for display luminance
+boundaries, the application of the Perceptual Quantizer (PQ) curve, and
+how the DirectX Graphics Infrastructure (DXGI) negotiates final output
+to an HDR-capable display.</p>
+<h2 id="the-source-floating-point-render-targets">The Source:
+Floating-Point Render Targets</h2>
+<p>Modern DirectX rendering pipelines generate high-dynamic-range scenes
+inside 64-bit floating-point surfaces, typically using the
+<code>DXGI_FORMAT_R16G16B16A16_FLOAT</code> format. These FP16 buffers
+store scene-referred lighting values linearly without arbitrary dynamic
+range clipping.</p>
+<p>In DirectX, these buffers operate primarily under one of two color
+representations:</p>
+<ul>
+<li><strong>scRGB (Linear Rec.709 primaries):</strong> In this space,
+1.0 represents nominal standard dynamic range (SDR) white (typically
+calibrated to 80 or 100 nits). Values exceeding 1.0 describe
+high-intensity specular highlights, while negative values represent
+wide-gamut colors outside Rec.709 primaries.</li>
+<li><strong>Linear Rec.2020:</strong> In this space, pixel coordinates
+are directly mapped to the massive Rec.2020 wide color gamut, with light
+values expressed in absolute or normalized physical units.</li>
+</ul>
+<p>Because displays cannot consume infinite dynamic range or arbitrary
+floating-point values, these buffers require transformation before
+transmission.</p>
+<h2 id="display-calibration-and-metadata-retrieval">Display Calibration
+and Metadata Retrieval</h2>
+<p>Before mapping luminance and chrominance, DirectX must determine the
+target display's physical boundaries. The engine queries the display’s
+capabilities via DXGI using <code>IDXGIOutput6::GetDesc1</code>. This
+structure returns:</p>
+<ul>
+<li>Minimum and maximum luminance values (expressed in nits).</li>
+<li>Display color primaries (usually conforming to DCI-P3 within a
+Rec.2020 container).</li>
+<li>MaxCLL (Maximum Content Light Level) and MaxFALL (Maximum Frame
+Average Light Level) limits.</li>
+</ul>
+<p>With these parameters, the engine constructs a tone-mapping strategy
+adapted to the specific display hardware rather than a generic clipping
+threshold.</p>
+<h2 id="the-tone-mapping-stage">The Tone Mapping Stage</h2>
+<p>Tone mapping converts the high-dynamic-range scene values to match
+the peak luminance capabilities of the target display. Because HDR10
+allows up to 10,000 nits, but consumer panels typically peak between 400
+and 1,500 nits, unmapped values would blow out highlights into hard
+white clipping.</p>
+<p>DirectX shaders execute luminance tone mapping via a compute or
+full-screen pixel shader using algorithms such as ACES (Academy Color
+Encoding System) or custom Hermite/spline curves. The operations
+generally follow this sequence:</p>
+<ol type="1">
+<li><strong>Luminance Extraction:</strong> The shader computes
+perceptual luminance (<span class="math inline">\(Y\)</span>) from
+linear RGB values.</li>
+<li><strong>Compressing Highlights:</strong> The tone mapper leaves
+midtones and values below nominal white linear to maintain visual
+fidelity, while applying a compression roll-off (shoulder) only to
+values approaching the display’s measured peak nit capability.</li>
+<li><strong>Gamut Compression:</strong> Highly saturated colors outside
+the target monitor's capability are desaturated toward the display
+boundary rather than clipped abruptly, preventing color shifting in
+bright highlights.</li>
+</ol>
+<h2 id="color-space-transformation-to-rec2020">Color Space
+Transformation to Rec.2020</h2>
+<p>HDR10 strictly mandates the Rec.2020 color primaries. If the engine
+renders in scRGB, it must convert those coordinates into Rec.2020
+space.</p>
+<p>This is accomplished in the shader using a <span
+class="math inline">\(3 \times 3\)</span> color matrix
+multiplication:</p>
+<p><span class="math display">\[\begin{bmatrix} R_{2020} \\ G_{2020} \\
+B_{2020} \end{bmatrix} = M_{\text{scRGB} \to \text{Rec.2020}} \times
+\begin{bmatrix} R_{\text{scRGB}} \\ G_{\text{scRGB}} \\ B_{\text{scRGB}}
+\end{bmatrix}\]</span></p>
+<p>Because scRGB can encode values outside the physical Rec.709 spectrum
+using negative coordinates, this matrix conversion correctly maps those
+extended values into positive coordinates within the wider Rec.2020
+gamut.</p>
+<h2 id="applying-the-smpte-st-2084-pq-transfer-function">Applying the
+SMPTE ST 2084 (PQ) Transfer Function</h2>
+<p>Unlike standard desktop pipelines that rely on standard gamma curves
+(such as Gamma 2.2 or sRGB), HDR10 requires the non-linear transfer
+function defined by SMPTE ST 2084, known as the Perceptual Quantizer
+(PQ).</p>
+<p>The PQ curve is an absolute transfer function designed to cover
+luminance levels from 0.0001 nits up to 10,000 nits. The shader divides
+the linear nit values by 10,000 to normalize them into a <span
+class="math inline">\(0.0 \text{ to } 1.0\)</span> range, then computes
+the non-linear PQ values using standard formula constants (<span
+class="math inline">\(m_1, m_2, c_1, c_2, c_3\)</span>):</p>
+<p><span class="math display">\[V = \left( \frac{c_1 + c_2 L^{m_1}}{1 +
+c_3 L^{m_1}} \right)^{m_2}\]</span></p>
+<p>Where <span class="math inline">\(L\)</span> is normalized absolute
+luminance. The resulting value encodes perceptual steps evenly across
+the entire dynamic range, mitigating visible color banding.</p>
+<h2 id="swapchain-presentation-and-dxgi-encoding">Swapchain Presentation
+and DXGI Encoding</h2>
+<p>DirectX provides two main paths to hand off this data to the Windows
+Desktop Window Manager (DWM) and the physical output:</p>
+<h3 id="1-in-shader-encoding-to-10-bit-integer-surface">1. In-Shader
+Encoding to 10-Bit Integer Surface</h3>
+<p>The application performs tone mapping, Rec.2020 conversion, and PQ
+encoding manually inside its post-processing shaders. The output is
+written directly into an integer render target:</p>
+<ul>
+<li><strong>Format:</strong>
+<code>DXGI_FORMAT_R10G10B10A2_UNORM</code></li>
+<li><strong>Color Space:</strong>
+<code>DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020</code></li>
+</ul>
+<p>DXGI recognizes that the data is already converted to PQ and
+Rec.2020, passing the 10-bit signal straight through the swapchain to
+the display controller with static HDR10 metadata attached via
+<code>IDXGISwapChain4::SetHDRMetaData</code>.</p>
+<h3 id="2-passing-fp16-directly-to-dwm">2. Passing FP16 Directly to
+DWM</h3>
+<p>Alternatively, the engine can output linear scRGB directly into an
+FP16 swapchain:</p>
+<ul>
+<li><strong>Format:</strong>
+<code>DXGI_FORMAT_R16G16B16A16_FLOAT</code></li>
+<li><strong>Color Space:</strong>
+<code>DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709</code></li>
+</ul>
+<p>In this path, the application performs basic tone adjustments within
+its own linear pipeline, and the Desktop Window Manager handles the
+final hardware conversion to PQ and Rec.2020. While convenient,
+developer-driven in-shader tone mapping targeting the exact metadata
+limits often yields more precise artistic and luminance control.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-hdr-10-tone-mapping-for-wide-gamut-buffers';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

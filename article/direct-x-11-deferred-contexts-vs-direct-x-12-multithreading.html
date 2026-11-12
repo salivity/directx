@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 11 Deferred Contexts vs DirectX 12 Multithreading - directx</title>
+    <meta name="description" content="This article examines DirectX 11 deferred contexts, exploring how they were designed to bring multithreaded command recording to modern games and the technical reasons they failed to deliver meaningful performance improvements. It contrasts this legacy ap">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-11-deferred-contexts-vs-direct-x-12-multithreading">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 11 Deferred Contexts vs DirectX 12 Multithreading - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-11-deferred-contexts-vs-direct-x-12-multithreading" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article examines DirectX 11 deferred contexts, exploring how they were designed to bring multithreaded command recording to modern games and the technical reasons they failed to deliver meaningful performance improvements. It contrasts this legacy ap" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="directx-11-deferred-contexts-vs-directx-12-multithreading">DirectX
+11 Deferred Contexts vs DirectX 12 Multithreading</h1>
+<p>This article examines DirectX 11 deferred contexts, exploring how
+they were designed to bring multithreaded command recording to modern
+games and the technical reasons they failed to deliver meaningful
+performance improvements. It contrasts this legacy approach with the
+ground-up architectural redesign of DirectX 12, detailing why modern
+low-level APIs succeed where DirectX 11 struggled.</p>
+<h3 id="what-are-deferred-contexts-in-directx-11">What Are Deferred
+Contexts in DirectX 11?</h3>
+<p>In DirectX 11, the runtime divides rendering duties between two types
+of device contexts: the <strong>Immediate Context</strong> and
+<strong>Deferred Contexts</strong>.</p>
+<p>The immediate context is tied directly to the driver and the GPU
+pipeline. It is responsible for executing commands and presenting
+frames. Because the immediate context is not thread-safe, all
+traditional draw calls and state changes had to occur sequentially on a
+single CPU thread (the main render thread).</p>
+<p>To utilize multi-core CPUs, Microsoft introduced deferred contexts. A
+deferred context allows background worker threads to record rendering
+commands into an intermediate structure called an
+<code>ID3D11CommandList</code>. Worker threads generate these command
+lists concurrently without directly communicating with the GPU. Once
+recorded, these command lists are passed back to the immediate context
+on the main thread, which calls <code>ExecuteCommandList</code> to play
+them back in sequence for GPU submission.</p>
+<h3
+id="why-deferred-contexts-failed-to-deliver-multithreading-gains">Why
+Deferred Contexts Failed to Deliver Multithreading Gains</h3>
+<p>While conceptually promising, deferred contexts rarely yielded
+significant frame rate improvements and often performed worse than pure
+single-threaded rendering. Several architectural bottlenecks caused this
+failure:</p>
+<h4 id="1-the-immediate-context-bottleneck">1. The Immediate Context
+Bottleneck</h4>
+<p>Command lists recorded on deferred contexts could not be submitted
+directly to hardware queues. They still had to be serialized through the
+single immediate context on the primary thread. The CPU overhead
+required to replay, validate, and stitch these command lists together
+often equaled or exceeded the time saved by generating them across
+multiple threads.</p>
+<h4 id="2-heavy-driver-state-tracking-and-validation">2. Heavy Driver
+State Tracking and Validation</h4>
+<p>DirectX 11 is a high-level API where the graphics driver actively
+monitors pipeline state, tracks resource hazards, and handles memory
+residency on the fly. Because the driver had to guarantee state
+consistency across independently recorded command lists, it performed
+extensive state validation during playback. This dynamic dependency
+tracking introduced substantial CPU overhead that negated multithreading
+benefits.</p>
+<h4 id="3-driver-level-lock-contention">3. Driver-Level Lock
+Contention</h4>
+<p>Because DirectX 11 drivers were not originally architected for
+concurrency, many GPU vendors implemented deferred contexts using heavy
+internal locking. When worker threads attempted to allocate memory or
+reference shared resources simultaneously, they frequently stalled,
+waiting for internal driver mutexes.</p>
+<h4 id="4-hardware-and-driver-disparity">4. Hardware and Driver
+Disparity</h4>
+<p>Implementation quality varied widely across hardware vendors. Some
+vendors wrote optimized driver paths for deferred contexts, while others
+essentially emulated the feature in software by queuing commands in
+system memory and executing them on the main thread. Game developers
+could not rely on consistent performance across different GPU
+architectures, leading many to abandon the feature entirely.</p>
+<h3 id="how-directx-12-solved-the-problem">How DirectX 12 Solved the
+Problem</h3>
+<p>DirectX 12 eliminated the centralized immediate context and
+redesigned the rendering pipeline to align with modern multi-core CPU
+architectures:</p>
+<ul>
+<li><strong>Independent Command Allocators and Lists:</strong> In
+DirectX 12, <code>ID3D12GraphicsCommandList</code> and
+<code>ID3D12CommandAllocator</code> are completely decoupled from each
+other. Worker threads can record draw calls with zero driver-level
+synchronization or locking between threads.</li>
+<li><strong>Pipeline State Objects (PSOs):</strong> Rather than allowing
+individual state changes that the driver must validate at runtime,
+DirectX 12 bakes shaders, blend states, rasterizer states, and render
+target formats into immutable PSOs ahead of time. This eliminates
+CPU-side validation overhead during command recording.</li>
+<li><strong>Direct Queue Submission:</strong> Once recorded, command
+lists are submitted directly to an <code>ID3D12CommandQueue</code>. The
+submission model is extremely lightweight, consisting of an array of
+pointers passed to the GPU driver without re-parsing or re-validating
+the individual draw calls.</li>
+<li><strong>Explicit Developer Control:</strong> Hazard tracking,
+resource state transitions (barriers), and thread synchronization are
+placed entirely in the hands of the developer. By removing the driver's
+guessing games, DirectX 12 allows true parallel command generation that
+scales linearly with available CPU cores.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-11-deferred-contexts-vs-direct-x-12-multithreading';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

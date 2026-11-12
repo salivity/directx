@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX Bitmasks and Integer Format Arithmetic - directx</title>
+    <meta name="description" content="Integer format arithmetic, particularly through formats like DXGIFORMATR32UINT, enables precise bit-level control and raw numerical processing in DirectX rendering and compute pipelines. Unlike floating-point formats that introduce rounding errors or norm">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-bitmasks-and-integer-format-arithmetic">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX Bitmasks and Integer Format Arithmetic - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-bitmasks-and-integer-format-arithmetic" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Integer format arithmetic, particularly through formats like DXGIFORMATR32UINT, enables precise bit-level control and raw numerical processing in DirectX rendering and compute pipelines. Unlike floating-point formats that introduce rounding errors or norm" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-bitmasks-and-integer-format-arithmetic">DirectX Bitmasks
+and Integer Format Arithmetic</h1>
+<p>Integer format arithmetic, particularly through formats like
+<code>DXGI_FORMAT_R32_UINT</code>, enables precise bit-level control and
+raw numerical processing in DirectX rendering and compute pipelines.
+Unlike floating-point formats that introduce rounding errors or
+normalized formats that map values between 0.0 and 1.0, integer formats
+preserve exact binary representations. This article breaks down the
+fundamentals of integer format arithmetic in DirectX, explains how
+integers drive bitmask implementations, and highlights practical use
+cases such as data packing, atomic synchronization, and visibility
+culling in modern graphics programming.</p>
+<h2 id="understanding-integer-format-arithmetic">Understanding Integer
+Format Arithmetic</h2>
+<p>In DirectX, standard color formats such as
+<code>DXGI_FORMAT_R8G8B8A8_UNORM</code> automatically convert stored
+binary data into floating-point numbers within the [0.0, 1.0] range
+during texture sampling. In contrast, integer formats such as
+<code>DXGI_FORMAT_R32_UINT</code> (32-bit unsigned integer) or
+<code>DXGI_FORMAT_R32_SINT</code> (32-bit signed integer) prevent any
+hardware normalization or filtering.</p>
+<p>Integer format arithmetic refers to performing standard mathematical
+and bit-level instructions directly on these values within High-Level
+Shader Language (HLSL). These operations include:</p>
+<ul>
+<li><strong>Standard arithmetic:</strong> Addition, subtraction,
+multiplication, and division without precision loss or mantissa
+truncation.</li>
+<li><strong>Bitwise logic:</strong> Operations such as AND
+(<code>&amp;</code>), OR (<code>|</code>), XOR (<code>^</code>), NOT
+(<code>~</code>), and bit shifts (<code>&lt;&lt;</code>,
+<code>&gt;&gt;</code>).</li>
+<li><strong>Atomic operations:</strong> Hardware-level instructions
+(such as <code>InterlockedAdd</code>, <code>InterlockedOr</code>, or
+<code>InterlockedCompareExchange</code>) that allow multiple GPU threads
+to safely read, modify, and write integer memory locations
+concurrently.</li>
+</ul>
+<p>Because integer instructions execute directly on hardware registers
+without intermediate float-to-int conversion steps, they provide
+deterministic behavior across different GPU architectures.</p>
+<h2 id="what-is-a-bitmask">What is a Bitmask?</h2>
+<p>A bitmask is a binary sequence used to selectively store, read, or
+manipulate individual bits or bitfields within a single integer. Because
+a 32-bit integer (<code>uint</code>) contains 32 distinct bits, each bit
+can represent an independent boolean state (true/false) or a slice of
+bits can represent small numerical indices.</p>
+<p>In graphics programming, storing boolean properties in standard
+full-precision formats is inefficient. Using an <code>R32_UINT</code>
+integer as a bitmask allows up to 32 separate flags to occupy the same
+memory footprint as a single 32-bit float, minimizing memory bandwidth
+and cache pressure.</p>
+<h2 id="how-bitmasks-use-integer-arithmetic-in-directx">How Bitmasks Use
+Integer Arithmetic in DirectX</h2>
+<p>Bitmasking in DirectX relies on specific bitwise operators executed
+inside HLSL compute, vertex, or pixel shaders.</p>
+<h3 id="1-setting-and-toggling-flags">1. Setting and Toggling Flags</h3>
+<p>To mark a condition as active, the bitwise OR (<code>|</code>)
+operator adds the bit to the mask without altering other flags:</p>
+<pre class="hlsl"><code>#define FLAG_CASTS_SHADOW   (1u &lt;&lt; 0) // Bit 0
+#define FLAG_IS_TRANSPARENT (1u &lt;&lt; 1) // Bit 1
+#define FLAG_IS_DYNAMIC     (1u &lt;&lt; 2) // Bit 2
+
+// Set the transparent and dynamic flags
+uint objectState = 0;
+objectState |= (FLAG_IS_TRANSPARENT | FLAG_IS_DYNAMIC);</code></pre>
+<p>To toggle or invert a specific flag, the XOR (<code>^</code>)
+operator is used:</p>
+<pre class="hlsl"><code>objectState ^= FLAG_IS_DYNAMIC; // Toggles dynamic state</code></pre>
+<h3 id="2-checking-and-querying-flags">2. Checking and Querying
+Flags</h3>
+<p>To evaluate if a particular condition is met, the bitwise AND
+(<code>&amp;</code>) operator isolates the targeted bit:</p>
+<pre class="hlsl"><code>bool castsShadow = (objectState &amp; FLAG_CASTS_SHADOW) != 0;</code></pre>
+<h3 id="3-clearing-flags">3. Clearing Flags</h3>
+<p>To deactivate a specific flag without affecting any surrounding bits,
+the bitwise NOT (<code>~</code>) and AND (<code>&amp;</code>) operators
+are combined:</p>
+<pre class="hlsl"><code>objectState &amp;= ~FLAG_IS_TRANSPARENT; // Removes transparent flag</code></pre>
+<h3 id="4-packing-non-boolean-data">4. Packing Non-Boolean Data</h3>
+<p>Beyond single-bit booleans, bitmasks allow packing multiple discrete
+attributes into a single <code>R32_UINT</code>. This is accomplished by
+combining bit shifts and bitwise masks to restrict bit width:</p>
+<pre class="hlsl"><code>// Layout: Bits 0-7 = Material ID (8 bits, 0-255)
+// Layout: Bits 8-31 = Instance ID (24 bits, 0-16,777,215)
+
+uint packedData = (materialID &amp; 0xFF) | ((instanceID &amp; 0xFFFFFF) &lt;&lt; 8);
+
+// Unpacking inside the shader:
+uint extractedMaterialID = packedData &amp; 0xFF;
+uint extractedInstanceID = (packedData &gt;&gt; 8) &amp; 0xFFFFFF;</code></pre>
+<h2 id="common-directx-applications">Common DirectX Applications</h2>
+<h3 id="clustered-and-tiled-light-culling">Clustered and Tiled Light
+Culling</h3>
+<p>Modern rendering pipelines subdivide the screen into a 3D grid of
+view-frustum clusters. Instead of passing massive arrays of dynamic
+lights to every pixel shader, a compute shader performs frustum-sphere
+intersection tests against active lights. The compute shader records
+light visibility using a bitmask of <code>R32_UINT</code> entries, where
+bit <span class="math inline">\(N\)</span> indicates whether light index
+<span class="math inline">\(N\)</span> influences the cluster. The pixel
+shader reads this bitmask using standard bitwise traversal to evaluate
+only visible lights.</p>
+<h3 id="atomic-screen-space-bins-and-synchronization">Atomic
+Screen-Space Bins and Synchronization</h3>
+<p>In compute workflows using Unordered Access Views (UAVs), multiple
+shader invocations often write to the same memory addresses. HLSL
+provides atomic bitwise operations—such as
+<code>InterlockedOr(buffer[index], mask)</code>—which leverage integer
+format arithmetic to update shared bitmasks across thousands of threads
+simultaneously without read-write race conditions.</p>
+<h3 id="visibility-and-culling-buffers">Visibility and Culling
+Buffers</h3>
+<p>Indirect rendering systems write draw arguments and instance
+visibility directly to GPU buffers. By encoding visibility matrices into
+integer bitmasks, GPU cull passes can compress scene state, feed
+conditional rendering checks, and optimize multi-view passes (such as VR
+stereo rendering or cascaded shadow maps) with minimal storage
+overhead.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-bitmasks-and-integer-format-arithmetic';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

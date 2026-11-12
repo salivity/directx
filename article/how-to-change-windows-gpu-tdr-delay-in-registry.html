@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Change Windows GPU TDR Delay in Registry - directx</title>
+    <meta name="description" content="Windows Timeout Detection and Recovery (TDR) is a safeguard designed to detect when graphics hardware is frozen and automatically reset the driver to prevent a full system freeze. When running resource-intensive DirectX applications, rendering engines, or">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-to-change-windows-gpu-tdr-delay-in-registry">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Change Windows GPU TDR Delay in Registry - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-to-change-windows-gpu-tdr-delay-in-registry" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Windows Timeout Detection and Recovery (TDR) is a safeguard designed to detect when graphics hardware is frozen and automatically reset the driver to prevent a full system freeze. When running resource-intensive DirectX applications, rendering engines, or" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-change-windows-gpu-tdr-delay-in-registry">How to Change
+Windows GPU TDR Delay in Registry</h1>
+<p>Windows Timeout Detection and Recovery (TDR) is a safeguard designed
+to detect when graphics hardware is frozen and automatically reset the
+driver to prevent a full system freeze. When running resource-intensive
+DirectX applications, rendering engines, or compute tasks, this
+detection mechanism may trigger prematurely, causing unexpected
+application crashes or "Display driver stopped responding" errors. This
+article details the specific Windows registry settings used to adjust or
+disable the GPU TDR delay, their exact values, and how to configure them
+properly.</p>
+<h3 id="tdr-registry-location">TDR Registry Location</h3>
+<p>All TDR-related parameters are located within the Windows Registry
+under the graphics driver configuration key:</p>
+<pre class="text"><code>HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\GraphicsDrivers</code></pre>
+<h3 id="key-settings-controlling-tdr-delay">Key Settings Controlling TDR
+Delay</h3>
+<p>Windows provides several <code>REG_DWORD</code> values to control how
+the OS handles DirectX and graphics timeouts:</p>
+<h4 id="1-tdrdelay">1. TdrDelay</h4>
+<ul>
+<li><strong>Type:</strong> <code>REG_DWORD</code></li>
+<li><strong>Default Value:</strong> <code>2</code> (seconds)</li>
+<li><strong>Function:</strong> Specifies the number of seconds that the
+GPU is permitted to delay a preemption request from the GPU scheduler.
+If the GPU does not respond within this timeframe, Windows initiates a
+recovery event.</li>
+<li><strong>Usage:</strong> Increasing this value (for example, to
+<code>8</code> or <code>10</code>) gives complex shaders and heavy
+DirectX rendering tasks more time to finish before Windows assumes the
+GPU has hung.</li>
+</ul>
+<h4 id="2-tdrddidelay">2. TdrDdiDelay</h4>
+<ul>
+<li><strong>Type:</strong> <code>REG_DWORD</code></li>
+<li><strong>Default Value:</strong> <code>5</code> (seconds)</li>
+<li><strong>Function:</strong> Specifies the number of seconds that the
+operating system allows threads to leave the device driver interface
+(DDI).</li>
+<li><strong>Usage:</strong> This works in tandem with
+<code>TdrDelay</code>. When increasing <code>TdrDelay</code>, you should
+often increase <code>TdrDdiDelay</code> proportionally to allow the
+driver adequate time to release execution contexts.</li>
+</ul>
+<h4 id="3-tdrlevel">3. TdrLevel</h4>
+<ul>
+<li><strong>Type:</strong> <code>REG_DWORD</code></li>
+<li><strong>Default Value:</strong> <code>3</code>
+(TdrLevelRecover)</li>
+<li><strong>Function:</strong> Defines the system's behavior when a
+timeout is detected.</li>
+<li><strong>Possible Values:</strong>
+<ul>
+<li><code>0</code> – <strong>TdrLevelOff:</strong> Completely disables
+TDR detection (not recommended for daily use, primarily for
+debugging).</li>
+<li><code>1</code> – <strong>TdrLevelBugCheck:</strong> Forces a system
+Blue Screen of Death (BSOD) when a timeout occurs instead of attempting
+recovery.</li>
+<li><code>2</code> – <strong>TdrLevelRecoverVGA:</strong> Recovers to a
+basic VGA driver.</li>
+<li><code>3</code> – <strong>TdrLevelRecover:</strong> Default recovery
+behavior; resets the driver without rebooting the PC.</li>
+</ul></li>
+</ul>
+<h3 id="how-to-modify-the-tdr-settings">How to Modify the TDR
+Settings</h3>
+<ol type="1">
+<li><p>Press <code>Win + R</code>, type <code>regedit</code>, and press
+<strong>Enter</strong> to open the Registry Editor.</p></li>
+<li><p>Navigate to:</p>
+<pre class="text"><code>HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\GraphicsDrivers</code></pre></li>
+<li><p>Check the right-hand pane for <code>TdrDelay</code>. If it does
+not exist, right-click an empty area, select <strong>New &gt; DWORD
+(32-bit) Value</strong>, and name it <code>TdrDelay</code>.</p></li>
+<li><p>Double-click <code>TdrDelay</code>, switch the Base to
+<strong>Decimal</strong>, and set the value to your desired timeout in
+seconds (such as <code>8</code> or <code>10</code>).</p></li>
+<li><p>(Optional) Create or edit <code>TdrDdiDelay</code> as a
+<code>DWORD (32-bit) Value</code>, set Base to <strong>Decimal</strong>,
+and assign a value (such as <code>10</code> or
+<code>15</code>).</p></li>
+<li><p>Click <strong>OK</strong> to save your changes.</p></li>
+<li><p>Close the Registry Editor and <strong>restart your
+computer</strong> for the new settings to take effect.</p></li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-to-change-windows-gpu-tdr-delay-in-registry';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WDDM Architectural Changes in Windows Vista and DirectX 10 - directx</title>
+    <meta name="description" content="The release of Windows Vista introduced the Windows Display Driver Model (WDDM), marking a fundamental redesign of the Windows graphics subsystem to coincide with the capabilities of DirectX 10. Replacing the legacy Windows XP Display Driver Model (XPDM),">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/wddm-architectural-changes-in-windows-vista-and-direct-x-10">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="WDDM Architectural Changes in Windows Vista and DirectX 10 - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/wddm-architectural-changes-in-windows-vista-and-direct-x-10" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The release of Windows Vista introduced the Windows Display Driver Model (WDDM), marking a fundamental redesign of the Windows graphics subsystem to coincide with the capabilities of DirectX 10. Replacing the legacy Windows XP Display Driver Model (XPDM)," />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="wddm-architectural-changes-in-windows-vista-and-directx-10">WDDM
+Architectural Changes in Windows Vista and DirectX 10</h1>
+<p>The release of Windows Vista introduced the Windows Display Driver
+Model (WDDM), marking a fundamental redesign of the Windows graphics
+subsystem to coincide with the capabilities of DirectX 10. Replacing the
+legacy Windows XP Display Driver Model (XPDM), WDDM shifted graphics
+processing from a dedicated, unmanaged hardware pipeline into a fully
+virtualized, scheduled, and fault-tolerant operating system resource.
+This transition resolved chronic system stability issues, enabled the
+hardware-accelerated Desktop Window Manager (DWM), and provided the
+underlying architecture required to support the modern, unified-pipeline
+design of DirectX 10.</p>
+<h3 id="decoupling-into-user-mode-and-kernel-mode-drivers">Decoupling
+into User-Mode and Kernel-Mode Drivers</h3>
+<p>Under the legacy XPDM, display drivers executed heavily within kernel
+space, meaning a single driver bug or illegal memory access could cause
+a Blue Screen of Death (BSOD). WDDM split graphics driver functionality
+into two distinct layers:</p>
+<ul>
+<li><strong>User-Mode Driver (UMD):</strong> DirectX 10 runtime logic
+and hardware-specific translation run primarily in user mode. State
+validation, resource allocation mapping, and shader compilation occur
+here, isolated from critical operating system components.</li>
+<li><strong>Kernel-Mode Driver (KMD):</strong> A lean, privileged layer
+responsible for low-level hardware access, memory management, and
+interrupt handling.</li>
+</ul>
+<p>By pushing the majority of DirectX 10 translation tasks to the user
+mode, Windows Vista ensured that driver-level crashes would terminate
+only the offending application rather than the entire operating
+system.</p>
+<h3 id="gpu-virtualization-and-the-video-memory-manager-vidmm">GPU
+Virtualization and the Video Memory Manager (VidMM)</h3>
+<p>Prior to WDDM, video RAM (VRAM) was managed directly by individual
+display drivers, offering limited multitasking capabilities and no
+robust mechanism to overcommit memory. WDDM introduced the Video Memory
+Manager (VidMM) as a core kernel component.</p>
+<p>VidMM virtualizes the GPU’s physical memory, allowing the operating
+system to dynamically allocate, partition, and page resources between
+dedicated VRAM and system memory. This architectural shift matched the
+DirectX 10 requirement to handle complex rendering workloads that exceed
+physical VRAM capacities, ensuring that multiple graphics-intensive
+applications can run simultaneously without running out of addressable
+hardware memory.</p>
+<h3 id="gpu-scheduling-and-preemption-vidsch">GPU Scheduling and
+Preemption (VidSch)</h3>
+<p>DirectX 10 introduced support for fine-grained parallel processing
+and unified shader pipelines, demanding a more coordinated approach to
+GPU execution. WDDM introduced the GPU Scheduler (VidSch), which treats
+the graphics processing unit as a shared, pre-emptible multitasking
+processor rather than a single-tasking, run-to-completion pipeline.</p>
+<p>WDDM implements basic cooperative and context-switch scheduling. The
+operating system, rather than the graphics hardware or individual
+application, controls command buffers sent to the GPU. This ensures that
+background 3D tasks cannot indefinitely block primary display output or
+real-time user interface rendering.</p>
+<h3 id="timeout-detection-and-recovery-tdr">Timeout Detection and
+Recovery (TDR)</h3>
+<p>In previous driver architectures, a GPU entering an infinite loop or
+hanging on an intensive command sequence would freeze the entire
+computer, necessitating a hard reboot. WDDM introduced Timeout Detection
+and Recovery (TDR).</p>
+<p>With TDR, the operating system tracks the execution time of commands
+sent to the graphics hardware. If the GPU fails to respond within a
+default threshold (typically two seconds), the kernel-mode driver
+detects the hang, resets the graphics processor, reallocates active
+resources, and reloads the driver without requiring a reboot.</p>
+<h3 id="integration-with-the-desktop-window-manager-dwm">Integration
+with the Desktop Window Manager (DWM)</h3>
+<p>WDDM formed the infrastructure needed for Windows Aero and the
+Desktop Window Manager (DWM). In XPDM, applications drew directly to a
+single shared front-buffer display surface. WDDM requires that every
+open window renders to an off-screen surface managed by the graphics
+pipeline. DWM then uses DirectX to composite these surfaces into the
+final desktop display in real time, eliminating display artifacts such
+as window tearing and rendering trails during system execution.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/wddm-architectural-changes-in-windows-vista-and-direct-x-10';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

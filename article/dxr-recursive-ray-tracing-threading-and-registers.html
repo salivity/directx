@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DXR Recursive Ray Tracing: Threading and Registers - directx</title>
+    <meta name="description" content="Recursive ray generation in DirectX Raytracing (DXR) allows shaders—such as Closest Hit shaders—to spawn secondary rays via nested TraceRay() calls, creating dynamic rendering paths for reflections, refractions, and global illumination. While flexible, th">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/dxr-recursive-ray-tracing-threading-and-registers">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DXR Recursive Ray Tracing: Threading and Registers - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/dxr-recursive-ray-tracing-threading-and-registers" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Recursive ray generation in DirectX Raytracing (DXR) allows shaders—such as Closest Hit shaders—to spawn secondary rays via nested TraceRay() calls, creating dynamic rendering paths for reflections, refractions, and global illumination. While flexible, th" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="dxr-recursive-ray-tracing-threading-and-registers">DXR Recursive
+Ray Tracing: Threading and Registers</h1>
+<p>Recursive ray generation in DirectX Raytracing (DXR) allows
+shaders—such as Closest Hit shaders—to spawn secondary rays via nested
+<code>TraceRay()</code> calls, creating dynamic rendering paths for
+reflections, refractions, and global illumination. While flexible, this
+approach introduces substantial performance bottlenecks at the hardware
+level. This article examines how nested ray recursion inflates GPU
+register allocation, triggers register spilling to slow memory, causes
+thread divergence, and severely degrades hardware thread scheduling
+efficiency.</p>
+<h3 id="gpu-register-pressure-and-the-virtual-call-stack">GPU Register
+Pressure and the Virtual Call Stack</h3>
+<p>Traditional GPU architectures rely on thousands of lightweight
+threads running in lockstep (Wavefronts on AMD, Warps on NVIDIA). Each
+thread relies on a shared pool of general-purpose registers (GPRs) to
+maintain its state. Unlike standard CPU execution, modern GPUs lack a
+dedicated hardware call stack designed for deep, dynamic recursion.</p>
+<p>When a shader invokes <code>TraceRay()</code> recursively, the
+execution state of the parent shader must be preserved until the child
+ray traversal and its subsequent shading complete. This creates several
+acute hardware impacts:</p>
+<ul>
+<li><strong>Inflated Live Variable Lifetimes:</strong> All local
+variables needed after the nested <code>TraceRay()</code> call must
+remain allocated throughout the entire traversal of the child ray. This
+artificially lengthens variable lifespans, dramatically increasing the
+total register count required per thread.</li>
+<li><strong>Reduced Occupancy:</strong> Hardware thread schedulers
+allocate execution slots based on resource availability. As the number
+of registers allocated per thread increases, the total number of active
+warps or wavefronts that can reside concurrently on a Streaming
+Multiprocessor (SM) or Compute Unit (CU) drops. This reduction in thread
+occupancy limits the GPU's primary mechanism for hiding memory
+latency.</li>
+<li><strong>Register Spilling to Local Memory:</strong> When recursive
+depth requires more registers than the hardware allocator can provide,
+the compiler must spill the excess state into local thread storage
+(scratch memory located in VRAM or L2 cache). Reading and writing stack
+frames to memory turns low-latency register operations into high-latency
+memory transactions, multiplying memory bandwidth saturation.</li>
+</ul>
+<h3 id="impact-on-thread-scheduling-and-execution-coherence">Impact on
+Thread Scheduling and Execution Coherence</h3>
+<p>GPU schedulers depend on uniform execution across lanes within a warp
+or wavefront. Recursive ray dispatching fundamentally breaks this
+uniformity through multiple mechanisms:</p>
+<ul>
+<li><strong>Execution and Path Divergence:</strong> In any single wave
+of 32 or 64 threads, individual rays will hit different surfaces, enter
+different hit shaders, or terminate early (e.g., hitting a light source
+or reaching the skybox). If some threads recurse while others finish,
+the GPU scheduler must serialize execution paths. Threads that have
+completed must idle while active lanes finish their deeper recursion,
+slashing SIMD/SIMT hardware utilization.</li>
+<li><strong>Unpredictable Latency and Warp Stalls:</strong> Traversal of
+nested rays through the Bounding Volume Hierarchy (BVH) has
+unpredictable duration. Because lower occupancy leaves the scheduler
+with fewer alternative warps to execute during stalls, execution
+pipelines sit idle waiting for ray-box and ray-triangle intersection
+hardware to resolve.</li>
+<li><strong>Dynamic State Management Overhead:</strong> The DXR runtime
+must dynamically manage ray payloads across recursion boundaries.
+Passing large ray payload structures down recursive chains demands
+additional memory overhead, which further fragments the cache hierarchy
+and slows scheduler dispatch cycles.</li>
+</ul>
+<h3 id="mitigation-strategies-in-modern-directx">Mitigation Strategies
+in Modern DirectX</h3>
+<p>To counter the scheduling stalls and high register pressure of
+recursion, modern DirectX pipelines generally avoid deep
+<code>TraceRay()</code> nesting in favor of iterative paradigms:</p>
+<ul>
+<li><strong>Loop-Based Ray Generation:</strong> Rather than firing rays
+from hit shaders, developers maintain an iterative loop within the
+primary Ray Generation Shader. Shaders write hit surface parameters into
+an output buffer, allowing the main loop to cast subsequent rays
+sequentially, reducing register lifetimes to a single ray's scope.</li>
+<li><strong>Inline Ray Tracing (<code>RayQuery</code> in DXR
+1.1):</strong> Inline ray queries grant explicit control over the
+traversal process directly within compute or pixel shaders, eliminating
+the runtime hit-shader dispatch table entirely and keeping the execution
+stack flat.</li>
+<li><strong>Payload Trimming:</strong> Restricting the Ray Payload to
+the absolute minimum byte count reduces the live state carried across
+recursive boundaries, minimizing spilled memory when recursion cannot be
+completely avoided.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/dxr-recursive-ray-tracing-threading-and-registers';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

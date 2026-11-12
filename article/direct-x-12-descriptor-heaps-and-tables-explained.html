@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Descriptor Heaps and Tables Explained - directx</title>
+    <meta name="description" content="In DirectX 12, explicit GPU resource binding is achieved through descriptors, descriptor heaps, and descriptor tables, replacing the implicit driver-managed state mechanisms of earlier graphics APIs. This article explains how these three components work t">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-descriptor-heaps-and-tables-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Descriptor Heaps and Tables Explained - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-descriptor-heaps-and-tables-explained" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In DirectX 12, explicit GPU resource binding is achieved through descriptors, descriptor heaps, and descriptor tables, replacing the implicit driver-managed state mechanisms of earlier graphics APIs. This article explains how these three components work t" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-descriptor-heaps-and-tables-explained">DirectX 12
+Descriptor Heaps and Tables Explained</h1>
+<p>In DirectX 12, explicit GPU resource binding is achieved through
+descriptors, descriptor heaps, and descriptor tables, replacing the
+implicit driver-managed state mechanisms of earlier graphics APIs. This
+article explains how these three components work together to expose
+buffers, textures, and samplers to GPU shaders, how memory is allocated
+and partitioned within heaps, and how root signatures leverage
+descriptor tables to optimize pipeline binding and maximize rendering
+performance.</p>
+<h3 id="descriptors-the-fundamental-units-of-binding">Descriptors: The
+Fundamental Units of Binding</h3>
+<p>A descriptor (historically referred to as a "resource view") is a
+relatively small, opaque data block—typically 32 to 64 bytes—that fully
+defines a resource to the GPU hardware. Rather than passing an entire
+resource object directly to the pipeline, the application passes a
+descriptor that contains:</p>
+<ul>
+<li>The GPU virtual address of the resource.</li>
+<li>The data format (e.g.,
+<code>DXGI_FORMAT_R8G8B8A8_UNORM</code>).</li>
+<li>Dimensionality and structural layout (e.g., 2D texture, buffer, mip
+levels, array slices).</li>
+<li>Resource type specifications, such as Constant Buffer Views (CBV),
+Shader Resource Views (SRV), Unordered Access Views (UAV), Samplers,
+Render Target Views (RTV), and Depth Stencil Views (DSV).</li>
+</ul>
+<p>Descriptors cannot reside in standard CPU system memory when read by
+shaders; they must be stored in contiguous GPU-visible allocations.</p>
+<h3 id="descriptor-heaps-the-backing-memory">Descriptor Heaps: The
+Backing Memory</h3>
+<p>A descriptor heap is a dedicated, contiguous array of descriptors
+allocated directly in GPU memory. It functions similarly to a custom
+memory pool specifically designed for descriptor allocations.</p>
+<p>Descriptor heaps are categorized by the types of descriptors they
+store:</p>
+<ol type="1">
+<li><strong>CBV/SRV/UAV Heaps:</strong> Store constant buffers, shader
+resources (textures and buffers), and read-write unordered access
+resources. These can be configured as shader-visible.</li>
+<li><strong>Sampler Heaps:</strong> Store sampler states. Samplers are
+kept in separate heaps due to hardware differences in sampler units on
+many GPU architectures.</li>
+<li><strong>RTV Heaps:</strong> Store render target views for output
+merger binding. These are non-shader-visible.</li>
+<li><strong>DSV Heaps:</strong> Store depth/stencil views for the output
+merger. These are also non-shader-visible.</li>
+</ol>
+<p>Descriptor heaps are either <strong>Shader-Visible</strong> or
+<strong>Non-Shader-Visible</strong>. Non-shader-visible heaps exist in
+system or GPU memory to stage descriptors on the CPU (such as RTVs or
+staging pools). Shader-visible heaps are bound to the command list using
+<code>SetDescriptorHeaps</code>, allowing shader units to fetch
+descriptors directly during execution. Only one CBV/SRV/UAV heap and one
+Sampler heap can be bound to the pipeline concurrently.</p>
+<h3 id="descriptor-tables-slicing-the-heap">Descriptor Tables: Slicing
+the Heap</h3>
+<p>A descriptor table is not an allocation of memory; rather, it is a
+subrange, or view, into an existing descriptor heap.</p>
+<p>Because a shader-visible heap can contain thousands of descriptors,
+binding the entire heap directly to individual shader stages is
+inefficient. Instead, descriptor tables designate contiguous slices of a
+heap by specifying an offset (base descriptor handle) and a length.</p>
+<p>For example, an application may organize a single CBV/SRV/UAV heap
+containing:</p>
+<ul>
+<li>Indices 0–99: Material textures (SRVs).</li>
+<li>Indices 100–149: Dynamic per-frame constant buffers (CBVs).</li>
+<li>Indices 150–199: Compute dispatch storage buffers (UAVs).</li>
+</ul>
+<p>A descriptor table can then be defined to point specifically to index
+0 with a length of 10 to expose 10 material textures to a pixel shader,
+while another descriptor table points to index 100 with a length of 2 to
+provide constant buffers to the vertex shader.</p>
+<h3 id="integration-via-the-root-signature">Integration via the Root
+Signature</h3>
+<p>The root signature acts as the parameter contract between the
+application code and the shader stages. It defines what data the shaders
+expect, arranged in root parameters:</p>
+<ul>
+<li><strong>Root Constants:</strong> Data pushed directly into root
+registers (fastest, smallest space).</li>
+<li><strong>Root Descriptors:</strong> Pointers bound directly to a
+single buffer (CBV, SRV, or UAV) without utilizing a descriptor
+heap.</li>
+<li><strong>Descriptor Tables:</strong> Pointers to ranges inside a
+bound descriptor heap.</li>
+</ul>
+<p>When a root parameter is configured as a descriptor table, the root
+signature merely holds a 64-bit GPU descriptor handle representing the
+start of that table. During a draw or dispatch call:</p>
+<ol type="1">
+<li>The application binds the master descriptor heap using
+<code>ID3D12GraphicsCommandList::SetDescriptorHeaps</code>.</li>
+<li>The application sets the root table parameter using
+<code>SetGraphicsRootDescriptorTable</code> (or compute equivalent),
+providing the GPU handle pointing to the desired offset within that
+heap.</li>
+<li>The GPU shader dereferences the table pointer to index into the heap
+and read the resource descriptors with minimal driver intervention.</li>
+</ol>
+<h3 id="architectural-benefits">Architectural Benefits</h3>
+<p>By decoupling descriptor allocation (heaps) from pipeline exposure
+(tables), DirectX 12 achieves:</p>
+<ul>
+<li><strong>Reduced Driver Overhead:</strong> Descriptor validation
+occurs at creation time on the CPU rather than dynamically per draw
+call.</li>
+<li><strong>Cache Efficiency:</strong> Grouping frequently used
+descriptors contiguously in GPU cache-friendly structures reduces cache
+misses during shader execution.</li>
+<li><strong>Bindless Rendering:</strong> Because descriptor tables allow
+dynamic indexing, shaders can index descriptors using variables (e.g.,
+material IDs stored in a vertex buffer), enabling modern bindless
+rendering workflows where thousands of resources are accessed
+dynamically without CPU-side state changes.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-12-descriptor-heaps-and-tables-explained';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

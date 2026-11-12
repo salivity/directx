@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Windows Auto HDR Uses AI and DirectX - directx</title>
+    <meta name="description" content="Windows Auto HDR upgrades legacy Standard Dynamic Range (SDR) games to High Dynamic Range (HDR) automatically, without requiring developer updates. By combining lightweight machine learning algorithms with DirectX runtime hooks, Windows analyzes 8-bit SDR">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-windows-auto-hdr-uses-ai-and-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Windows Auto HDR Uses AI and DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-windows-auto-hdr-uses-ai-and-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Windows Auto HDR upgrades legacy Standard Dynamic Range (SDR) games to High Dynamic Range (HDR) automatically, without requiring developer updates. By combining lightweight machine learning algorithms with DirectX runtime hooks, Windows analyzes 8-bit SDR" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-windows-auto-hdr-uses-ai-and-directx">How Windows Auto HDR
+Uses AI and DirectX</h1>
+<p>Windows Auto HDR upgrades legacy Standard Dynamic Range (SDR) games
+to High Dynamic Range (HDR) automatically, without requiring developer
+updates. By combining lightweight machine learning algorithms with
+DirectX runtime hooks, Windows analyzes 8-bit SDR output frames in real
+time and intelligently remaps color values, luminance, and dynamic range
+into a 10-bit or 16-bit HDR color space. This process brightens specular
+highlights and deepens color saturation while preserving the original
+artistic intent and user interface clarity.</p>
+<h3 id="intercepting-the-pipeline-with-directx-hooks">Intercepting the
+Pipeline with DirectX Hooks</h3>
+<p>Auto HDR operates at the operating system and graphics driver level
+rather than inside the game's internal game engine. It targets games
+built on DirectX 11 and DirectX 12.</p>
+<p>When an eligible game runs, Windows uses presentation-level hooks via
+the DirectX Graphics Infrastructure (DXGI). As the game completes its
+render loop and prepares to present the final frame, DXGI intercepts the
+standard 8-bit swapchain buffer (typically formatted as
+<code>DXGI_FORMAT_B8G8R8A8_UNORM</code> or
+<code>R8G8B8A8_UNORM</code>).</p>
+<p>Instead of sending this limited 8-bit frame directly to the display,
+the system upgrades the swapchain to a high-precision format—typically a
+10-bit integer format (<code>DXGI_FORMAT_R10G10B10A2_UNORM</code>) or a
+16-bit floating-point format
+(<code>DXGI_FORMAT_R16G16B16A16_FLOAT</code>, often used with scRGB).
+This provides the necessary headroom to hold expanded color and
+luminance data without introducing banding artifacts.</p>
+<h3 id="the-role-of-machine-learning">The Role of Machine Learning</h3>
+<p>Traditional tone-mapping tools use simple math to stretch luminance
+evenly across a frame, which often causes blown-out UI text or
+washed-out midtones. Auto HDR avoids this by utilizing a deep neural
+network trained on thousands of side-by-side SDR and native HDR game
+frames.</p>
+<p>During training, the model learned how game engines construct scenes
+and how lighting physics behave in native HDR:</p>
+<ul>
+<li><strong>Semantic Classification:</strong> The neural network
+recognizes the difference between diffuse surfaces (such as concrete,
+skin, or cloth), intense emissive light sources (such as neon signs,
+fire, sunlight, and laser blasts), and static 2D HUD/UI elements.</li>
+<li><strong>Selective Intensity Calculation:</strong> Because the model
+understands scene context, it knows to leave UI elements and paper-white
+diffuse values at typical SDR brightness (around 100 to 200 nits) while
+boosting targeted light sources to modern HDR peak thresholds (often
+reaching 1,000 nits or more depending on the calibrated display).</li>
+</ul>
+<p>For live deployment, Microsoft distilled this complex training into
+an optimized, hardware-accelerated post-processing shader. This
+inferencing model executes in fractions of a millisecond directly on the
+GPU, avoiding noticeable input latency or frame-rate drops.</p>
+<h3 id="expanding-the-8-bit-color-space">Expanding the 8-Bit Color
+Space</h3>
+<p>Standard 8-bit SDR buffers are restricted to the narrow Rec. 709/sRGB
+color gamut, offering only 256 steps per RGB channel and a low dynamic
+range.</p>
+<p>To convert this limited data into wide color gamut (WCG) HDR:</p>
+<ol type="1">
+<li><strong>Bit-Depth Expansion:</strong> The 8-bit integer values are
+uncompressed into floating-point color representations. This eliminates
+rounding errors during mathematical transformations.</li>
+<li><strong>Color Gamut Remapping:</strong> The sRGB color coordinates
+are mapped into wide-gamut spaces, specifically BT.2020 or linear scRGB.
+The system calculates where saturated colors should shift along the
+wider chromaticity curve without distorting natural skin tones or
+neutral colors.</li>
+<li><strong>Luminance De-Quantization:</strong> The inferred brightness
+values are plotted along the Perceptual Quantizer (PQ / SMPTE ST 2084)
+curve. By distributing luminance logarithmically rather than linearly,
+the system allocates more precision to high-contrast areas.</li>
+</ol>
+<p>Once the frame is transformed and tone-mapped to match the specific
+peak brightness and black-level capabilities of the connected HDR
+display, DXGI presents the final frame to the monitor, producing an
+authentic HDR image from an SDR source.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-windows-auto-hdr-uses-ai-and-direct-x';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

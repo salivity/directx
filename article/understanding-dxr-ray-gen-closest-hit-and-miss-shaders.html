@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding DXR Ray Gen, Closest Hit, and Miss Shaders - directx</title>
+    <meta name="description" content="DirectX Raytracing (DXR) replaces the traditional rasterization pipeline with an event-driven shader model designed around ray traversal through bounding volume hierarchies. This article explains how the ray generation shader initiates rays, how hardware">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/understanding-dxr-ray-gen-closest-hit-and-miss-shaders">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Understanding DXR Ray Gen, Closest Hit, and Miss Shaders - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/understanding-dxr-ray-gen-closest-hit-and-miss-shaders" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX Raytracing (DXR) replaces the traditional rasterization pipeline with an event-driven shader model designed around ray traversal through bounding volume hierarchies. This article explains how the ray generation shader initiates rays, how hardware" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="understanding-dxr-ray-gen-closest-hit-and-miss-shaders">Understanding
+DXR Ray Gen, Closest Hit, and Miss Shaders</h1>
+<p>DirectX Raytracing (DXR) replaces the traditional rasterization
+pipeline with an event-driven shader model designed around ray traversal
+through bounding volume hierarchies. This article explains how the ray
+generation shader initiates rays, how hardware traversal determines
+intersections, and how control branches to either the closest hit shader
+or the miss shader to resolve lighting, materials, and environment data
+back to the final render target.</p>
+<h3 id="the-ray-generation-shader-starting-traversal">The Ray Generation
+Shader: Starting Traversal</h3>
+<p>The Ray Generation (RayGen) shader serves as the entry point for the
+DXR pipeline. Dispatched across a grid representing the render target
+dimensions, each thread corresponds to a specific pixel or sample.</p>
+<p>The RayGen shader initializes a user-defined payload structure
+containing data such as radiance, hit distance, and recursion depth. It
+then calculates the world-space origin and direction of a ray based on
+the camera projection matrix and calls the intrinsic function
+<code>TraceRay()</code>. This invocation hands execution over to the
+fixed-function traversal hardware, targeting the Top-Level Acceleration
+Structure (TLAS).</p>
+<h3 id="hardware-traversal-and-resolution">Hardware Traversal and
+Resolution</h3>
+<p>Once <code>TraceRay()</code> is invoked, the GPU tests the ray
+against the acceleration structures to identify primitive intersections
+between the defined minimum (<code>TMin</code>) and maximum
+(<code>TMax</code>) distance bounds. Depending on whether a valid
+intersection is found, the pipeline branches execution to one of two
+stages:</p>
+<ol type="1">
+<li><strong>Geometry Intersected:</strong> If a valid hit occurs and
+passes any optional any-hit shader evaluation, the pipeline identifies
+the intersection closest to the ray origin and invokes the
+<strong>Closest Hit Shader</strong>.</li>
+<li><strong>No Geometry Intersected:</strong> If the ray exits the scene
+bounds without striking any geometry, the pipeline invokes the
+<strong>Miss Shader</strong>.</li>
+</ol>
+<h3 id="the-closest-hit-shader-surface-evaluation">The Closest Hit
+Shader: Surface Evaluation</h3>
+<p>The Closest Hit (CHS) shader executes when a ray successfully strikes
+opaque or evaluated geometry. It has access to the ray payload, built-in
+system values (such as the primitive ID and ray direction), and
+intersection attributes (such as barycentric coordinates).</p>
+<p>The CHS typically performs surface shading by:</p>
+<ul>
+<li>Interpolating vertex attributes across the hit triangle to sample
+diffuse, normal, and roughness textures.</li>
+<li>Evaluating local lighting models using analytic light sources.</li>
+<li>Writing the calculated surface color or material properties into the
+ray payload.</li>
+</ul>
+<p>The CHS can also invoke <code>TraceRay()</code> to cast secondary
+rays, such as shadow rays toward light sources or reflection/refraction
+rays. In these cases, the current CHS acts similarly to a RayGen shader,
+waiting for the secondary ray traversal to complete before using the
+updated secondary payload to resolve the final surface appearance.</p>
+<h3 id="the-miss-shader-environment-handling">The Miss Shader:
+Environment Handling</h3>
+<p>The Miss Shader (MS) executes when a ray traverses to
+<code>TMax</code> without registering an intersection. Because no
+geometry was encountered, the shader cannot sample mesh attributes.
+Instead, it typically resolves background information.</p>
+<p>Common uses for the Miss Shader include:</p>
+<ul>
+<li>Sampling high-dynamic-range (HDR) environment maps or procedural sky
+models using the ray direction.</li>
+<li>Returning a default ambient light value.</li>
+<li>Setting a boolean flag in the payload for shadow rays, indicating
+that the path to a light source is unobstructed.</li>
+</ul>
+<p>Like the CHS, the Miss Shader writes its results directly into the
+ray payload before terminating.</p>
+<h3 id="payload-return-and-output">Payload Return and Output</h3>
+<p>After either the Closest Hit Shader or the Miss Shader completes
+execution, control returns to the shader that called
+<code>TraceRay()</code>. If <code>TraceRay()</code> was called
+recursively within a CHS, control returns to that CHS. Once all
+secondary rays resolve, control returns to the originating RayGen
+shader.</p>
+<p>The RayGen shader unpacks the final values stored in the payload,
+performs any necessary post-processing or temporal accumulation, and
+writes the output pixel color directly to an unordered access view (UAV)
+bound to the render target.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/understanding-dxr-ray-gen-closest-hit-and-miss-shaders';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

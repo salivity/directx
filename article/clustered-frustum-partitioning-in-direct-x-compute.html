@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clustered Frustum Partitioning in DirectX Compute - directx</title>
+    <meta name="description" content="Clustered forward shading divides the camera view frustum into a three-dimensional grid of sub-frustums, known as clusters or froxels, to efficiently cull and assign lights in modern rendering pipelines. This article details how DirectX compute passes con">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/clustered-frustum-partitioning-in-direct-x-compute">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Clustered Frustum Partitioning in DirectX Compute - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/clustered-frustum-partitioning-in-direct-x-compute" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Clustered forward shading divides the camera view frustum into a three-dimensional grid of sub-frustums, known as clusters or froxels, to efficiently cull and assign lights in modern rendering pipelines. This article details how DirectX compute passes con" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="clustered-frustum-partitioning-in-directx-compute">Clustered
+Frustum Partitioning in DirectX Compute</h1>
+<p>Clustered forward shading divides the camera view frustum into a
+three-dimensional grid of sub-frustums, known as clusters or froxels, to
+efficiently cull and assign lights in modern rendering pipelines. This
+article details how DirectX compute passes construct this
+three-dimensional spatial acceleration structure. It covers the
+mathematical formulation of screen-space and depth-space slicing, the
+implementation of DirectX compute shaders to generate bounding volumes,
+and how these clusters are stored in GPU memory to decouple scene
+complexity from dynamic light counts.</p>
+<h3 id="1-the-3d-cluster-grid-structure">1. The 3D Cluster Grid
+Structure</h3>
+<p>Standard tiled forward shading partitions only the two-dimensional
+screen space (<span class="math inline">\(X\)</span> and <span
+class="math inline">\(Y\)</span>), which causes high depth complexity to
+result in false-positive light assignments along the view ray. Clustered
+forward shading resolves this by adding depth (<span
+class="math inline">\(Z\)</span>) partitioning.</p>
+<p>A typical cluster allocation consists of:</p>
+<ul>
+<li><strong><span class="math inline">\(X\)</span> and <span
+class="math inline">\(Y\)</span> Dimensions:</strong> The viewport is
+subdivided into uniform pixel blocks (commonly <span
+class="math inline">\(16 \times 16\)</span> or <span
+class="math inline">\(32 \times 32\)</span> pixels).</li>
+<li><strong><span class="math inline">\(Z\)</span> Dimension:</strong>
+The depth range between the near clipping plane (<span
+class="math inline">\(Z_{near}\)</span>) and far clipping plane (<span
+class="math inline">\(Z_{far}\)</span>) is subdivided into discrete
+slices (typically 16 to 64 slices).</li>
+</ul>
+<p>Because perspective projection causes frustum volume to expand
+rapidly with distance, linear depth subdivision results in excessively
+large clusters near the camera and tiny clusters far away. To maintain a
+balanced ratio between cluster dimensions, the depth slices are
+partitioned exponentially:</p>
+<p><span class="math display">\[Z_i = Z_{near} \cdot
+\left(\frac{Z_{far}}{Z_{near}}\right)^{\frac{i}{N}}\]</span></p>
+<p>Where <span class="math inline">\(i\)</span> is the slice index
+(<span class="math inline">\(0 \le i &lt; N\)</span>) and <span
+class="math inline">\(N\)</span> is the total number of depth
+slices.</p>
+<h3 id="2-generating-cluster-bounds-via-compute-pass">2. Generating
+Cluster Bounds via Compute Pass</h3>
+<p>In DirectX (Direct3D 11 or Direct3D 12), building the cluster
+hierarchy is executed as a standalone compute pass prior to light
+culling.</p>
+<p>A compute shader is dispatched with a three-dimensional thread group
+configuration matching the cluster grid dimensions:</p>
+<pre class="hlsl"><code>[numthreads(1, 1, 1)] // Or grouped into configurations like (8, 8, 1)
+void CS_BuildClusters(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint3 clusterId = dispatchThreadId;
+    // Calculate AABB for clusterId
+}</code></pre>
+<p>Within this compute shader, the cluster volume is bounded by
+determining its Axis-Aligned Bounding Box (AABB) or an oriented frustum
+in view space:</p>
+<ol type="1">
+<li><strong>Screen-to-View Space Unprojection:</strong> The shader
+computes the normalized device coordinates (NDC) for the four
+screen-space corners of the current <span class="math inline">\((X,
+Y)\)</span> tile.</li>
+<li><strong>Ray Generation:</strong> Using the inverse projection
+matrix, the NDC points are unprojected to create four directional rays
+originating from the camera position <span class="math inline">\((0, 0,
+0)\)</span> in view space.</li>
+<li><strong>Depth Extrusion:</strong> The shader calculates the
+cluster's specific near and far depth bounds (<span
+class="math inline">\(Z_{min}\)</span> and <span
+class="math inline">\(Z_{max}\)</span>) using the exponential formula.
+The four rays are intersected with the near and far view planes of the
+cluster to produce eight corner vertices in view space.</li>
+<li><strong>Bounding Box Construction:</strong> An AABB is derived from
+the minimum and maximum component-wise coordinates of these eight
+view-space vertices.</li>
+</ol>
+<h3 id="3-gpu-memory-storage-and-layout">3. GPU Memory Storage and
+Layout</h3>
+<p>Once the bounds are generated, the compute shader writes the results
+to an unordered access view (UAV) bound to a structured buffer.</p>
+<pre class="hlsl"><code>struct ClusterAABB
+{
+    float4 minPoint;
+    float4 maxPoint;
+};
+
+RWStructuredBuffer&lt;ClusterAABB&gt; RWClusterAABBs : register(u0);</code></pre>
+<p>Because camera-relative cluster volumes do not change dynamically
+unless the camera field of view or clip planes change, this compute pass
+can be executed once on scene initialization or window resize, avoiding
+per-frame reconstruction overhead.</p>
+<h3 id="4-downstream-light-culling-and-shading">4. Downstream Light
+Culling and Shading</h3>
+<p>Once the clusters are established, a subsequent compute pass assigns
+lights to each cluster:</p>
+<ol type="1">
+<li><strong>Light Culling Compute Pass:</strong> Threads map to
+clusters, loading the stored <code>ClusterAABB</code> and testing it
+against active point and spot lights (using sphere-AABB or cone-AABB
+intersection tests).</li>
+<li><strong>Linked Lists or Grid Indirection:</strong> Intersecting
+light indices are written to a global light index list, with each
+cluster recording an offset and count into this list stored in a 3D
+texture (<code>RWTexture3D&lt;uint2&gt;</code>) or flat structured
+buffer.</li>
+<li><strong>Forward Pixel Shader Execution:</strong> During the geometry
+rendering pass, the pixel shader reads its screen coordinate and linear
+view-space depth, computes the corresponding cluster index using inverse
+mathematical functions, reads the assigned light range, and evaluates
+only the lights affecting that specific cluster.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/clustered-frustum-partitioning-in-direct-x-compute';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

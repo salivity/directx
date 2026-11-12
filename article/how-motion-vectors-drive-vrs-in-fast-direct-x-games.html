@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Motion Vectors Drive VRS in Fast DirectX Games - directx</title>
+    <meta name="description" content="Variable Rate Shading (VRS) combined with motion vectors allows modern DirectX 12 engines to dramatically reduce GPU pixel workloads in fast-paced games. By analyzing the velocity of geometry across the screen, the rendering pipeline can dynamically lower">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-motion-vectors-drive-vrs-in-fast-direct-x-games">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Motion Vectors Drive VRS in Fast DirectX Games - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-motion-vectors-drive-vrs-in-fast-direct-x-games" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Variable Rate Shading (VRS) combined with motion vectors allows modern DirectX 12 engines to dramatically reduce GPU pixel workloads in fast-paced games. By analyzing the velocity of geometry across the screen, the rendering pipeline can dynamically lower" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-motion-vectors-drive-vrs-in-fast-directx-games">How Motion
+Vectors Drive VRS in Fast DirectX Games</h1>
+<p>Variable Rate Shading (VRS) combined with motion vectors allows
+modern DirectX 12 engines to dramatically reduce GPU pixel workloads in
+fast-paced games. By analyzing the velocity of geometry across the
+screen, the rendering pipeline can dynamically lower shading precision
+on rapidly moving objects where high-frequency detail is naturally
+obscured by motion or blur. This article explains the technical
+mechanics behind motion-driven VRS, how it integrates into DirectX 12
+pipelines, and how it maximizes frame rates while maintaining perceived
+visual fidelity.</p>
+<h3 id="understanding-variable-rate-shading-in-directx-12">Understanding
+Variable Rate Shading in DirectX 12</h3>
+<p>Variable Rate Shading is an API feature introduced in DirectX 12 that
+decouples pixel shader invocation rates from the render target
+resolution. Under standard rendering, every pixel on a 4K display
+executes the pixel shader once (a 1x1 shading rate). VRS allows
+developers to assign coarser shading rates—such as 1x2, 2x1, 2x2, or
+4x4—to specific screen-space tiles.</p>
+<p>Under VRS Tier 2, the shading rate can be determined dynamically via
+a screen-space shading rate image (a low-resolution texture mask). Each
+pixel or block in this mask specifies the shading frequency for a
+corresponding block of screen pixels, enabling selective allocation of
+GPU compute resources.</p>
+<h3 id="the-role-of-motion-vectors">The Role of Motion Vectors</h3>
+<p>Motion vectors are 2D vectors generated during the geometry pass
+(G-buffer generation) that track the screen-space displacement of pixels
+between the current and previous frames. Typically used for temporal
+anti-aliasing (TAA), temporal upscaling, and post-process motion blur,
+motion vectors provide an exact measurement of pixel velocity.</p>
+<p>Human visual perception cannot resolve fine spatial detail on objects
+traversing the display at high velocities. Because fast-moving elements
+are already subject to temporal smearing or deliberate motion blur
+passes, full-rate pixel shading on these surfaces represents wasted
+computational effort.</p>
+<h3 id="how-motion-vectors-drive-the-shading-rate-mask">How Motion
+Vectors Drive the Shading Rate Mask</h3>
+<p>Integrating motion vectors into the VRS pipeline involves generating
+a dynamic shading rate image before the primary lighting or forward
+shading pass:</p>
+<ol type="1">
+<li><strong>Velocity Sampling:</strong> A compute shader samples the
+motion vector buffer across 8x8 or 16x16 pixel tiles, corresponding to
+the hardware tile size required by the GPU for VRS.</li>
+<li><strong>Magnitude Computation:</strong> The shader calculates the
+velocity magnitude (speed) of the pixels within each tile. Tiles with
+higher average velocities are flagged for reduced shading.</li>
+<li><strong>Thresholding and Mapping:</strong> Velocity values are
+mapped to supported VRS coarse rates. For example:
+<ul>
+<li>Low or zero velocity maps to full rate (1x1).</li>
+<li>Moderate velocity maps to half rate (2x1 or 1x2).</li>
+<li>High velocity maps to quarter rate (2x2 or 4x4).</li>
+</ul></li>
+<li><strong>Directional Shading:</strong> Because motion vectors provide
+directional data, anisotropic shading rates can be applied. An object
+moving purely horizontally can use a 2x1 shading rate (half resolution
+horizontally, full resolution vertically) to preserve vertical edge
+sharpness while cutting horizontal shading cost in half.</li>
+<li><strong>Mask Generation:</strong> The resulting rate assignments are
+written to a screen-space shading rate surface and bound to the DirectX
+12 command list using <code>RSSetShadingRateImage</code>.</li>
+</ol>
+<h3 id="performance-impact-in-high-motion-scenarios">Performance Impact
+in High-Motion Scenarios</h3>
+<p>Fast DirectX titles—such as racing games, first-person arena
+shooters, and flight simulators—benefit the most from motion-driven VRS.
+In these titles, vast portions of the frame are in constant, rapid
+motion relative to the camera viewport.</p>
+<p>By reducing the shading frequency across fast-moving backgrounds,
+peripheries during camera pans, and moving vehicles, the pixel shader
+pipeline load drops significantly. This freed GPU compute time allows
+for:</p>
+<ul>
+<li>Higher overall frame rates in GPU-bound scenarios.</li>
+<li>Reduced frame-time variance, leading to smoother pacing during
+intense action.</li>
+<li>Greater power efficiency and lower thermal throttling on mobile and
+console hardware.</li>
+</ul>
+<h3 id="preserving-image-quality">Preserving Image Quality</h3>
+<p>To prevent noticeable degradation, implementations typically apply
+filtering heuristics when evaluating motion vectors for VRS:</p>
+<ul>
+<li><strong>Edge Detection:</strong> Discontinuities in depth or normal
+buffers are evaluated alongside velocity to ensure that silhouette edges
+maintain higher shading rates, avoiding temporal aliasing.</li>
+<li><strong>Luminance and Contrast Weighting:</strong> High-contrast
+textures that may exhibit noticeable artifacting under coarse shading
+can be clamped to a finer shading rate, even at high speeds.</li>
+<li><strong>Specular Reflection Exclusions:</strong> Surfaces with
+sharp, dynamic specular highlights can be masked out to prevent specular
+flickering.</li>
+</ul>
+<p>By leveraging existing motion vector data to dictate shading density,
+DirectX 12 titles can intelligently redistribute rendering resources,
+delivering substantial performance uplifts in high-speed gameplay
+without compromising visual clarity.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-motion-vectors-drive-vrs-in-fast-direct-x-games';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

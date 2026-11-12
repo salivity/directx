@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 12 Render Pass Optimizations for TBDR GPUs - directx</title>
+    <meta name="description" content="The DirectX 12 Render Pass API optimizes rendering performance by giving developers fine-grained control over how render targets are bound, accessed, and resolved during a defined scope of draw calls. For mobile and tile-based deferred rendering (TBDR) ar">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-12-render-pass-optimizations-for-tbdr-gp-us">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 12 Render Pass Optimizations for TBDR GPUs - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-12-render-pass-optimizations-for-tbdr-gp-us" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The DirectX 12 Render Pass API optimizes rendering performance by giving developers fine-grained control over how render targets are bound, accessed, and resolved during a defined scope of draw calls. For mobile and tile-based deferred rendering (TBDR) ar" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-12-render-pass-optimizations-for-tbdr-gpus">DirectX 12
+Render Pass Optimizations for TBDR GPUs</h1>
+<p>The DirectX 12 Render Pass API optimizes rendering performance by
+giving developers fine-grained control over how render targets are
+bound, accessed, and resolved during a defined scope of draw calls. For
+mobile and tile-based deferred rendering (TBDR) architectures, these
+declarations act as vital driver and hardware hints. By explicitly
+communicating how data flows into and out of render targets, the API
+allows GPUs to maximize on-chip tile cache utilization and drastically
+reduce memory bandwidth round-trips to power-hungry external DRAM.</p>
+<h2 id="the-tile-based-rendering-bottleneck">The Tile-Based Rendering
+Bottleneck</h2>
+<p>Traditional immediate-mode desktop GPUs render geometry directly to
+full-frame allocations in high-bandwidth VRAM. In contrast, mobile and
+tile-based GPUs divide the screen into small regions, typically 16x16 or
+32x32 pixel tiles.</p>
+<p>Each tile is loaded into small, fast, on-chip tile memory (SRAM),
+where all rasterization, depth testing, and pixel shading occur. Once
+processing for a tile finishes, the completed data is written back to
+main system memory (LPDDR/DRAM). The most expensive operation on these
+architectures is not computation, but transferring data across the
+system bus. Without explicit workload boundaries, the GPU driver must
+conservatively assume that render targets contain data needed from prior
+frames and that all outputs must be written back to DRAM, causing severe
+bandwidth and thermal bottlenecks.</p>
+<h2 id="explicit-load-and-store-actions">Explicit Load and Store
+Actions</h2>
+<p>The DirectX 12 Render Pass API addresses this through beginning and
+ending access flags (<code>D3D12_RENDER_PASS_BEGINNING_ACCESS</code> and
+<code>D3D12_RENDER_PASS_ENDING_ACCESS</code>). These access types define
+precisely what the hardware must do with on-chip tile memory when a
+render pass starts and concludes:</p>
+<ul>
+<li><strong>Beginning Access (Load Optimization):</strong>
+<ul>
+<li><code>CLEAR</code>: Instructs the GPU to zero-initialize or set the
+tile buffer to a clear color within on-chip memory directly, eliminating
+the need to read old texture data from DRAM.</li>
+<li><code>DISCARD</code>: Notifies the GPU that the current buffer
+contents are unneeded and will be overwritten, allowing the hardware to
+skip loading data into the tile cache entirely.</li>
+<li><code>PRESERVE</code>: Forces the GPU to fetch existing pixels from
+DRAM into on-chip cache only when previous contents are genuinely
+required for blending or incremental drawing.</li>
+</ul></li>
+<li><strong>Ending Access (Store Optimization):</strong>
+<ul>
+<li><code>STORE</code> / <code>PRESERVE</code>: Explicitly flushes the
+finished tile cache data to DRAM.</li>
+<li><code>DISCARD</code>: Tells the hardware that the contents (such as
+intermediate depth buffers or transient stencil passes) are no longer
+needed. The GPU simply discards the tile cache contents without spending
+memory bandwidth writing them back to main memory.</li>
+<li><code>RESOLVE</code>: Allows the hardware to resolve multisample
+anti-aliasing (MSAA) directly within the on-chip tile memory before
+writing a single resolved image back to DRAM, bypassing the need to
+store massive multi-sample buffers in system memory.</li>
+</ul></li>
+</ul>
+<h2 id="transient-resources-and-subpass-layouts">Transient Resources and
+Subpass Layouts</h2>
+<p>Complex rendering pipelines, such as deferred shading, rely heavily
+on intermediate G-buffers (normal, albedo, roughness, and depth). On
+traditional APIs, each G-buffer target is written to DRAM and then
+immediately read back in a subsequent lighting pass.</p>
+<p>With the Render Pass API, developers can designate these intermediate
+targets as transient. A TBDR GPU can retain the G-buffer data entirely
+within its local tile cache across consecutive subpasses. The geometry
+pass populates the on-chip G-buffer, and the lighting pass immediately
+consumes it within the same tile memory before the pass ends. The
+intermediate data is then discarded, ensuring that high-density G-buffer
+data never leaves the chip or consumes external memory bandwidth.</p>
+<h2 id="cache-coherency-and-reduced-state-flushes">Cache Coherency and
+Reduced State Flushes</h2>
+<p>Before the introduction of render passes, DirectX 12 relied entirely
+on <code>ResourceBarrier</code> calls to synchronize pipeline stages and
+transition resource states. While effective, fine-grained barriers can
+force a tile-based GPU to flush its local tile caches prematurely to
+guarantee cache coherency across different draw operations.</p>
+<p>The Render Pass API groups these operations into a unified execution
+block. Knowing the start, operations, and end of a pass allows the
+hardware scheduler to:</p>
+<ol type="1">
+<li><strong>Defer Cache Invalidation:</strong> The hardware avoids
+flushing L1/L2 caches between individual draw calls within the
+pass.</li>
+<li><strong>Optimize Layout Transitions:</strong> State transitions for
+render targets and depth-stencil surfaces can be deferred until the
+entire tile workload is complete.</li>
+<li><strong>Batch Geometry Processing:</strong> The GPU can bin all tile
+primitives efficiently, knowing that render target states remain static
+for the duration of the pass.</li>
+</ol>
+<p>By removing the guesswork from render target management, the DirectX
+12 Render Pass API transforms high-level pipeline intent into actionable
+layout and cache hints, directly aligning modern graphics engines with
+the hardware constraints of mobile and tile-based architectures.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-12-render-pass-optimizations-for-tbdr-gp-us';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

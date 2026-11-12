@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapping PBR to Modern DirectX Shader Pipelines - directx</title>
+    <meta name="description" content="Physically based rendering (PBR) relies on real-world optical physics to calculate how light interacts with surfaces, primarily through microfacet theory and energy conservation. In modern real-time rendering, mapping these mathematical models to modern D">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/mapping-pbr-to-modern-direct-x-shader-pipelines">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Mapping PBR to Modern DirectX Shader Pipelines - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/mapping-pbr-to-modern-direct-x-shader-pipelines" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Physically based rendering (PBR) relies on real-world optical physics to calculate how light interacts with surfaces, primarily through microfacet theory and energy conservation. In modern real-time rendering, mapping these mathematical models to modern D" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="mapping-pbr-to-modern-directx-shader-pipelines">Mapping PBR to
+Modern DirectX Shader Pipelines</h1>
+<p>Physically based rendering (PBR) relies on real-world optical physics
+to calculate how light interacts with surfaces, primarily through
+microfacet theory and energy conservation. In modern real-time
+rendering, mapping these mathematical models to modern DirectX (DirectX
+12 and High-Level Shader Language Shader Model 6+) requires a structured
+division of labor across descriptor bindings, vertex processing, pixel
+shading, compute-based image-based lighting (IBL), and
+hardware-accelerated ray tracing (DXR). This article outlines how PBR
+equations and texture data directly map to the stages and features of
+contemporary DirectX shader pipelines.</p>
+<h3 id="texture-packing-and-root-signature-setup">Texture Packing and
+Root Signature Setup</h3>
+<p>The standard metallic-roughness PBR workflow relies on a set of
+material parameters that must be exposed to the pipeline. DirectX 12
+utilizes root signatures and descriptor tables to bind these resources
+efficiently with minimal CPU overhead.</p>
+<p>Typically, material textures are packed into channel-efficient
+combinations:</p>
+<ul>
+<li><strong>Base Color / Albedo:</strong> RGB (sRGB format, sampled as
+linear in shaders) with an optional Alpha channel for opacity.</li>
+<li><strong>Normal Map:</strong> Two- or three-channel tangent-space
+normals (often BC5 or BC7 compressed).</li>
+<li><strong>Roughness-Metallic-Occlusion (RMO):</strong> A single
+composite texture packing Ambient Occlusion in the Red channel,
+Roughness in the Green channel, and Metallic in the Blue channel to
+conserve texture samplers and memory bandwidth.</li>
+</ul>
+<p>These textures, along with constant buffers containing light
+transforms, intensities, and camera positions, are bound to the pipeline
+via the Root Signature as Shader Resource Views (SRVs) and Constant
+Buffer Views (CBVs).</p>
+<h3 id="the-vertex-shader-stage">The Vertex Shader Stage</h3>
+<p>The vertex shader prepares spatial data for the microfacet
+calculations executed later in the pipeline. Its primary duties for PBR
+include:</p>
+<ul>
+<li>Transforming local vertex positions to clip space for rasterization,
+and world space for lighting vectors.</li>
+<li>Transforming and passing surface normal vectors, tangents, and
+bitangents (or signs) to the pixel shader to construct the
+Tangent-Bitangent-Normal (TBN) matrix.</li>
+<li>Passing UV coordinates for material map sampling.</li>
+</ul>
+<p>Shader Model 6 allows the efficient transmission of these
+interpolated attributes via user-defined output structures.</p>
+<h3 id="the-pixel-shader-evaluating-the-brdf">The Pixel Shader:
+Evaluating the BRDF</h3>
+<p>The pixel shader executes the Bidirectional Reflectance Distribution
+Function (BRDF). The standard formulation is the Cook-Torrance
+microfacet specular shading model combined with a Lambertian diffuse
+model:</p>
+<p><span class="math display">\[f(l, v) = k_d f_{\text{lambert}} + k_s
+f_{\text{cook-torrance}}\]</span></p>
+<p>In the pixel shader, the implementation unfolds in several discrete
+steps:</p>
+<ol type="1">
+<li><strong>Vector Construction:</strong> The shader reconstructs the
+normal using the sampled normal map and the TBN matrix. It computes the
+normalized view vector (<span class="math inline">\(V\)</span>), light
+direction vector (<span class="math inline">\(L\)</span>), and halfway
+vector (<span class="math inline">\(H = \frac{V + L}{\|V +
+L\|}\)</span>).</li>
+<li><strong>Fresnel Term (<span
+class="math inline">\(F\)</span>):</strong> Computed using the Schlick
+approximation. For dielectrics, base reflectivity (<span
+class="math inline">\(F_0\)</span>) is typically clamped around 0.04,
+while for metals, <span class="math inline">\(F_0\)</span> is derived
+directly from the albedo texture based on the metallic map.</li>
+<li><strong>Normal Distribution Function (<span
+class="math inline">\(D\)</span>):</strong> Evaluated using the
+Trowbridge-Reitz GGX distribution to model microfacet alignment relative
+to <span class="math inline">\(H\)</span> based on the surface roughness
+value.</li>
+<li><strong>Geometric Shadowing (<span
+class="math inline">\(G\)</span>):</strong> Calculated using the Smith
+model with the Schlick-GGX formulation, accounting for microfacet
+self-shadowing and masking based on both the view and light angles.</li>
+<li><strong>Direct Light Accumulation:</strong> The specular
+Cook-Torrance term <span class="math inline">\(\frac{D \cdot F \cdot
+G}{4(\mathbf{N} \cdot \mathbf{V})(\mathbf{N} \cdot \mathbf{L})}\)</span>
+is combined with the diffuse component <span class="math inline">\((1 -
+F) \frac{\text{Albedo}}{\pi}\)</span> and modulated by the light's
+irradiance and incoming angle (<span class="math inline">\(\mathbf{N}
+\cdot \mathbf{L}\)</span>).</li>
+</ol>
+<p>HLSL intrinsic functions like <code>dot</code>,
+<code>saturate</code>, and fast vector arithmetic execute these
+calculations with low latency on modern GPU compute units.</p>
+<h3 id="compute-shaders-and-image-based-lighting-ibl">Compute Shaders
+and Image-Based Lighting (IBL)</h3>
+<p>To account for indirect, ambient light without full path tracing,
+modern pipelines utilize the split-sum approximation for Image-Based
+Lighting. Compute shaders are used offline or during scene
+initialization to pre-integrate environment maps:</p>
+<ul>
+<li><strong>Diffuse Irradiance:</strong> A compute shader convolves an
+environment cubemap to capture low-frequency irradiance. The pixel
+shader samples this cubemap using the surface normal.</li>
+<li><strong>Specular Pre-Filtered Environment Map:</strong> Compute
+shaders generate a mipmapped cubemap where each mip level corresponds to
+a specific roughness level convolved with the GGX distribution.</li>
+<li><strong>BRDF Integration LUT:</strong> A 2D lookup texture
+pre-integrates the Fresnel response and geometric shadowing across
+varying roughness and incidence angles. The pixel shader samples this
+LUT using <span class="math inline">\(\mathbf{N} \cdot
+\mathbf{V}\)</span> and roughness.</li>
+</ul>
+<p>During the forward or deferred pixel shading pass, indirect diffuse
+and specular components are resolved by combining these lookups with the
+material's AO, metallic, and roughness values.</p>
+<h3 id="integration-with-directx-raytracing-dxr">Integration with
+DirectX Raytracing (DXR)</h3>
+<p>In DirectX 12 pipelines utilizing DXR, PBR functions migrate into hit
+shaders (<code>ClosestHitShader</code>) or callable shaders.</p>
+<p>Instead of relying solely on rasterized shadow maps and pre-filtered
+cubemaps, ray generation shaders cast shadow and reflection rays into
+the Top-Level Acceleration Structure (TLAS). When a surface is
+intersected, the <code>ClosestHitShader</code> samples the same PBR
+textures and evaluates the Cook-Torrance BRDF to determine the material
+response to traced light paths, producing physically accurate ambient
+occlusion, multi-bounce reflections, and area-light penumbras.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/mapping-pbr-to-modern-direct-x-shader-pipelines';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

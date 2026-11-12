@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectSR Unifies Super Resolution in DirectX - directx</title>
+    <meta name="description" content="Microsoft’s DirectSR (Direct Super Resolution) is an API designed to streamline the integration of upscaling technologies into modern video games. By establishing a unified interface between game engines and hardware-specific upscalers like NVIDIA DLSS, A">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-sr-unifies-super-resolution-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectSR Unifies Super Resolution in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-sr-unifies-super-resolution-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Microsoft’s DirectSR (Direct Super Resolution) is an API designed to streamline the integration of upscaling technologies into modern video games. By establishing a unified interface between game engines and hardware-specific upscalers like NVIDIA DLSS, A" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directsr-unifies-super-resolution-in-directx">How DirectSR
+Unifies Super Resolution in DirectX</h1>
+<p>Microsoft’s DirectSR (Direct Super Resolution) is an API designed to
+streamline the integration of upscaling technologies into modern video
+games. By establishing a unified interface between game engines and
+hardware-specific upscalers like NVIDIA DLSS, AMD FidelityFX Super
+Resolution (FSR), and Intel XeSS, DirectSR eliminates the need for
+developers to write and maintain separate codebases for each vendor.
+This article explains how DirectSR abstracts temporal upscaling inputs,
+coordinates with GPU vendor drivers, and delivers a consistent
+super-resolution pipeline within DirectX 12.</p>
+<h3 id="standardizing-the-input-pipeline">Standardizing the Input
+Pipeline</h3>
+<p>Temporal super-resolution technologies share a core set of graphical
+requirements to reconstruct a high-resolution frame from a
+lower-resolution render. Previously, each vendor SDK expected these
+parameters in slightly different formats, conventions, or coordinate
+spaces.</p>
+<p>DirectSR resolves this fragmentation by establishing a single,
+standardized set of engine inputs:</p>
+<ul>
+<li><strong>Color Buffers:</strong> Both the low-resolution render
+target and the high-resolution output destination.</li>
+<li><strong>Depth Buffers:</strong> Geometric depth data to determine
+pixel occlusion and distance.</li>
+<li><strong>Motion Vectors:</strong> Per-pixel velocity vectors that
+track how surfaces move across successive frames.</li>
+<li><strong>Camera Jitter Offsets:</strong> Sub-pixel offsets applied
+during rendering to sample different points of the scene across
+frames.</li>
+<li><strong>Exposure and Reactive Masks:</strong> Optional helper
+textures used to preserve dynamic elements like user interfaces,
+particles, or rapid lighting shifts.</li>
+</ul>
+<p>Because developers provide these parameters to DirectSR once, the API
+automatically converts, maps, and packages the data to match the precise
+expectations of the active upscaling provider.</p>
+<h3 id="the-driver-and-plugin-architecture">The Driver and Plugin
+Architecture</h3>
+<p>DirectSR acts as an abstraction layer positioned between the game
+engine and the underlying hardware. Instead of compiling vendor-specific
+SDK binaries directly into the game's executable, DirectSR relies on a
+modular architecture:</p>
+<ol type="1">
+<li><strong>Vendor Driver Implementations:</strong> GPU manufacturers
+(NVIDIA, AMD, and Intel) implement DirectSR support directly within
+their graphics drivers or via dedicated runtime plugins. When DirectSR
+initializes, it queries the system to detect which technologies the
+installed hardware supports.</li>
+<li><strong>Built-in Fallbacks:</strong> To ensure wide compatibility
+across systems without specific driver-level variants, DirectSR includes
+native support for common algorithms—such as AMD FSR 2.2—directly within
+the DirectX 12 Agility SDK runtime. This guarantees that even without
+specialized hardware, games can provide temporal upscaling.</li>
+</ol>
+<h3 id="runtime-execution-flow">Runtime Execution Flow</h3>
+<p>During gameplay, the application interacts with DirectSR through a
+common set of DirectX 12 command-list calls:</p>
+<ul>
+<li><strong>Initialization and Capability Querying:</strong> The game
+engine queries DirectSR to determine the available upscaling variants
+(e.g., DLSS on GeForce hardware, XeSS on Arc, or FSR across general
+hardware). The game can then present these options to the player or
+select the optimal path automatically.</li>
+<li><strong>Resource Allocation:</strong> DirectSR manages the internal
+scratch buffers and historical frame data required for temporal
+reconstruction, reducing manual memory management for the
+developer.</li>
+<li><strong>Dispatch:</strong> At the end of the rendering pipeline, the
+game records a DirectSR dispatch command onto the standard DirectX 12
+command list. DirectSR routes the workload through the active vendor
+backend, outputting the reconstructed, anti-aliased image at native
+display resolution.</li>
+</ul>
+<p>By shifting upscaling from isolated, proprietary implementations into
+a core platform feature of DirectX, DirectSR allows developers to target
+a single interface while ensuring players retain access to
+hardware-tailored performance and image fidelity.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-direct-sr-unifies-super-resolution-in-direct-x';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

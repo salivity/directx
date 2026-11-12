@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DLSS Ray Reconstruction Hooks into DirectX - directx</title>
+    <meta name="description" content="This article provides a technical overview of how NVIDIA’s Deep Learning Super Sampling (DLSS) Ray Reconstruction integrates into the modern DirectX 12 rendering pipeline. It explores the shift from traditional hand-tuned denoisers to an AI-driven framewo">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-dlss-ray-reconstruction-hooks-into-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DLSS Ray Reconstruction Hooks into DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-dlss-ray-reconstruction-hooks-into-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides a technical overview of how NVIDIA’s Deep Learning Super Sampling (DLSS) Ray Reconstruction integrates into the modern DirectX 12 rendering pipeline. It explores the shift from traditional hand-tuned denoisers to an AI-driven framewo" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-dlss-ray-reconstruction-hooks-into-directx">How DLSS Ray
+Reconstruction Hooks into DirectX</h1>
+<p>This article provides a technical overview of how NVIDIA’s Deep
+Learning Super Sampling (DLSS) Ray Reconstruction integrates into the
+modern DirectX 12 rendering pipeline. It explores the shift from
+traditional hand-tuned denoisers to an AI-driven framework, identifying
+the exact insertion point where DLSS Ray Reconstruction intercepts
+ray-traced data, the DirectX resource inputs required, and how the
+underlying compute execution processes noisy samples into high-fidelity
+imagery.</p>
+<p>In a conventional DirectX 12 Raytracing (DXR) pipeline, the engine
+first generates standard rasterized geometric buffers (G-Buffers
+containing depth, world normals, and motion vectors). Afterward, the
+engine invokes <code>DispatchRays</code> to trace light paths across
+several passes, typically dividing work into diffuse global
+illumination, specular reflections, and shadows. Because casting
+hundreds of rays per pixel is computationally prohibitive, the engine
+traces a sparse number of rays (often 1 or 2 rays per pixel), generating
+noisy intermediate radiance buffers. Traditionally, these buffers are
+sent through multiple hand-tuned spatial and temporal denoiser passes
+before being recombined and fed into a separate temporal upscaler.</p>
+<p>DLSS Ray Reconstruction fundamentally alters this pipeline by
+replacing both the individual hand-tuned denoisers and the standard DLSS
+Super Resolution stage with a single, unified neural network.</p>
+<p>To hook into DirectX 12, developers integrate DLSS Ray Reconstruction
+using the NVIDIA Streamline framework or directly via the NVAPI library.
+The hook operates at the compute shader stage of the DirectX pipeline.
+Rather than allowing the engine to execute its native denoising passes,
+the engine binds the raw, noisy radiance output buffers from the DXR
+<code>DispatchRays</code> call directly as shader resource views (SRVs)
+for the DLSS pipeline.</p>
+<p>The integration requires the engine to supply several specific
+DirectX 12 resources to the DLSS interface:</p>
+<ul>
+<li><strong>Noisy Radiance Buffers:</strong> Unfiltered hit results,
+separated into specular and diffuse components to preserve
+high-frequency lighting details.</li>
+<li><strong>G-Buffer Data:</strong> High-precision geometric normals,
+surface roughness, and linear depth buffers.</li>
+<li><strong>Motion Vectors:</strong> 2D screen-space vectors
+representing both camera motion and dynamic object movement.</li>
+<li><strong>Ray Tracing Parameters:</strong> Ray hit distances and ray
+directions to help the model distinguish between surface geometry and
+reflected geometry.</li>
+</ul>
+<p>Once these DirectX resources are bound, the integration dispatches a
+driver-level compute workload. Under the hood, this executes an
+autoencoder neural network directly on the GPU’s Tensor Cores. The model
+processes the temporal history alongside the raw DXR inputs,
+intelligently accumulating valid samples across time while identifying
+and rejecting ghosting artifacts.</p>
+<p>Because the neural network is trained to recognize lighting patterns
+rather than simply blurring pixels, it simultaneously denoises and
+upscales the image. The DLSS Ray Reconstruction pass outputs a clean,
+super-resolved HDR radiance buffer into an unordered access view (UAV)
+or render target view (RTV). The engine then bypasses any further
+spatial or temporal denoising and proceeds directly to post-processing,
+tone mapping, and user interface compositing in the final stages of the
+DirectX frame.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-dlss-ray-reconstruction-hooks-into-direct-x';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

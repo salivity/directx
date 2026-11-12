@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX 10.1 Multisampling and Blend State Updates - directx</title>
+    <meta name="description" content="DirectX 10.1 introduced several critical refinements to the graphics pipeline, specifically standardizing multisample anti-aliasing (MSAA) specifications and expanding flexibility with independent blend states. This article examines the exact updates made">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-10-1-multisampling-and-blend-state-updates">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX 10.1 Multisampling and Blend State Updates - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-10-1-multisampling-and-blend-state-updates" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX 10.1 introduced several critical refinements to the graphics pipeline, specifically standardizing multisample anti-aliasing (MSAA) specifications and expanding flexibility with independent blend states. This article examines the exact updates made" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-101-multisampling-and-blend-state-updates">DirectX 10.1
+Multisampling and Blend State Updates</h1>
+<p>DirectX 10.1 introduced several critical refinements to the graphics
+pipeline, specifically standardizing multisample anti-aliasing (MSAA)
+specifications and expanding flexibility with independent blend states.
+This article examines the exact updates made to multisampling behavior,
+sample-pattern definitions, per-sample pixel shading, and per-target
+blending controls that distinguished DirectX 10.1 from the original
+DirectX 10 release.</p>
+<h3 id="multisampling-refinements">Multisampling Refinements</h3>
+<p>DirectX 10.0 granted hardware vendors significant leeway in how they
+implemented multisampling, resulting in inconsistent rendering results
+across different GPU architectures. DirectX 10.1 addressed this by
+introducing rigid specifications and greater programmatic access to
+multi-sampled buffers.</p>
+<ul>
+<li><strong>Standardized MSAA Sample Patterns:</strong> DirectX 10.1
+mandated standard sample patterns for 2x, 4x, and 8x MSAA. Prior to
+this, GPU manufacturers used proprietary sample locations, which led to
+subtle differences in edge antialiasing quality across different
+hardware. Standardizing these sample positions ensured identical,
+predictable rendering quality regardless of the underlying GPU
+vendor.</li>
+<li><strong>Per-Sample Pixel Shader Execution:</strong> DirectX 10.1
+exposed finer control over multisample resources by allowing pixel
+shaders to run on a per-sample basis rather than strictly per-pixel.
+Shaders gained access to the <code>SV_SampleIndex</code> system-value
+semantic, which tracks which specific sample is currently being
+evaluated.</li>
+<li><strong>Coverage Mask and Sample Access:</strong> Developers gained
+the ability to read and write MSAA coverage masks directly using the
+<code>SV_Coverage</code> semantic. Pixel shaders could also read
+individual sub-pixel samples directly from multi-sampled depth and color
+textures using the <code>.Load()</code> method without requiring a prior
+downsample (resolve) pass. This was a critical architectural change that
+made deferred shading compatible with MSAA.</li>
+<li><strong>Custom Resolve Filters:</strong> By allowing shaders to read
+individual samples within multi-sampled textures, developers were no
+longer forced to rely solely on the hardware’s default box-filter
+resolve. DirectX 10.1 enabled custom post-process resolve filters (such
+as bicubic, tent, or edge-detecting resolves) executed directly in
+compute or pixel shaders.</li>
+</ul>
+<h3 id="blend-state-refinements">Blend State Refinements</h3>
+<p>While DirectX 10 introduced support for up to eight simultaneous
+render targets (Multiple Render Targets, or MRT), it enforced a strict
+restriction: all bound render targets had to share the exact same blend
+state. DirectX 10.1 eliminated this bottleneck through substantial
+refinements to blend operations.</p>
+<ul>
+<li><strong>Independent Blending per Render Target:</strong> In DirectX
+10.1, the <code>D3D10_BLEND_DESC1</code> structure replaced
+<code>D3D10_BLEND_DESC</code>. This update enabled developers to
+configure independent blend modes, operations, and factors for each of
+the eight individual render targets (<code>RenderTarget[0]</code>
+through <code>RenderTarget[7]</code>).</li>
+<li><strong>Per-Target Blend Control:</strong> Each target can
+independently enable or disable blending, use different blend equations
+(such as <code>D3D10_BLEND_OP_ADD</code> on target 0 and
+<code>D3D10_BLEND_OP_MAX</code> on target 1), and configure distinct
+source and destination blend factors (such as
+<code>D3D10_BLEND_SRC_ALPHA</code> versus
+<code>D3D10_BLEND_ONE</code>).</li>
+<li><strong>Independent Color Write Masks:</strong> While DirectX 10
+allowed separate write masks per target, the addition of completely
+independent blend states allowed engines to output opaque geometric
+G-buffer data (e.g., normals and depth) to certain targets while
+simultaneously outputting blended or accumulated light data to others in
+a single rendering pass, removing the need for costly multi-pass
+workarounds.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-10-1-multisampling-and-blend-state-updates';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

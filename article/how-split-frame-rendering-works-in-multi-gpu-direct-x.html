@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Split-Frame Rendering Works in Multi-GPU DirectX - directx</title>
+    <meta name="description" content="Split-frame rendering (SFR) is a spatial multi-GPU technique that accelerates real-time graphics by dividing a single frame&#39;s viewport into distinct geometric regions, assigning each slice to a separate graphics card. Unlike Alternate Frame Rendering (AFR">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-split-frame-rendering-works-in-multi-gpu-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Split-Frame Rendering Works in Multi-GPU DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-split-frame-rendering-works-in-multi-gpu-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Split-frame rendering (SFR) is a spatial multi-GPU technique that accelerates real-time graphics by dividing a single frame&#39;s viewport into distinct geometric regions, assigning each slice to a separate graphics card. Unlike Alternate Frame Rendering (AFR" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-split-frame-rendering-works-in-multi-gpu-directx">How
+Split-Frame Rendering Works in Multi-GPU DirectX</h1>
+<p>Split-frame rendering (SFR) is a spatial multi-GPU technique that
+accelerates real-time graphics by dividing a single frame's viewport
+into distinct geometric regions, assigning each slice to a separate
+graphics card. Unlike Alternate Frame Rendering (AFR), which delegates
+entire sequential frames to individual GPUs and often introduces input
+latency, SFR processes every frame cooperatively in real time. This
+article breaks down how SFR partitions viewport workloads across
+multi-GPU DirectX configurations, detailing the mechanics of viewport
+slicing, dynamic load balancing, geometry handling, and final frame
+compositing.</p>
+<h3 id="viewport-slicing-and-scissor-rectangles">Viewport Slicing and
+Scissor Rectangles</h3>
+<p>In modern graphics APIs, the screen space is defined by the viewport
+and scissor rectangles. Under SFR, the host application or graphics
+driver configures the primary render target boundaries identically
+across participating GPUs but modifies the active rasterization window
+for each device.</p>
+<p>In a dual-GPU DirectX setup, the viewport is typically split
+horizontally into top and bottom regions, though vertical splits can
+also be implemented:</p>
+<ul>
+<li><strong>DirectX 11 (Driver-Managed):</strong> The display driver
+intercepts rendering commands and injects custom scissor rects
+(<code>RSSetScissorRects</code>) and viewport offsets
+(<code>RSSetViewports</code>), constraining pixel shading to designated
+physical halves of the display.</li>
+<li><strong>DirectX 12 (Explicit Multi-Adapter):</strong> The developer
+manages spatial partitioning directly via separate command lists. Each
+GPU adapter executes draw calls restricted to its assigned screen-space
+bounds using its own dedicated command queues.</li>
+</ul>
+<h3 id="dynamic-load-balancing">Dynamic Load Balancing</h3>
+<p>Rendering workloads are rarely uniform across a screen. The lower
+portion of a frame often features complex geometry, dense foliage, and
+detailed character models, while the upper portion may primarily contain
+skyboxes and post-process lighting. A static 50/50 split would cause the
+primary GPU handling the complex half to stall while the secondary GPU
+sits idle.</p>
+<p>To maintain frame pacing, DirectX SFR implementations employ dynamic
+load balancing:</p>
+<ol type="1">
+<li><strong>Hardware Timer Queries:</strong> DirectX timestamp queries
+(<code>D3D12_QUERY_TYPE_TIMESTAMP</code>) measure the execution duration
+of each slice on its respective adapter.</li>
+<li><strong>Boundary Adjustment:</strong> If one GPU's execution time
+exceeds the other by a predetermined delta, the partitioning boundary
+shifts vertically for the subsequent frame.</li>
+<li><strong>Equilibrium Target:</strong> The algorithm continuously
+modulates the split line (e.g., 60/40, 45/55) to equalize rasterization
+and pixel shading workloads between the hardware units.</li>
+</ol>
+<h3 id="geometry-pipeline-redundancy">Geometry Pipeline Redundancy</h3>
+<p>While SFR excels at dividing pixel-shading costs, geometry processing
+introduces an inherent bottleneck. Because 3D objects frequently
+intersect the boundary between viewports, primitive culling cannot
+always occur before vertex transformation.</p>
+<p>Consequently, both GPUs must execute the vertex, hull, and domain
+shading stages for the entire scene (or large overlapping bounding
+boxes) to ensure objects spanning the split line render seamlessly. Once
+triangles pass the geometry stage, hardware viewport clipping and
+scissoring discard primitives that fall outside a GPU’s designated
+region before the pixel shading stage begins. This makes SFR highly
+effective for fill-rate and pixel-shader-bound games, but minimally
+effective for scenes bound by heavy vertex pipelines.</p>
+<h3 id="inter-gpu-synchronization-and-final-compositing">Inter-GPU
+Synchronization and Final Compositing</h3>
+<p>Once each GPU completes the rasterization and post-processing of its
+designated viewport partition, the disparate render segments must be
+stitched together for display.</p>
+<p>In DirectX 12 Explicit Multi-Adapter configurations, this compositing
+sequence follows a structured pipeline:</p>
+<ol type="1">
+<li><strong>Cross-Adapter Resources:</strong> The application creates a
+cross-adapter shared heap
+(<code>D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER</code>) accessible by both
+the primary (display-connected) and secondary GPUs.</li>
+<li><strong>Data Transfer:</strong> The secondary GPU copies its
+finished frame section to the shared resource. The primary GPU executes
+a copy command via its direct memory access (DMA) copy queue across the
+PCIe bus or high-speed bridge (such as NVLink).</li>
+<li><strong>Fence Synchronization:</strong> Cross-adapter fences ensure
+the transfer does not overwrite data currently in flight, and verify
+that the secondary GPU's work is fully resolved before compositing
+begins.</li>
+<li><strong>Final Blit and Presentation:</strong> The primary GPU blits
+(block transfers) the secondary GPU's partial buffer into the main swap
+chain's back buffer alongside its own rendered slice. The unified frame
+is then passed to the DirectX presentation engine
+(<code>IDXGISwapChain::Present</code>) for output to the display.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-split-frame-rendering-works-in-multi-gpu-direct-x';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

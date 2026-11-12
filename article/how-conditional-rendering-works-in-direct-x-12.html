@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Conditional Rendering Works in DirectX 12 - directx</title>
+    <meta name="description" content="Conditional rendering in DirectX 12 enables the GPU to discard draw or dispatch calls dynamically based on the outcome of a prior GPU query, completely eliminating CPU-GPU synchronization bottlenecks. By using hardware predication through the ID3D12Graphi">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-conditional-rendering-works-in-direct-x-12">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Conditional Rendering Works in DirectX 12 - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-conditional-rendering-works-in-direct-x-12" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Conditional rendering in DirectX 12 enables the GPU to discard draw or dispatch calls dynamically based on the outcome of a prior GPU query, completely eliminating CPU-GPU synchronization bottlenecks. By using hardware predication through the ID3D12Graphi" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-conditional-rendering-works-in-directx-12">How Conditional
+Rendering Works in DirectX 12</h1>
+<p>Conditional rendering in DirectX 12 enables the GPU to discard draw
+or dispatch calls dynamically based on the outcome of a prior GPU query,
+completely eliminating CPU-GPU synchronization bottlenecks. By using
+hardware predication through the
+<code>ID3D12GraphicsCommandList::SetPredication</code> API, the
+rendering pipeline evaluates visibility or execution conditions directly
+on the hardware. This approach allows developers to skip rendering
+complex geometry—such as objects hidden behind other geometry—without
+needing to stall the pipeline to read query results back to the CPU.</p>
+<h3 id="the-problem-with-traditional-query-based-culling">The Problem
+with Traditional Query-Based Culling</h3>
+<p>In standard occlusion culling pipelines, the CPU issues a simplified
+bounding-box draw call to test whether an object is visible via an
+occlusion query. To determine whether the full-detail mesh should be
+drawn, the CPU traditionally needs to read the query result from GPU
+memory. This round-trip latency introduces pipeline stalls, forcing the
+engine to either wait several frames to retrieve the data (introducing
+latency and visibility popping) or stall the CPU thread waiting for the
+GPU to finish execution.</p>
+<h3 id="the-mechanism-of-predication">The Mechanism of Predication</h3>
+<p>DirectX 12 solves this via predication, allowing commands recorded
+into a command list to be conditionally executed or bypassed by the
+GPU's Command Processor (CP) at runtime. The process functions in four
+distinct steps:</p>
+<ol type="1">
+<li><strong>Recording Queries:</strong> The application issues a
+lightweight draw call (such as a bounding box) surrounded by query
+markers using <code>ID3D12GraphicsCommandList::BeginQuery</code> and
+<code>EndQuery</code> with a query heap configured for
+<code>D3D12_QUERY_TYPE_OCCLUSION</code> or
+<code>D3D12_QUERY_TYPE_BINARY_OCCLUSION</code>. Binary occlusion is
+typically preferred for conditional rendering because it only returns a
+0 (not visible) or non-zero (visible) 64-bit value, optimizing
+performance.</li>
+<li><strong>Resolving Query Data:</strong> The raw query results inside
+the query heap are converted into standard buffer data using
+<code>ID3D12GraphicsCommandList::ResolveQueryData</code>. This writes
+the 64-bit visibility results to a designated
+<code>ID3D12Resource</code> buffer on the GPU.</li>
+<li><strong>Setting Predication:</strong> Before issuing the draw or
+dispatch calls for the actual complex object, the CPU records
+<code>ID3D12GraphicsCommandList::SetPredication</code>. This method
+accepts:
+<ul>
+<li>A pointer to the buffer resource containing the resolved query
+result.</li>
+<li>An aligned byte offset to the specific 64-bit query value.</li>
+<li>A predication operation flag
+(<code>D3D12_PREDICATION_OP_EQUAL_ZERO</code> or
+<code>D3D12_PREDICATION_OP_NOT_EQUAL_ZERO</code>).</li>
+</ul></li>
+<li><strong>Hardware-Level Bypassing:</strong> All subsequent draw,
+dispatch, or copy commands recorded in the command list will reference
+this predication status until <code>SetPredication</code> is called
+again with <code>nullptr</code>.</li>
+</ol>
+<h3 id="gpu-side-execution-flow">GPU-Side Execution Flow</h3>
+<p>When the GPU reaches the predicated commands in the command
+buffer:</p>
+<ul>
+<li>The Command Processor fetches the 64-bit integer stored at the
+designated buffer offset.</li>
+<li>If <code>D3D12_PREDICATION_OP_EQUAL_ZERO</code> is specified, the
+GPU executes the subsequent commands only if the query result is equal
+to zero (meaning no pixels passed the depth test).</li>
+<li>If <code>D3D12_PREDICATION_OP_NOT_EQUAL_ZERO</code> is specified,
+the GPU executes the commands only if the value is non-zero (meaning at
+least one pixel passed the depth test and the object is visible).</li>
+<li>If the predication test fails, the Command Processor discards the
+draw command. No vertex shaders, pixel shaders, or rasterization states
+are scheduled or executed for that call, saving substantial vertex and
+fragment processing overhead.</li>
+</ul>
+<h3 id="performance-considerations">Performance Considerations</h3>
+<p>Because predication operates at the Command Processor level, commands
+are skipped with minimal overhead. However, the command packets still
+travel through the GPU's front-end pipeline. While conditional rendering
+effectively prevents expensive geometry and pixel shading workloads on
+hidden objects, drawing millions of tiny, empty predicated packets can
+still create a minor bottleneck in front-end command processing. For
+massive scene hierarchies, conditional rendering is best paired with
+coarse CPU-side frustum culling or compute-based GPU-driven pipelines
+(via <code>ExecuteIndirect</code>) to maximize throughput.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-conditional-rendering-works-in-direct-x-12';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

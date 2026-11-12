@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Borderless Windowed vs Exclusive Fullscreen Performance - directx</title>
+    <meta name="description" content="For years, PC gamers favored exclusive fullscreen mode over borderless windowed mode to eliminate input lag and maximize frame rates. However, recent architectural improvements in Windows and the DirectX display pipeline—specifically the evolution of the">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/borderless-windowed-vs-exclusive-fullscreen-performance">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Borderless Windowed vs Exclusive Fullscreen Performance - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/borderless-windowed-vs-exclusive-fullscreen-performance" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="For years, PC gamers favored exclusive fullscreen mode over borderless windowed mode to eliminate input lag and maximize frame rates. However, recent architectural improvements in Windows and the DirectX display pipeline—specifically the evolution of the" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="borderless-windowed-vs-exclusive-fullscreen-performance">Borderless
+Windowed vs Exclusive Fullscreen Performance</h1>
+<p>For years, PC gamers favored exclusive fullscreen mode over
+borderless windowed mode to eliminate input lag and maximize frame
+rates. However, recent architectural improvements in Windows and the
+DirectX display pipeline—specifically the evolution of the DirectX Flip
+presentation model—have closed this performance gap entirely. This
+article explains the technical differences between borderless windowed
+and exclusive fullscreen modes, the historical limitations of windowed
+rendering, and how modern Flip presentation enables borderless windowed
+gaming to match exclusive fullscreen speed, latency, and feature
+support.</p>
+<h3
+id="understanding-display-modes-fullscreen-vs-borderless-windowed">Understanding
+Display Modes: Fullscreen vs. Borderless Windowed</h3>
+<p>Exclusive Fullscreen (FSE) grants a game direct, uncontested control
+over the graphics pipeline and display hardware. By bypassing the
+Windows Desktop Window Manager (DWM), the game writes directly to the
+front buffer shown on the monitor. This method historically offered the
+lowest input latency, direct support for Variable Refresh Rate (VRR)
+technologies like G-Sync and FreeSync, and peak frame pacing. The
+drawback is poor multitasking: switching out of the game via Alt-Tab
+forces the display adapter to renegotiate video modes, causing monitor
+flickering, slow switching, and potential crashes.</p>
+<p>Borderless Windowed mode runs the game inside a standard window
+stripped of title bars and borders, stretched across the entire
+resolution of the desktop. It allows instantaneous Alt-Tabbing and
+seamless cursor movement between multiple monitors. Historically, this
+convenience came with severe performance penalties because the game had
+to route its frames through the DWM alongside all other desktop
+elements.</p>
+<h3 id="the-problem-with-legacy-windowed-rendering-the-blt-model">The
+Problem with Legacy Windowed Rendering: The Blt Model</h3>
+<p>In legacy versions of DirectX (DirectX 9 through early DirectX 11),
+windowed applications used the "Blt" (Bit Block Transfer) presentation
+model.</p>
+<p>Under the Blt model:</p>
+<ol type="1">
+<li>The game renders a frame into an off-screen back buffer.</li>
+<li>The back buffer contents are copied into a DWM-managed surface.</li>
+<li>The DWM composites this surface with the rest of the desktop,
+enforcing its own vertical synchronization (V-Sync).</li>
+<li>The final composite image is sent to the display.</li>
+</ol>
+<p>This multi-step copy-and-composite process introduced at least one to
+two frames of input latency, frequently locked frame rates to the
+desktop refresh rate, introduced micro-stuttering, and prevented
+tear-free variable refresh rate displays from synchronizing directly to
+the game engine.</p>
+<h3 id="the-directx-flip-model-eliminating-the-overhead">The DirectX
+Flip Model: Eliminating the Overhead</h3>
+<p>To resolve the inefficiencies of the Blt model, Microsoft introduced
+the DXGI Flip model (specifically
+<code>DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL</code> and
+<code>DXGI_SWAP_EFFECT_FLIP_DISCARD</code>). Instead of copying image
+memory across buffers, the Flip model passes memory surface pointers
+between the application and the compositor, drastically reducing memory
+bandwidth overhead and processing time.</p>
+<p>The real breakthrough for borderless windowed gaming comes from two
+key sub-features of the Flip model:</p>
+<ul>
+<li><strong>Direct Flip:</strong> When a borderless window covers the
+entire screen without any overlapping transparent windows, the DWM
+avoids compositing the desktop entirely. It binds the application's swap
+chain directly to the display pipeline.</li>
+<li><strong>Independent Flip (iFlip):</strong> Independent Flip goes a
+step further by removing the DWM completely from the presentation loop
+once full-screen coverage is established. The graphics hardware reads
+directly from the application's back buffers, identically to how
+Exclusive Fullscreen functions.</li>
+</ul>
+<p>Because Independent Flip provides direct hardware scanout, it
+completely bypasses the DWM composition stage, dropping input latency to
+the exact level of Exclusive Fullscreen while maintaining the ability to
+resume desktop compositing instantly if an overlay appears.</p>
+<h3 id="multi-plane-overlays-mpo-and-variable-refresh-rates">Multi-Plane
+Overlays (MPO) and Variable Refresh Rates</h3>
+<p>Modern GPUs paired with display controllers that support Multi-Plane
+Overlays (MPO) further reinforce this parity. MPO allows the graphics
+card to scan out multiple separate surfaces simultaneously at the
+hardware level. A game running in borderless windowed mode can be
+scanned out on one hardware plane while system notifications, chat
+overlays, or volume sliders are processed on an independent hardware
+plane.</p>
+<p>Because the game's surface remains independent, the GPU maintains
+full hardware synchronization with the display. Consequently, Variable
+Refresh Rate (G-Sync and FreeSync) and Custom Frame Rates function
+seamlessly without tearing, stutter, or added latency in borderless
+windowed mode.</p>
+<h3 id="modern-windows-optimizations">Modern Windows Optimizations</h3>
+<p>With modern APIs like DirectX 12 and Vulkan, the Flip model is
+enforced by default, rendering Exclusive Fullscreen practically obsolete
+for newer titles.</p>
+<p>For older games built on DirectX 10 and DirectX 11 that natively used
+the legacy Blt model, Windows 11 includes an engine-level feature called
+"Optimizations for Windowed Games." When enabled, the operating system
+intercepts legacy presentation calls and upgrades them automatically to
+the modern Flip model. This allows legacy titles to benefit from
+Independent Flip, low input latency, Auto HDR, and full VRR support
+while remaining in borderless windowed mode.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/borderless-windowed-vs-exclusive-fullscreen-performance';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

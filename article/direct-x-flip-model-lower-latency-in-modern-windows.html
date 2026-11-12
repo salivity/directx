@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX Flip Model: Lower Latency in Modern Windows - directx</title>
+    <meta name="description" content="The DirectX Flip Model is a modern presentation mechanism in the Windows operating system designed to streamline how graphics frames are delivered from an application directly to the display. This article explains the technical differences between legacy">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-flip-model-lower-latency-in-modern-windows">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX Flip Model: Lower Latency in Modern Windows - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-flip-model-lower-latency-in-modern-windows" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The DirectX Flip Model is a modern presentation mechanism in the Windows operating system designed to streamline how graphics frames are delivered from an application directly to the display. This article explains the technical differences between legacy" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directx-flip-model-lower-latency-in-modern-windows">DirectX Flip
+Model: Lower Latency in Modern Windows</h1>
+<p>The DirectX Flip Model is a modern presentation mechanism in the
+Windows operating system designed to streamline how graphics frames are
+delivered from an application directly to the display. This article
+explains the technical differences between legacy presentation models
+and the Flip Model, breaks down how it bypasses Desktop Window Manager
+(DWM) composition penalties, and details why it has become mandatory for
+achieving minimal input latency and enabling modern graphics features on
+Windows 10 and Windows 11.</p>
+<h2
+id="understanding-the-presentation-pipeline-bitblt-vs-flip">Understanding
+the Presentation Pipeline: BitBlt vs. Flip</h2>
+<p>Historically, DirectX applications running in windowed or borderless
+modes relied on the <strong>BitBlt (Bit Block Transfer)</strong> model.
+In this legacy approach:</p>
+<ol type="1">
+<li>The game renders a frame to its private back buffer.</li>
+<li>The runtime physically copies (blits) the pixel memory into an
+off-screen surface owned by the Desktop Window Manager (DWM).</li>
+<li>The DWM composites this surface along with other desktop elements
+(such as overlays, chat apps, and the taskbar).</li>
+<li>The composite image is finally pushed to the display.</li>
+</ol>
+<p>This multi-step memory copying introduces severe performance
+bottlenecks, significant memory bandwidth overhead, and unavoidable
+input delay—typically adding one to two frames of latency.</p>
+<p>The <strong>Flip Model</strong> (introduced with DXGI 1.2 in DirectX
+11.1 and expanded in DirectX 12) removes this memory-copying phase
+entirely. Instead of copying pixel data, the application and the DWM
+share surface allocations. When a frame is ready, the application simply
+passes ownership of the memory surface (back buffer) to the compositor
+using pointers. This eliminates redundant memory operations, preserves
+bandwidth, and reduces frame delivery time.</p>
+<h2 id="why-the-flip-model-is-mandatory-for-low-latency">Why the Flip
+Model Is Mandatory for Low Latency</h2>
+<p>Modern Windows builds have evolved to make the Flip Model the
+baseline standard for responsive gaming and graphics-intensive tasks for
+several critical reasons:</p>
+<h3 id="1-independent-flip-iflip-and-true-windowed-latency-parity">1.
+Independent Flip (iFlip) and True Windowed Latency Parity</h3>
+<p>Under the Flip Model, Windows can initiate <strong>Independent Flip
+(iFlip)</strong>. When a borderless windowed game completely covers the
+screen, the DWM steps aside completely. The graphics hardware reads
+directly from the application's swap chain, effectively routing the
+frame straight to the monitor's scanout hardware.</p>
+<p>This gives borderless windowed games the exact same low-latency
+benefits historically reserved exclusively for traditional Fullscreen
+Exclusive (FSE) mode, while retaining the instant alt-tabbing and
+multi-monitor flexibility of windowed mode.</p>
+<h3 id="2-elimination-of-dwm-queue-delay">2. Elimination of DWM Queue
+Delay</h3>
+<p>Legacy blitting requires frame queuing to ensure the DWM does not
+tear when stitching multiple desktop windows together. This introduces
+display pipeline buffering that noticeably degrades mouse and controller
+responsiveness. The Flip Model's direct handoff synchronizes frame
+presentation with the display refresh cycle far more efficiently,
+slashing total input-to-pixel response time.</p>
+<h3 id="3-native-support-for-variable-refresh-rate-vrr">3. Native
+Support for Variable Refresh Rate (VRR)</h3>
+<p>Technologies like NVIDIA G-Sync and AMD FreeSync synchronize the
+monitor's physical refresh rate to the GPU's frame generation rate. For
+VRR to function properly in windowed or borderless modes without screen
+tearing or visual judder, the compositor must allow the application
+direct timing control over the scanout. The Flip Model enables this
+hardware handoff, making stable, tear-free, low-latency VRR possible
+outside of exclusive fullscreen.</p>
+<h3 id="4-compatibility-with-advanced-windows-gaming-features">4.
+Compatibility with Advanced Windows Gaming Features</h3>
+<p>Microsoft has built modern Windows display capabilities strictly on
+top of the Flip presentation infrastructure. The following features will
+not function on applications utilizing legacy blit presentation:</p>
+<ul>
+<li><strong>Optimizations for Windowed Games:</strong> The Windows 11
+engine that automatically upgrades legacy DirectX 10 and 11 games to
+modern Flip presentation.</li>
+<li><strong>Auto HDR:</strong> Automatic luminance tone mapping for
+standard dynamic range (SDR) titles.</li>
+<li><strong>DirectStorage:</strong> High-throughput asset streaming
+directly from NVMe drives into VRAM.</li>
+</ul>
+<h2 id="summary">Summary</h2>
+<p>The DirectX Flip Model transitions the Windows display pipeline from
+an outdated memory-copying workflow to a modern, pointer-swapping direct
+presentation architecture. By eliminating intermediary composition
+stages and facilitating hardware-level direct scanning, the Flip Model
+is essential for eliminating input lag, unlocking full VRR performance,
+and achieving the lowest possible latency on modern Windows systems.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-flip-model-lower-latency-in-modern-windows';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

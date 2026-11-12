@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DXR Revolutionizes Global Illumination in Games - directx</title>
+    <meta name="description" content="DirectX Raytracing (DXR) revolutionizes indirect diffuse global illumination by replacing static, pre-baked lighting and flawed screen-space approximations with real-time, physically accurate simulations of bounced light. By enabling the GPU to trace rays">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-dxr-revolutionizes-global-illumination-in-games">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DXR Revolutionizes Global Illumination in Games - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-dxr-revolutionizes-global-illumination-in-games" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX Raytracing (DXR) revolutionizes indirect diffuse global illumination by replacing static, pre-baked lighting and flawed screen-space approximations with real-time, physically accurate simulations of bounced light. By enabling the GPU to trace rays" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-dxr-revolutionizes-global-illumination-in-games">How DXR
+Revolutionizes Global Illumination in Games</h1>
+<p>DirectX Raytracing (DXR) revolutionizes indirect diffuse global
+illumination by replacing static, pre-baked lighting and flawed
+screen-space approximations with real-time, physically accurate
+simulations of bounced light. By enabling the GPU to trace rays through
+a fully realized dynamic scene hierarchy, DXR allows light to
+realistically bounce off surfaces, carry color to neighboring geometry,
+and illuminate shadowed areas without manual developer intervention.
+This article examines the limitations of traditional global
+illumination, how DXR solves these challenges dynamically, and the
+modern architectural innovations that make real-time indirect diffuse
+lighting practical in modern gaming.</p>
+<h2 id="the-limitations-of-traditional-diffuse-illumination">The
+Limitations of Traditional Diffuse Illumination</h2>
+<p>Indirect diffuse global illumination refers to light that bounces off
+matte surfaces and scatters in multiple directions, softly illuminating
+nearby geometry. Historically, game developers had to rely on
+rasterization-based workarounds to simulate this effect due to
+performance constraints:</p>
+<ul>
+<li><strong>Baked Lightmaps:</strong> High-quality global illumination
+was precomputed and baked into static textures. While visually
+convincing, lightmaps only worked on non-moving geometry and static
+light sources. Any real-time destruction, day-night cycles, or moving
+objects broke the illusion.</li>
+<li><strong>Light Probes:</strong> Grids of precomputed or sparsely
+updated volumetric probes supplied approximate bounce light to dynamic
+objects. However, probes often suffered from light leaking through thin
+walls and lacked fine spatial detail.</li>
+<li><strong>Screen-Space Global Illumination (SSGI):</strong> SSGI
+extracts indirect light from the data currently visible in the camera
+frame. The moment a light source or an occluding object moves
+off-screen, the indirect illumination abruptly vanishes, resulting in
+noticeable edge artifacts and flickering.</li>
+</ul>
+<h2 id="how-dxr-solves-the-indirect-lighting-problem">How DXR Solves the
+Indirect Lighting Problem</h2>
+<p>DirectX Raytracing bypasses the restrictions of the camera view
+frustum by utilizing hardware-accelerated Bounding Volume Hierarchy
+(BVH) structures. Instead of querying screen pixels, the graphics
+pipeline directly tests rays against the actual 3D geometry of the
+scene.</p>
+<p>When a primary camera ray hits a diffuse surface, a DXR ray
+generation or compute shader shoots secondary rays out across the
+surface's hemisphere according to a cosine-weighted distribution. These
+rays query the BVH to detect off-screen geometry and emissive surfaces,
+calculating the exact amount of radiance reflected back to the primary
+hit point.</p>
+<p>This mechanism provides critical visual enhancements:</p>
+<ul>
+<li><strong>Dynamic Color Bleeding:</strong> Light hitting a brightly
+colored surface—such as a red carpet—naturally picks up that surface's
+color and transfers a warm hue to adjacent white walls.</li>
+<li><strong>Consistent Multi-Bounce Lighting:</strong> Secondary and
+tertiary ray bounces dynamically illuminate interior spaces that direct
+light cannot reach, producing realistic ambient gradients rather than
+flat, artificially brightened shadows.</li>
+<li><strong>Unified Dynamic Worlds:</strong> Because DXR computes
+illumination per frame using current scene data, dynamic geometry like
+opening doors, crumbling structures, and moving vehicles cast and
+receive indirect light instantly and accurately.</li>
+</ul>
+<h2
+id="overcoming-the-cost-denoising-and-spatio-temporal-resampling">Overcoming
+the Cost: Denoising and Spatio-Temporal Resampling</h2>
+<p>Simulating full hemispherical diffuse scattering cleanly requires
+hundreds of rays per pixel, which is impossible to execute at high frame
+rates. DXR makes indirect diffuse GI viable in real-time games by
+combining low-sample ray budgets with advanced reconstruction
+techniques.</p>
+<p>Modern DXR implementations typically trace only one or two diffuse
+rays per pixel (or cast rays at a lower internal resolution). This
+results in a raw output that is heavily undersampled and visually noisy.
+To transform this sparse data into stable, continuous lighting,
+developers use:</p>
+<ol type="1">
+<li><strong>Spatio-Temporal Denoisers:</strong> Algorithms such as
+Spatiotemporal Variance-Guided Filtering (SVGF) or NVIDIA Real-Time
+Denoisers (NRD) blend lighting history over time while preserving
+geometry edges using surface normals and motion vectors.</li>
+<li><strong>Reservoir-Based Spatio-Temporal Importance Resampling
+(ReSTIR GI):</strong> Modern titles increasingly implement ReSTIR to
+statistically reuse high-quality ray samples across neighboring pixels
+and consecutive frames, achieving the visual fidelity of dozens of rays
+per pixel at the computational cost of just a few.</li>
+</ol>
+<p>By leveraging hardware-accelerated ray traversal alongside
+sophisticated reconstruction pipelines, DXR removes the decades-old
+divide between static realism and dynamic gameplay, establishing
+physically based indirect diffuse global illumination as a standard
+pillar of modern game rendering.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-dxr-revolutionizes-global-illumination-in-games';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

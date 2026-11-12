@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectX Feature Level 11_0 vs 12_0 Hardware Requirements - directx</title>
+    <meta name="description" content="This article compares the hardware specifications between DirectX Feature Level 110 and Feature Level 120. While Feature Level 110 established the baseline for modern programmable graphics with Shader Model 5.0 and hardware tessellation, Feature Level 120">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/direct-x-feature-level-11-0-vs-12-0-hardware-requirements">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DirectX Feature Level 11_0 vs 12_0 Hardware Requirements - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/direct-x-feature-level-11-0-vs-12-0-hardware-requirements" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article compares the hardware specifications between DirectX Feature Level 110 and Feature Level 120. While Feature Level 110 established the baseline for modern programmable graphics with Shader Model 5.0 and hardware tessellation, Feature Level 120" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="directx-feature-level-11_0-vs-12_0-hardware-requirements">DirectX
+Feature Level 11_0 vs 12_0 Hardware Requirements</h1>
+<p>This article compares the hardware specifications between DirectX
+Feature Level 11_0 and Feature Level 12_0. While Feature Level 11_0
+established the baseline for modern programmable graphics with Shader
+Model 5.0 and hardware tessellation, Feature Level 12_0 raises hardware
+prerequisites by mandating advanced memory management, broader compute
+capabilities, and flexible resource binding. Understanding these
+differences clarifies what physical GPU architectures are required to
+run applications targeting these distinct tiers.</p>
+<h3 id="overview-of-directx-feature-levels">Overview of DirectX Feature
+Levels</h3>
+<p>In the DirectX graphics ecosystem, feature levels define a strict set
+of hardware capabilities guaranteed by a physical GPU, independent of
+the software API version. A GPU operating under DirectX 12 might only
+satisfy Feature Level 11_0 hardware limits, whereas a card satisfying
+Feature Level 12_0 guarantees physical support for newer silicon
+features that reduce driver overhead, increase draw throughput, and
+allow advanced memory virtualization.</p>
+<h3 id="feature-level-11_0-hardware-baseline">Feature Level 11_0
+Hardware Baseline</h3>
+<p>Introduced alongside DirectX 11, Feature Level 11_0 defined the
+baseline for standard high-definition 3D rendering. Hardware meeting
+this specification must support:</p>
+<ul>
+<li><strong>Shader Model 5.0:</strong> Requires fully programmable
+compute shaders (CS 5.0), geometry shaders, hull shaders, and domain
+shaders.</li>
+<li><strong>Hardware Tessellation:</strong> Silicon-level tessellation
+units capable of subdividing geometry dynamically on the GPU.</li>
+<li><strong>Basic Unordered Access Views (UAVs):</strong> Limited
+support for typed UAV loads (restricted primarily to single-component
+32-bit formats such as <code>R32_UINT</code>, <code>R32_SINT</code>, and
+<code>R32_FLOAT</code>).</li>
+<li><strong>Fixed Resource Limits:</strong> Hardware-enforced limits on
+shader resource views (SRVs), constant buffer views (CBVs), and render
+target views (RTVs) bound simultaneously to specific pipeline
+slots.</li>
+<li><strong>Texture Formats:</strong> Mandatory hardware decompression
+for BC6H and BC7 texture compression formats, along with maximum 2D
+texture dimensions of 16,384 x 16,384 pixels.</li>
+</ul>
+<h3 id="key-hardware-upgrades-in-feature-level-12_0">Key Hardware
+Upgrades in Feature Level 12_0</h3>
+<p>Feature Level 12_0 shifts fundamental hardware execution paradigms,
+requiring GPU architectures to handle dynamic indexing, virtualized
+memory, and modern compute loads natively in silicon.</p>
+<h4 id="1-resource-binding-tier-2-support">1. Resource Binding: Tier 2
+Support</h4>
+<p>Feature Level 11_0 relies on rigid, static resource slots managed
+largely by the graphics driver. Feature Level 12_0 mandates Resource
+Binding Tier 2. At this level, hardware must support descriptor tables
+with vastly larger capacities (up to 500,000 or more descriptors) and
+permit shaders to dynamically index into arrays of textures and buffers.
+This hardware capability drastically reduces CPU-side draw call
+preparation and enables bindless rendering patterns.</p>
+<h4 id="2-tiled-resources-tier-2-support">2. Tiled Resources: Tier 2
+Support</h4>
+<p>While Feature Level 11_0 has no requirement for sparse memory
+management, Feature Level 12_0 mandates Tiled Resources Tier 2. This
+requires GPU memory controllers to natively handle hardware-accelerated
+sparse textures. Silicon must support virtual memory mapping where
+unmapped tiles return default or clamped values, allowing games to
+allocate massive virtual texture spaces without consuming equivalent
+amounts of physical VRAM.</p>
+<h4 id="3-typed-uav-loads">3. Typed UAV Loads</h4>
+<p>Under Feature Level 11_0, shaders attempting random reads from UAVs
+are limited to raw 32-bit data types, forcing developers to manually
+unpack complex formats. Feature Level 12_0 requires hardware-level
+support for Typed UAV Loads across a broader range of formats, including
+standard packed formats like <code>R16G16B16A16_FLOAT</code>,
+<code>R8G8B8A8_UNORM</code>, and <code>R16_FLOAT</code>. This enables
+faster compute-based post-processing and deferred rendering passes
+directly on typed buffers.</p>
+<h4 id="4-shader-model-51">4. Shader Model 5.1</h4>
+<p>Feature Level 12_0 requires support for Shader Model 5.1. While
+maintaining backward compatibility with SM 5.0 operations, SM 5.1
+hardware accommodates dynamically sized arrays of resources in HLSL,
+leveraging the Tier 2 resource binding capabilities to access unbound
+counts of descriptors from within execution kernels.</p>
+<h3 id="architectural-impact">Architectural Impact</h3>
+<p>From a hardware deployment perspective, Feature Level 11_0 is
+supported by older legacy architectures, including NVIDIA Fermi and
+Kepler, AMD TeraScale 2/3 and early Graphics Core Next (GCN), and Intel
+Ivy Bridge/Haswell graphics.</p>
+<p>Achieving Feature Level 12_0 requires newer silicon architectures
+that integrate advanced memory management units (MMUs) and flexible
+hardware schedulers. Compatible architectures include NVIDIA Maxwell
+(second generation) and Pascal or later, AMD GCN (second generation
+onward) and RDNA, and Intel Skylake (Gen 9) integrated graphics or
+newer.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/direct-x-feature-level-11-0-vs-12-0-hardware-requirements';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Variable Refresh Rate (VRR) in DirectX and DXGI - directx</title>
+    <meta name="description" content="Variable Refresh Rate (VRR) is a display technology that synchronizes a monitor&#39;s refresh rate to the GPU&#39;s rendering speed, eliminating screen tearing and reducing input latency without the stutter of traditional VSync. In the Windows ecosystem, develope">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/variable-refresh-rate-vrr-in-direct-x-and-dxgi">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Variable Refresh Rate (VRR) in DirectX and DXGI - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/variable-refresh-rate-vrr-in-direct-x-and-dxgi" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Variable Refresh Rate (VRR) is a display technology that synchronizes a monitor&#39;s refresh rate to the GPU&#39;s rendering speed, eliminating screen tearing and reducing input latency without the stutter of traditional VSync. In the Windows ecosystem, develope" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="variable-refresh-rate-vrr-in-directx-and-dxgi">Variable Refresh
+Rate (VRR) in DirectX and DXGI</h1>
+<p>Variable Refresh Rate (VRR) is a display technology that synchronizes
+a monitor's refresh rate to the GPU's rendering speed, eliminating
+screen tearing and reducing input latency without the stutter of
+traditional VSync. In the Windows ecosystem, developers implement VRR
+for modern applications through the DirectX Graphics Infrastructure
+(DXGI) and Direct3D. This article explores how VRR functions and details
+the programmatic steps required to enable it using modern DXGI swap
+chains.</p>
+<h3 id="what-is-variable-refresh-rate-vrr">What is Variable Refresh Rate
+(VRR)?</h3>
+<p>Traditionally, displays refresh at a static rate, such as 60Hz,
+120Hz, or 144Hz. If the GPU renders frames faster or slower than this
+fixed cycle, artifacts occur:</p>
+<ul>
+<li><strong>Tearing:</strong> When the GPU pushes a new frame in the
+middle of a monitor refresh cycle.</li>
+<li><strong>Stuttering:</strong> When VSync is enabled and the GPU fails
+to meet the fixed refresh window, forcing the display to repeat the
+previous frame.</li>
+</ul>
+<p>VRR technologies—including NVIDIA G-Sync, AMD FreeSync, and VESA
+Adaptive-Sync—allow the display to adjust its refresh cycle on the fly
+to match the GPU's frame generation. The display only refreshes when a
+new frame is ready to be shown.</p>
+<h3 id="the-role-of-directx-and-dxgi">The Role of DirectX and DXGI</h3>
+<p>Historically, VRR was limited to exclusive fullscreen applications.
+With the evolution of the Windows Display Driver Model (WDDM) and DXGI,
+VRR can now function across borderless windowed and windowed modes.</p>
+<p>DXGI acts as the bridge between Direct3D (DirectX 11 or DirectX 12)
+and the graphics driver. It governs the swap chain—the collection of
+buffers used to render and display visual frames. To make VRR work
+without exclusive fullscreen control, DXGI relies on tearing flags and
+the Flip presentation model.</p>
+<h3 id="how-to-enable-vrr-through-dxgi">How to Enable VRR Through
+DXGI</h3>
+<p>Enabling VRR in a DirectX application requires using DXGI 1.5 or
+newer to implement "tearing support." This informs the operating system
+and graphics driver that the application can bypass standard VSync
+behavior in windowed mode, enabling VRR.</p>
+<h4 id="1-adopt-the-flip-presentation-model">1. Adopt the Flip
+Presentation Model</h4>
+<p>Legacy swap effects (like <code>DXGI_SWAP_EFFECT_DISCARD</code>) copy
+buffers through the Desktop Window Manager (DWM), which enforces
+standard composition and prevents VRR. You must use the modern Flip
+Model:</p>
+<ul>
+<li><code>DXGI_SWAP_EFFECT_FLIP_DISCARD</code> (recommended for Direct3D
+12 and modern Direct3D 11)</li>
+<li><code>DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL</code></li>
+</ul>
+<h4 id="2-query-for-tearing-support">2. Query for Tearing Support</h4>
+<p>Before requesting VRR, the application must query the hardware and OS
+to confirm whether tearing (unlocked presentation) is supported. This is
+done using <code>IDXGIFactory5</code>:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>BOOL allowTearing <span class="op">=</span> FALSE<span class="op">;</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>ComPtr<span class="op">&lt;</span>IDXGIFactory5<span class="op">&gt;</span> factory5<span class="op">;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">(</span>SUCCEEDED<span class="op">(</span>factory<span class="op">.</span>As<span class="op">(&amp;</span>factory5<span class="op">)))</span> <span class="op">{</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    factory5<span class="op">-&gt;</span>CheckFeatureSupport<span class="op">(</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>        DXGI_FEATURE_PRESENT_ALLOW_TEARING<span class="op">,</span> </span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;</span>allowTearing<span class="op">,</span> </span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>        <span class="kw">sizeof</span><span class="op">(</span>allowTearing<span class="op">)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">);</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h4 id="3-create-the-swap-chain-with-the-tearing-flag">3. Create the
+Swap Chain with the Tearing Flag</h4>
+<p>When defining the <code>DXGI_SWAP_CHAIN_DESC1</code>, include the
+<code>DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING</code> flag if
+<code>allowTearing</code> returns true:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>DXGI_SWAP_CHAIN_DESC1 desc <span class="op">=</span> <span class="op">{};</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>desc<span class="op">.</span>SwapEffect <span class="op">=</span> DXGI_SWAP_EFFECT_FLIP_DISCARD<span class="op">;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>desc<span class="op">.</span>Flags <span class="op">=</span> allowTearing <span class="op">?</span> DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING <span class="op">:</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Configure format, width, height, and buffer count...</span></span></code></pre></div>
+<h4 id="4-present-frames-using-the-tearing-flag">4. Present Frames Using
+the Tearing Flag</h4>
+<p>To allow the display to synchronize dynamically to the application's
+render rate, the present call must disable VSync by using a sync
+interval of <code>0</code> and passing the
+<code>DXGI_PRESENT_ALLOW_TEARING</code> flag:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>UINT presentFlags <span class="op">=</span> <span class="op">(</span>allowTearing <span class="op">&amp;&amp;</span> <span class="op">!</span>vsyncEnabled<span class="op">)</span> <span class="op">?</span> DXGI_PRESENT_ALLOW_TEARING <span class="op">:</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>swapChain<span class="op">-&gt;</span>Present<span class="op">(</span><span class="dv">0</span><span class="op">,</span> presentFlags<span class="op">);</span></span></code></pre></div>
+<p>When <code>DXGI_PRESENT_ALLOW_TEARING</code> is passed with a sync
+interval of <code>0</code>, the DWM suspends its fixed-rate composition
+for the window. If the display supports G-Sync, FreeSync, or
+Adaptive-Sync, it will seamlessly scale its refresh rate to the timing
+of your <code>Present</code> calls.</p>
+<h3 id="system-requirements-for-dxgi-vrr">System Requirements for DXGI
+VRR</h3>
+<p>For the swap chain implementation to activate VRR successfully:</p>
+<ul>
+<li>The user must have a VRR-capable monitor and compatible GPU drivers
+(NVIDIA, AMD, or Intel).</li>
+<li>Windows 10 (Version 1709 or newer) or Windows 11 must be
+installed.</li>
+<li>Variable Refresh Rate or "Hardware-accelerated GPU scheduling" must
+be enabled in Windows Graphics Settings for windowed applications to
+automatically utilize these features.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/variable-refresh-rate-vrr-in-direct-x-and-dxgi';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

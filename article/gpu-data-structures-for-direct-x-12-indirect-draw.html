@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU Data Structures for DirectX 12 Indirect Draw - directx</title>
+    <meta name="description" content="Executing indirect draw commands in DirectX 12 shifts draw call generation entirely to the GPU, enabling high-performance GPU-driven rendering pipelines such as occlusion culling and dynamic LOD selection. To invoke an indirect draw via ID3D12GraphicsComm">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/gpu-data-structures-for-direct-x-12-indirect-draw">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="GPU Data Structures for DirectX 12 Indirect Draw - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/gpu-data-structures-for-direct-x-12-indirect-draw" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Executing indirect draw commands in DirectX 12 shifts draw call generation entirely to the GPU, enabling high-performance GPU-driven rendering pipelines such as occlusion culling and dynamic LOD selection. To invoke an indirect draw via ID3D12GraphicsComm" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="gpu-data-structures-for-directx-12-indirect-draw">GPU Data
+Structures for DirectX 12 Indirect Draw</h1>
+<p>Executing indirect draw commands in DirectX 12 shifts draw call
+generation entirely to the GPU, enabling high-performance GPU-driven
+rendering pipelines such as occlusion culling and dynamic LOD selection.
+To invoke an indirect draw via
+<code>ID3D12GraphicsCommandList::ExecuteIndirect</code>, you must
+prepare specific GPU-resident memory buffers that encode drawing
+parameters and execution counts. This article outlines the required GPU
+data structures, their layouts, resource states, and optional components
+needed to execute these commands successfully.</p>
+<h3 id="1-the-indirect-argument-buffer">1. The Indirect Argument
+Buffer</h3>
+<p>The primary data structure required on the GPU is the Argument
+Buffer. This is a standard <code>ID3D12Resource</code> buffer placed in
+the <code>D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT</code> state before the
+<code>ExecuteIndirect</code> call is issued.</p>
+<p>The binary layout of this buffer must strictly mirror the argument
+operations defined by the CPU-created
+<code>ID3D12CommandSignature</code>. The buffer can contain data for a
+single draw call or an array of consecutive draw commands.</p>
+<p>Depending on your pipeline, the argument buffer contains one or more
+of the following fundamental structures:</p>
+<h4 id="draw-instanced-arguments-d3d12_draw_arguments">Draw Instanced
+Arguments (<code>D3D12_DRAW_ARGUMENTS</code>)</h4>
+<p>For non-indexed geometry, the buffer must supply a four-component
+structure equivalent to the parameters of
+<code>DrawInstanced</code>:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> D3D12_DRAW_ARGUMENTS <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    UINT VertexCountPerInstance<span class="op">;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    UINT InstanceCount<span class="op">;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    UINT StartVertexLocation<span class="op">;</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    UINT StartInstanceLocation<span class="op">;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<h4
+id="draw-indexed-instanced-arguments-d3d12_draw_indexed_arguments">Draw
+Indexed Instanced Arguments
+(<code>D3D12_DRAW_INDEXED_ARGUMENTS</code>)</h4>
+<p>For indexed geometry, the structure matches the arguments expected by
+<code>DrawIndexedInstanced</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> D3D12_DRAW_INDEXED_ARGUMENTS <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    UINT IndexCountPerInstance<span class="op">;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    UINT InstanceCount<span class="op">;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    UINT StartIndexLocation<span class="op">;</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    INT  BaseVertexLocation<span class="op">;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    UINT StartInstanceLocation<span class="op">;</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<h4 id="extended-command-layouts">Extended Command Layouts</h4>
+<p>If the command signature defines root arguments or view bindings
+prior to the draw, the GPU data structure must pack those sequentially
+preceding the draw arguments. Common inclusions are:</p>
+<ul>
+<li><strong>Root Constants:</strong> Direct 32-bit values matching
+<code>D3D12_INDIRECT_ARGUMENT_TYPE_32BIT_CONSTANTS</code>.</li>
+<li><strong>Root Views:</strong> 64-bit GPU virtual addresses
+(<code>D3D12_GPU_VIRTUAL_ADDRESS</code>) for Constant Buffer Views
+(CBV), Shader Resource Views (SRV), or Unordered Access Views
+(UAV).</li>
+<li><strong>Vertex and Index Buffer Views:</strong> Packed
+<code>D3D12_VERTEX_BUFFER_VIEW</code> or
+<code>D3D12_INDEX_BUFFER_VIEW</code> structures if vertex or index
+inputs are altered per command.</li>
+</ul>
+<h3 id="2-the-count-buffer-optional">2. The Count Buffer (Optional)</h3>
+<p>When the exact number of commands to execute is determined
+dynamically on the GPU—such as after a compute-based frustum or
+occlusion culling pass—a Count Buffer is required.</p>
+<ul>
+<li><strong>Data Layout:</strong> The count buffer is a standard GPU
+buffer containing a single 32-bit unsigned integer (<code>UINT32</code>
+/ <code>uint</code>).</li>
+<li><strong>Value:</strong> This integer specifies the actual number of
+commands to execute from the argument buffer.</li>
+<li><strong>Behavior:</strong> When provided to
+<code>ExecuteIndirect</code>, the runtime clamps this value to the
+<code>MaxCommandCount</code> parameter passed to the CPU-side call.</li>
+<li><strong>State:</strong> Like the argument buffer, the count buffer
+must transition to <code>D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT</code>
+prior to command execution.</li>
+</ul>
+<p>If a count buffer is not used, the argument buffer executes a fixed
+number of commands defined directly by the <code>MaxCommandCount</code>
+parameter.</p>
+<h3 id="3-gpu-buffer-preparation-and-synchronization">3. GPU Buffer
+Preparation and Synchronization</h3>
+<p>Because these data structures are typically populated on the GPU via
+compute shaders, proper synchronization is mandatory:</p>
+<ol type="1">
+<li><strong>UAV Population:</strong> The compute shader writes data to
+the argument buffer (and optional count buffer) using an Unordered
+Access View (structured or raw/byte-address buffer).</li>
+<li><strong>Resource Transition:</strong> Before issuing
+<code>ExecuteIndirect</code>, you must insert a resource barrier
+transitioning both the argument buffer and the count buffer from
+<code>D3D12_RESOURCE_STATE_UNORDERED_ACCESS</code> to
+<code>D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT</code>.</li>
+<li><strong>Alignment:</strong> Every command sequence inside the
+argument buffer must align to a byte boundary divisible by 4, matching
+the stride defined in the corresponding
+<code>ID3D12CommandSignature</code>.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/gpu-data-structures-for-direct-x-12-indirect-draw';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

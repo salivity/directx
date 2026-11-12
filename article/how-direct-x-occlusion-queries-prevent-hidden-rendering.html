@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectX Occlusion Queries Prevent Hidden Rendering - directx</title>
+    <meta name="description" content="DirectX handles occlusion queries by enabling developers to ask the GPU whether any pixels of an object&#39;s bounding volume would pass the depth test before committing to rendering the high-detail model. By rasterizing lightweight geometry between specific">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-x-occlusion-queries-prevent-hidden-rendering">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectX Occlusion Queries Prevent Hidden Rendering - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-x-occlusion-queries-prevent-hidden-rendering" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="DirectX handles occlusion queries by enabling developers to ask the GPU whether any pixels of an object&#39;s bounding volume would pass the depth test before committing to rendering the high-detail model. By rasterizing lightweight geometry between specific" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directx-occlusion-queries-prevent-hidden-rendering">How
+DirectX Occlusion Queries Prevent Hidden Rendering</h1>
+<p>DirectX handles occlusion queries by enabling developers to ask the
+GPU whether any pixels of an object's bounding volume would pass the
+depth test before committing to rendering the high-detail model. By
+rasterizing lightweight geometry between specific query boundaries, the
+graphics hardware counts the visible pixels against the current depth
+buffer. If the query reports that zero fragments are visible, the
+application can safely discard the rendering commands for the complex
+mesh, significantly reducing pixel shading, geometry processing, and
+memory bandwidth overhead.</p>
+<h3 id="the-query-mechanism-workflow">The Query Mechanism Workflow</h3>
+<p>The process relies on a two-phase rendering strategy: occluders
+first, followed by occlusion testing for occluded candidates.</p>
+<ol type="1">
+<li><strong>Rendering Occluders:</strong> The scene's major, opaque
+objects (such as walls, terrain, or large structures) are rendered
+normally into the depth buffer. Sorting geometry front-to-back ensures
+the depth buffer is populated with the closest surfaces early in the
+frame.</li>
+<li><strong>Issuing the Query:</strong> The application binds an
+occlusion query. In DirectX 11, this uses <code>ID3D11Query</code>
+initialized with <code>D3D11_QUERY_OCCLUSION</code>. In DirectX 12, this
+is handled via a query heap allocated with
+<code>D3D12_QUERY_HEAP_TYPE_OCCLUSION</code>.</li>
+<li><strong>Drawing Bounding Geometry:</strong> Color writes are
+disabled, and a simplified geometric proxy—typically an Axis-Aligned
+Bounding Box (AABB) or an Oriented Bounding Box (OBB)—is rendered
+between <code>Begin()</code> and <code>End()</code> commands.</li>
+<li><strong>Depth Testing:</strong> The rasterizer tests the bounding
+box against the existing depth buffer. If any fragment passes the depth
+test, the hardware increments an internal visible-pixel counter.</li>
+<li><strong>Evaluating Visibility:</strong> The query returns either the
+total count of passed pixels or a binary boolean (visible/hidden),
+indicating whether the enclosed detailed mesh needs to be rendered.</li>
+</ol>
+<h3 id="standard-vs-binary-occlusion-queries">Standard vs. Binary
+Occlusion Queries</h3>
+<p>DirectX supports two main types of occlusion queries:</p>
+<ul>
+<li><strong>Standard Occlusion Queries
+(<code>D3D12_QUERY_TYPE_OCCLUSION</code> /
+<code>D3D11_QUERY_OCCLUSION</code>):</strong> These return a 64-bit
+integer representing the exact number of pixels or samples that passed
+the depth/stencil test. While useful for level-of-detail (LOD) selection
+or lens flare intensity calculations, retrieving exact pixel counts
+requires tracking hardware counters across multiple rasterizer
+backends.</li>
+<li><strong>Binary Occlusion Queries
+(<code>D3D12_QUERY_TYPE_BINARY_OCCLUSION</code>):</strong> Introduced to
+eliminate the overhead of exact counter aggregation, binary queries
+return a simple true/false result indicating whether at least one pixel
+passed the depth test. The GPU can terminate depth evaluation for a
+bounding primitive as soon as a single visible fragment is confirmed,
+improving hardware throughput.</li>
+</ul>
+<h3 id="managing-latency-and-cpu-gpu-synchronization">Managing Latency
+and CPU-GPU Synchronization</h3>
+<p>Because GPUs execute commands asynchronously from the CPU, requesting
+query data immediately causes an expensive pipeline stall, forcing the
+CPU to wait until the GPU completes all preceding rasterization stages.
+DirectX engines mitigate this latency using two primary strategies:</p>
+<ul>
+<li><strong>Frame-Delayed Queries:</strong> The CPU does not wait for
+the current frame's query result. Instead, the engine uses the occlusion
+result from the previous frame (Frame <span
+class="math inline">\(N-1\)</span>) to make culling decisions for the
+current frame (Frame <span class="math inline">\(N\)</span>). For scenes
+with continuous camera movement, objects rarely transition from fully
+hidden to fully visible in a single frame, making this predictive model
+viable.</li>
+<li><strong>Conditional Rendering (Predication):</strong> DirectX
+provides GPU-side predication via <code>SetPredication</code>
+(<code>ID3D11DeviceContext::SetPredication</code> or
+<code>ID3D12GraphicsCommandList::SetPredication</code>). Predication
+allows the GPU to inspect the query results internally without sending
+data back across the PCIe bus to the CPU. If the query result indicates
+that zero samples passed, the GPU automatically skips the subsequent
+draw calls for the complex object at the hardware level, bypassing CPU
+synchronization entirely.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-direct-x-occlusion-queries-prevent-hidden-rendering';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Dolby Vision Works with DirectX on Windows - directx</title>
+    <meta name="description" content="Dolby Vision integration on Windows bridges game engines, media applications, and DirectX to deliver frame-by-frame dynamic high dynamic range (HDR) metadata to compatible displays. By leveraging the DirectX Graphics Infrastructure (DXGI) and low-level Di">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-dolby-vision-works-with-direct-x-on-windows">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Dolby Vision Works with DirectX on Windows - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-dolby-vision-works-with-direct-x-on-windows" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Dolby Vision integration on Windows bridges game engines, media applications, and DirectX to deliver frame-by-frame dynamic high dynamic range (HDR) metadata to compatible displays. By leveraging the DirectX Graphics Infrastructure (DXGI) and low-level Di" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-dolby-vision-works-with-directx-on-windows">How Dolby Vision
+Works with DirectX on Windows</h1>
+<p>Dolby Vision integration on Windows bridges game engines, media
+applications, and DirectX to deliver frame-by-frame dynamic high dynamic
+range (HDR) metadata to compatible displays. By leveraging the DirectX
+Graphics Infrastructure (DXGI) and low-level Direct3D pipelines, Windows
+passes high-bit-depth color buffers alongside proprietary Dolby Vision
+metadata to the GPU display pipeline. This setup bypasses standard
+static HDR10 limitations, ensuring accurate luminance, wider color
+volume mapping, and minimal processing latency for both real-time
+rendering and media playback.</p>
+<h3 id="the-role-of-dxgi-and-swap-chains">The Role of DXGI and Swap
+Chains</h3>
+<p>At the core of Windows graphics is the DirectX Graphics
+Infrastructure (DXGI), which manages communication between Direct3D
+runtimes, the GPU driver, and the display hardware. For standard HDR,
+DXGI utilizes high-precision swap chains configured to formats such as
+10-bit integer (<code>DXGI_FORMAT_R10G10B10A2_UNORM</code>) or 16-bit
+floating-point (<code>DXGI_FORMAT_R16G16B16A16_FLOAT</code>).</p>
+<p>When integrating Dolby Vision, DirectX applications typically render
+in these wide-gamut formats—most commonly using the BT.2020 color
+container with Perceptual Quantizer (PQ / SMPTE ST 2084) transfer
+characteristics. The Dolby Vision runtime library works in tandem with
+the DirectX flip-model swap chains
+(<code>DXGI_SWAP_EFFECT_FLIP_DISCARD</code>). This ensures that frame
+presentation avoids the standard Windows Desktop Window Manager (DWM)
+composition layer when in exclusive or optimized borderless fullscreen
+modes, preventing unintended tone mapping or color conversion by the
+operating system.</p>
+<h3 id="dynamic-metadata-injection">Dynamic Metadata Injection</h3>
+<p>Standard HDR10 sends static metadata (SMPTE ST 2086) once per stream
+or game launch via standard DXGI metadata structures
+(<code>DXGI_HDR_METADATA_HDR10</code>). In contrast, Dolby Vision relies
+on dynamic metadata (SMPTE ST 2094-10) calculated on a per-frame or
+per-scene basis.</p>
+<ol type="1">
+<li><strong>Scene Analysis:</strong> For games running Direct3D 11 or
+12, the rendering engine utilizes the Dolby Vision PC SDK to analyze
+frame luminance histograms and color statistics directly from GPU
+compute or pixel buffers.</li>
+<li><strong>Metadata Packaging:</strong> The generated metadata contains
+target display profiles, minimum/maximum luminance values, and trim
+parameters specific to the target screen.</li>
+<li><strong>Synchronization:</strong> This metadata is associated
+directly with the corresponding DirectX presentation swap frame.
+Depending on the driver and GPU architecture, the metadata is passed
+either via vendor-specific driver extensions or sideband metadata
+packets synchronized with the vertical blanking interval (VBLANK).</li>
+</ol>
+<h3 id="video-signaling-and-display-output">Video Signaling and Display
+Output</h3>
+<p>Windows displays Dolby Vision content through one of two primary
+signaling methods over HDMI or DisplayPort:</p>
+<ul>
+<li><strong>RGB Tunneling:</strong> Commonly used for broader
+compatibility over standard display connections, the 12-bit Dolby Vision
+signal and its dynamic metadata are packaged into a standard 8-bit RGB
+4:4:4 container. The DirectX output pipeline renders the packed bits
+directly to the frame buffer, and the Dolby Vision-capable display
+unpacks the signal upon arrival, recognizing the embedded watermark and
+metadata packet.</li>
+<li><strong>Native Direct Signaling:</strong> On newer architectures
+supporting modern HDMI 2.1 pipelines, the GPU driver natively transmits
+uncompressed 10-bit or 12-bit signals alongside dynamic metadata
+info-frames directly to the monitor without container repackaging.</li>
+</ul>
+<h3 id="interaction-with-the-windows-hdr-subsystem">Interaction with the
+Windows HDR Subsystem</h3>
+<p>Windows Advanced Color manages system-wide color profiles and HDR
+toggles. When an application initializes a Dolby Vision DirectX
+context:</p>
+<ul>
+<li>The graphics driver verifies display capability through Extended
+Display Identification Data (EDID) containing Dolby Vision
+vendor-specific data blocks.</li>
+<li>If recognized, the Direct3D pipeline coordinates with the Windows
+Display Driver Model (WDDM) to give the application direct control over
+display tone mapping.</li>
+<li>The local display's internal Dolby Vision engine handles the final
+color transformation, effectively disabling standard OS-level tone
+mapping to maintain the artistic intent of the rendered DirectX
+output.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-dolby-vision-works-with-direct-x-on-windows';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

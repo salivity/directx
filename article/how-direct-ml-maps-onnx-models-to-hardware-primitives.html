@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How DirectML Maps ONNX Models to Hardware Primitives - directx</title>
+    <meta name="description" content="This article explains how Microsoft DirectML bridges the gap between high-level Open Neural Network Exchange (ONNX) models and physical silicon. By functioning as a specialized execution provider within the ONNX Runtime, DirectML translates abstract neura">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/how-direct-ml-maps-onnx-models-to-hardware-primitives">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How DirectML Maps ONNX Models to Hardware Primitives - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/how-direct-ml-maps-onnx-models-to-hardware-primitives" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains how Microsoft DirectML bridges the gap between high-level Open Neural Network Exchange (ONNX) models and physical silicon. By functioning as a specialized execution provider within the ONNX Runtime, DirectML translates abstract neura" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-directml-maps-onnx-models-to-hardware-primitives">How
+DirectML Maps ONNX Models to Hardware Primitives</h1>
+<p>This article explains how Microsoft DirectML bridges the gap between
+high-level Open Neural Network Exchange (ONNX) models and physical
+silicon. By functioning as a specialized execution provider within the
+ONNX Runtime, DirectML translates abstract neural network graphs into
+hardware-agnostic intermediate representations, applies graph-level
+optimizations, and ultimately compiles them into low-level DirectX 12
+compute commands and vendor-specific driver optimizations across diverse
+GPUs and NPUs.</p>
+<h3 id="the-onnx-runtime-execution-provider-layer">The ONNX Runtime
+Execution Provider Layer</h3>
+<p>The mapping pipeline begins when an ONNX model is loaded into the
+ONNX Runtime. The runtime parses the model's directed acyclic graph
+(DAG), which consists of standardized ONNX operators such as
+<code>Conv</code>, <code>MatMul</code>, and <code>Softmax</code>.</p>
+<p>Rather than executing these operators directly on the CPU, the ONNX
+Runtime queries its registered Execution Providers (EPs). The DirectML
+Execution Provider identifies the subgraphs containing operators it
+supports and partitions them away from unsupported operations (which
+fall back to the default CPU execution provider). For each supported
+node, the DirectML EP extracts metadata, including tensor shapes, data
+types (such as FP32, FP16, or INT8), padding, strides, and dimension
+semantics.</p>
+<h3 id="graph-lowering-to-directml-operator-descriptors">Graph Lowering
+to DirectML Operator Descriptors</h3>
+<p>Once the subgraphs are partitioned, DirectML lowers each ONNX
+operator into its own internal representation using the DirectML API.
+Each ONNX node maps to a corresponding DirectML operator description
+structure (prefixed as <code>DML_OPERATOR_DESC</code>), such as
+<code>DML_CONVOLUTION_OPERATOR_DESC</code> or
+<code>DML_GEMM_OPERATOR_DESC</code>.</p>
+<p>During this stage, DirectML standardizes tensor layouts. ONNX
+predominantly uses NCHW or NHWC memory formats. DirectML normalizes
+these input and output descriptions into native 4D or 5D strided tensor
+representations (<code>DML_BUFFER_TENSOR_DESC</code>), ensuring that
+memory strides, memory alignment requirements, and broadcast flags match
+what underlying hardware drivers expect.</p>
+<h3 id="operator-fusion-and-internal-graph-optimization">Operator Fusion
+and Internal Graph Optimization</h3>
+<p>DirectML does not necessarily map high-level operators to hardware on
+a strict one-to-one basis. Before hardware scheduling, the DirectML
+internal graph compiler analyzes the operator chain to perform critical
+performance optimizations:</p>
+<ul>
+<li><strong>Operator Fusion:</strong> DirectML identifies sequences that
+can be computed in a single pass. A common pattern is fusing an
+activation function (like ReLU or GELU) and bias addition directly into
+a preceding <code>Conv</code> or <code>Gemm</code> operation. This
+reduces round-trip memory bandwidth to VRAM.</li>
+<li><strong>Layout and Transform Folding:</strong> Transpose, Reshape,
+or Squeeze operations are frequently folded into the tensor stride
+metadata of adjacent compute nodes, eliminating redundant copy
+passes.</li>
+<li><strong>Resource Reuse and Memory Planning:</strong> DirectML
+computes the precise memory footprint and lifetime of intermediate
+activation tensors, assigning temporary allocations to shared scratch
+buffers to minimize overall VRAM consumption.</li>
+</ul>
+<h3 id="compilation-to-direct3d-12-compute-pipelines">Compilation to
+Direct3D 12 Compute Pipelines</h3>
+<p>DirectML is built directly on top of the Direct3D 12 (D3D12) API.
+Once the graph is optimized, DirectML translates the intermediate
+representations into native Direct3D 12 primitives through two distinct
+paths:</p>
+<ol type="1">
+<li><strong>Standard Compute Shaders (HLSL):</strong> For broad
+compatibility across all DirectX 12-capable hardware, DirectML maintains
+a library of highly optimized compute shaders written in High-Level
+Shader Language (HLSL). It compiles these shaders into Direct3D 12
+Pipeline State Objects (PSOs) tailored to the exact tensor shapes and
+precision types defined by the model.</li>
+<li><strong>Driver Meta-Commands:</strong> For maximum performance,
+modern GPU and NPU drivers (from vendors like Intel, NVIDIA, AMD, and
+Qualcomm) implement Direct3D 12 "Meta-Commands." Meta-commands allow the
+DirectML operator to bypass generic HLSL shaders and call proprietary,
+micro-architectural microcode baked into the hardware driver. This
+enables DirectML to directly leverage specialized silicon features, such
+as NVIDIA Tensor Cores, Intel XMX engines, AMD Matrix Cores, or
+dedicated NPU vector units.</li>
+</ol>
+<h3 id="hardware-dispatch-and-execution">Hardware Dispatch and
+Execution</h3>
+<p>At runtime, the compiled PSOs or meta-commands are bound to a
+DirectML Command Recorder. The command recorder serializes the
+operations onto a standard Direct3D 12 Command List.</p>
+<p>When the application calls for inference evaluation, the command list
+is closed and submitted to the hardware's direct compute queue via the
+Direct3D 12 command queue. The GPU or NPU scheduler receives these
+dispatches as native GPU tasks, reading input buffers, executing
+hardware-accelerated matrix math across available compute units, and
+writing results to the designated output buffers without intermediate
+virtualization overhead.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/how-direct-ml-maps-onnx-models-to-hardware-primitives';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

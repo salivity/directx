@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSAO vs Ray-Traced Ambient Occlusion in DirectX - directx</title>
+    <meta name="description" content="Ambient occlusion is a rendering technique used to calculate how exposed each point in a scene is to ambient lighting, producing realistic contact shadows in crevices and corners. In modern graphics programming with DirectX, developers typically choose be">
+    <link rel="canonical" href="https://salivity.github.io/directx/article/ssao-vs-ray-traced-ambient-occlusion-in-direct-x">
+    <link rel="search" type="application/opensearchdescription+xml" title="directx" href="/directx/opensearch.xml">
+    <link rel="icon" href="/directx/favicon.ico">
+    <link rel="stylesheet" href="/directx/css/style.css">
+    <link media="print" rel="stylesheet" href="/directx/css/print.css">
+    <script src="/directx/js/fuse.min.js"></script>
+    <script src="/directx/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="SSAO vs Ray-Traced Ambient Occlusion in DirectX - directx" />
+    <meta property="og:url" content="https://salivity.github.io/directx/article/ssao-vs-ray-traced-ambient-occlusion-in-direct-x" />
+    <meta property="og:image" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/directx/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Ambient occlusion is a rendering technique used to calculate how exposed each point in a scene is to ambient lighting, producing realistic contact shadows in crevices and corners. In modern graphics programming with DirectX, developers typically choose be" />
+    <link rel="manifest" href="/directx/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/directx/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>directx</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/directx/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="ssao-vs-ray-traced-ambient-occlusion-in-directx">SSAO vs
+Ray-Traced Ambient Occlusion in DirectX</h1>
+<p>Ambient occlusion is a rendering technique used to calculate how
+exposed each point in a scene is to ambient lighting, producing
+realistic contact shadows in crevices and corners. In modern graphics
+programming with DirectX, developers typically choose between Screen
+Space Ambient Occlusion (SSAO), a performance-friendly screen-space
+approximation, and Ray-Traced Ambient Occlusion (RTAO), a physically
+accurate method powered by DirectX Raytracing (DXR). This article breaks
+down the fundamental differences between SSAO and RTAO in DirectX,
+focusing on their rendering methodologies, visual accuracy, performance
+costs, and implementation pipelines.</p>
+<h3 id="rendering-methodology">Rendering Methodology</h3>
+<p>The primary difference between SSAO and RTAO lies in the data they
+use to compute occlusion:</p>
+<ul>
+<li><strong>SSAO (Screen Space Ambient Occlusion):</strong> SSAO
+operates as a post-processing pass using standard rasterization
+pipelines in DirectX 11 or DirectX 12. It relies exclusively on the 2D
+depth and normal buffers (G-Buffer) visible to the camera. The shader
+samples points in a sphere or hemisphere around each pixel in screen
+space to estimate how much geometry blocks the surrounding light.</li>
+<li><strong>RTAO (Ray-Traced Ambient Occlusion):</strong> RTAO utilizes
+the DirectX Raytracing (DXR) API to query full 3D world geometry rather
+than screen-space pixels. A ray generation shader shoots multiple rays
+out into a hemisphere aligned with the surface normal. These rays
+traverse a Bounding Volume Hierarchy (BVH) containing the actual scene
+geometry to check for true physical intersections.</li>
+</ul>
+<h3 id="visual-accuracy-and-artifacts">Visual Accuracy and
+Artifacts</h3>
+<p>Because of their differing technical approaches, the visual outputs
+vary dramatically:</p>
+<ul>
+<li><strong>Off-Screen Geometry:</strong> SSAO cannot account for
+objects outside the camera's field of view or behind other foreground
+elements. If an occluding object moves off-screen, its shadow abruptly
+disappears. RTAO samples the complete scene representation in memory,
+meaning off-screen objects cast accurate ambient shadows regardless of
+camera framing.</li>
+<li><strong>Artifacts and Haloing:</strong> SSAO often suffers from
+white or dark "halos" around edges due to depth discontinuities and
+imprecise screen-space thickness assumptions. RTAO eliminates haloing
+entirely, providing soft, natural contact shadows that transition
+smoothly across geometric boundaries.</li>
+<li><strong>Distance and Scale:</strong> SSAO uses heuristic radius
+settings that can over-darken or under-darken areas depending on the
+camera's distance to the object. RTAO natively respects world-space
+units, ensuring consistent and physically grounded shadows across near
+and distant geometry.</li>
+</ul>
+<h3 id="performance-and-hardware-requirements">Performance and Hardware
+Requirements</h3>
+<p>The fidelity of RTAO comes with a substantial computational trade-off
+compared to SSAO:</p>
+<ul>
+<li><strong>SSAO:</strong> Highly efficient and computationally
+predictable. It runs quickly on modern pixel or compute shaders,
+consuming a fraction of a millisecond of GPU frame time. It is
+compatible with virtually all DirectX 11- and DirectX 12-capable
+hardware, making it the standard choice for lower-end configurations and
+competitive high-framerate titles.</li>
+<li><strong>RTAO:</strong> Extremely resource-intensive. Tracing
+multiple rays per pixel requires dedicated ray-tracing hardware (such as
+RT cores) to achieve playable frame rates. Because casting dozens of
+rays per pixel is prohibitive, RTAO implementations trace low ray counts
+(often 1 ray per pixel or less) and rely heavily on spatial and temporal
+denoising filters to eliminate noise, adding further algorithmic
+complexity and memory overhead.</li>
+</ul>
+<h3 id="directx-implementation-pipeline">DirectX Implementation
+Pipeline</h3>
+<p>Implementing each technique in DirectX requires entirely different
+architectural considerations:</p>
+<ul>
+<li><strong>SSAO:</strong> Requires only standard DirectX rendering
+pipelines. The engine renders the depth and normal buffers into
+textures, executes a full-screen compute or pixel shader pass containing
+the sampling kernel, and applies a simple bilateral blur to smooth out
+sampling noise before blending the result into the lighting pass.</li>
+<li><strong>RTAO:</strong> Requires DirectX 12 with DXR support (Tier
+1.0 or 1.1). Developers must build and update two-level acceleration
+structures (Top-Level and Bottom-Level Acceleration Structures: TLAS and
+BLAS) in GPU memory to represent scene geometry. The pipeline requires
+configuring State Objects (RTPSOs), Ray Generation Shaders, Miss
+Shaders, and an integrated temporal denoiser to reconstruct clean
+occlusion maps before final composition.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/directx/article/ssao-vs-ray-traced-ambient-occlusion-in-direct-x';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/directx/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/directx/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>
